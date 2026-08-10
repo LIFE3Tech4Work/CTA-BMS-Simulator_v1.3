@@ -1,0 +1,26 @@
+{
+  "name": "cta-bms-simulator",
+  "version": "1.0.0",
+  "description": "CTA BMS Training Simulator — Honeywell SymmetrE / EBI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "vitest --run",
+    "screenshots": "node scripts/take-screenshots.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@tailwindcss/cli": "^4.3.1",
+    "express": "^4.22.2",
+    "tailwindcss": "^4.3.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "fast-check": "^4.8.0",
+    "puppeteer": "^23.11.1",
+    "vitest": "^4.1.9"
+  }
+}

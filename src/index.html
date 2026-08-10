@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTA BMS Simulator — Honeywell SymmetrE / EBI</title>
+
+  <link href="./output.css" rel="stylesheet">
+
+  <!-- Custom Tailwind config for BMS-specific colors -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'bms-dark': '#1a1a2e',
+            'bms-panel': '#16213e',
+            'bms-accent': '#0f3460',
+            'bms-cyan': '#00BFFF',
+            'bms-amber': '#FFA500',
+            'bms-charcoal': '#2d2d2d',
+          },
+          animation: {
+            'bms-flash': 'bms-flash 0.8s ease-in-out infinite',
+          },
+          keyframes: {
+            'bms-flash': {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '0.15' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Minimal base styles for BMS aesthetic */
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-900 text-white h-screen">
+
+  <!-- React mount point. h-full here is what actually makes every nested
+       overflow-y-auto pane (sidebars, diagrams, etc.) scrollable — without
+       it, h-full lower in the tree has nothing real to be 100% of, so
+       nothing ever clips/scrolls and content silently runs off the bottom
+       of the viewport instead. body is h-screen (not min-h-screen) for the
+       same reason: a MINIMUM height lets body grow past the viewport,
+       which (combined with its own overflow:hidden, disabling the
+       browser's normal page scrollbar) makes anything beyond the original
+       viewport height unreachable rather than scrollable. -->
+  <div id="root" class="h-full"></div>
+
+  <!-- Fallback for browsers with JavaScript disabled -->
+  <noscript>
+    <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;color:#fff;font-family:sans-serif;text-align:center;padding:2rem;">
+      <div>
+        <h1 style="font-size:1.5rem;margin-bottom:1rem;">CTA BMS Simulator</h1>
+        <p>This application requires JavaScript to run. Please enable JavaScript in your browser settings.</p>
+      </div>
+    </div>
+  </noscript>
+
+  <!-- React 18 (development build — UMD globals: React, ReactDOM) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel standalone — transforms JSX in <script type="text/babel"> tags at runtime -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- jsPDF — browser-side PDF generation for Capstone mode worksheet export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Auth layer — must load before App.jsx -->
+  <script src="auth/AuthContext.js"></script>
+  <script src="auth/SignOn.jsx"></script>
+
+  <!-- Shared UI components — load before screen-level components -->
+  <script type="text/babel" src="ui/shared/PointBadge.jsx"></script>
+  <script type="text/babel" src="ui/shared/OverrideIndicator.jsx"></script>
+  <script type="text/babel" src="ui/shared/StatusDots.jsx"></script>
+  <script type="text/babel" src="ui/shared/WhiteBox.jsx"></script>
+  <script type="text/babel" src="ui/shared/GreyBox.jsx"></script>
+  <script type="text/babel" src="ui/shared/ASHRAECallout.jsx"></script>
+
+  <!-- SymmetrE Station UI components -->
+  <script type="text/babel" src="ui/symmetre/BottomStatusBar.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/ZoneTabs.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/ControlsSidebar.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHUGraphic.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHUImageOverlay.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHU44NewImageOverlay.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHU44NewControlsSidebar.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHU46ImageOverlay.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHU46VectorOverlay.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHU46ControlsSidebar.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/VAVControlsSidebar.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/VAVGraphic.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHU23Graphic.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AHU23ControlsSidebar.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/SimultaneousHeatCool.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/LL97Panel.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/SMEQAForm.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/AppChrome.jsx"></script>
+
+  <!-- EBI Point Detail UI components -->
+  <script type="text/babel" src="ui/ebi/PointSidebar.jsx"></script>
+  <script type="text/babel" src="ui/ebi/GeneralTab.jsx"></script>
+  <script type="text/babel" src="ui/ebi/HistoryTab.jsx"></script>
+  <script type="text/babel" src="ui/ebi/AlarmsTab.jsx"></script>
+  <script type="text/babel" src="ui/ebi/RecentEventsTab.jsx"></script>
+  <script type="text/babel" src="ui/ebi/AppChrome.jsx"></script>
+
+  <!-- Alarm screen components -->
+  <script src="alarm/AlarmSummary.jsx"></script>
+
+  <!-- Schedule screen components -->
+  <script type="text/babel" src="schedule/WeeklySchedule.jsx"></script>
+  <script type="text/babel" src="schedule/ExceptionSchedule.jsx"></script>
+
+  <!-- Report screen components -->
+  <script type="text/babel" src="reports/PointAttributeReport.jsx"></script>
+
+  <!-- Reports / Export -->
+  <script src="reports/CSVExporter.js"></script>
+
+  <!-- Simulation engines -->
+  <script src="simulation/PointRegistry.js"></script>
+  <script src="simulation/Engine.js"></script>
+  <script src="simulation/TMY3Projector.js"></script>
+  <script src="simulation/FaultEngine.js"></script>
+  <script src="simulation/LL97Accumulator.js"></script>
+  <script src="simulation/AHU23Controller.js"></script>
+  <script src="simulation/AHU44NewController.js"></script>
+  <script src="simulation/AHU44NewFaultEngine.js"></script>
+  <script src="simulation/AHU46Controller.js"></script>
+  <script src="simulation/AHU46FaultEngine.js"></script>
+  <script src="simulation/VAVController.js"></script>
+  <script src="simulation/VAVFaultEngine.js"></script>
+
+  <!-- Reference data (scenarios, slides, chapters) — must load before mode components -->
+  <script type="module">
+    import { Scenarios } from './data/reference/scenarios.js';
+    import { CompanionSlides } from './data/reference/companionSlides.js';
+    import { Chapters } from './data/reference/chapters.js';
+    import { LL84 } from './data/building/ll84_constants.js';
+    import { BuildingArchetypes } from './data/building/building_archetypes.js';
+    window.SCENARIOS = Scenarios;
+    window.Scenarios = Scenarios;
+    window.COMPANION_SLIDES = CompanionSlides;
+    window.CHAPTERS = Chapters;
+    window.LL84_CONSTANTS = LL84;
+    window.LL84 = LL84;
+    window.BuildingArchetypes = BuildingArchetypes;
+  </script>
+
+  <!-- Load POINT_CATALOG + TMY3 weather data, initialize PointRegistry, wire SimulationEngine -->
+  <script type="module">
+    import { POINT_CATALOG } from './data/points/index.js';
+    import { TMY3 } from './data/weather/tmy3_central_park.js';
+
+    // Expose on window for TMY3Projector and other consumers
+    window.POINT_CATALOG = POINT_CATALOG;
+    window.TMY3_DATA = TMY3;
+
+    // Wait for DOM + Babel scripts to finish before bootstrapping
+    function bootstrap() {
+      // 1. Initialize PointRegistry with catalog data
+      if (window.PointRegistry && window.POINT_CATALOG) {
+        window.PointRegistry.initialize(window.POINT_CATALOG);
+
+        // Seed React context with the initialized registry
+        if (window.setPointRegistryState) {
+          window.setPointRegistryState({
+            points: window.PointRegistry.points,
+            getValue: window.PointRegistry.getValue,
+            setValue: window.PointRegistry.setValue,
+            subscribe: window.PointRegistry.subscribe,
+            unsubscribe: window.PointRegistry.unsubscribe,
+          });
+        }
+      }
+
+      // 2. Wire SimulationEngine tick → PointRegistry.interpolate + context update
+      if (window.SimulationEngine && window.PointRegistry) {
+        var lastAccumulatedRow = 0; // Track last row for LL97 hourly accumulation
+
+        window.SimulationEngine.onTick(function (event) {
+          // Interpolate all point values to current position
+          window.PointRegistry.interpolate(event.rowIndex, event.interpolationFraction);
+
+          // Feed live weather into AHU controllers so diagrams respond to OAT changes
+          if (window.TMY3Projector && window.TMY3Projector.interpolateWeather) {
+            var weather = window.TMY3Projector.interpolateWeather(event.rowIndex, event.interpolationFraction);
+            if (weather) {
+              // AHU-23-1 controller
+              if (window.AHU23Controller) {
+                window.AHU23Controller.setValue('oaTemperature', Math.round(weather.dryBulb * 10) / 10);
+                window.AHU23Controller.setValue('oaEnthalpy', Math.round(weather.enthalpy * 10) / 10);
+              }
+              // AHU-4-4 controller
+              if (window.AHU44NewController) {
+                window.AHU44NewController.setValue('oaTemperature', Math.round(weather.dryBulb * 10) / 10);
+                window.AHU44NewController.setValue('oaEnthalpy', Math.round(weather.enthalpy * 10) / 10);
+              }
+            }
+          }
+
+          // LL97 Accumulator: tick once per simulated hour (when row advances)
+          if (window.LL97Accumulator && event.rowIndex > lastAccumulatedRow) {
+            // Accumulate for each hour that passed
+            while (lastAccumulatedRow < event.rowIndex) {
+              lastAccumulatedRow++;
+              var outdoorTemp = null;
+              if (window.TMY3Projector && window.TMY3Projector.getWeatherForRow) {
+                var weather = window.TMY3Projector.getWeatherForRow(lastAccumulatedRow);
+                if (weather) outdoorTemp = weather.dryBulb;
+              }
+              window.LL97Accumulator.tick({ outdoorTemp: outdoorTemp });
+            }
+          }
+
+          // Update React SimulationContext so UI re-renders (ZoneTabs OA strip, etc.)
+          if (window.setSimulationState) {
+            window.setSimulationState({
+              currentRow: event.rowIndex,
+              speed: window.SimulationEngine.speed,
+              interpolationFraction: event.interpolationFraction,
+            });
+          }
+        });
+
+        // 3. Start the engine at default speed
+        window.SimulationEngine.setSpeed('60x');
+        window.SimulationEngine.start();
+      }
+    }
+
+    // Module scripts run deferred, but Babel-transformed scripts may still be pending.
+    // Retry until React app mounts and exposes state setters on window.
+    // 40 files are transformed client-side by in-browser Babel before the app
+    // mounts — on a slower machine or cold cache this can take a while, so the
+    // retry budget is generous (up to 40s) rather than giving up early and
+    // silently leaving the simulation clock (window.SimulationEngine) never
+    // started.
+    function tryBootstrap(attempts) {
+      if (window.setPointRegistryState && window.setSimulationState) {
+        bootstrap();
+      } else if (attempts < 200) {
+        setTimeout(function () { tryBootstrap(attempts + 1); }, 200);
+      } else {
+        console.warn('[BMS Bootstrap] Timed out waiting for React app to mount after 40s. ' +
+          'The simulation clock was not started. This usually means a script error ' +
+          'occurred earlier during page load — check the console above for the first ' +
+          'red error, or try a hard refresh (Cmd/Ctrl+Shift+R).');
+      }
+    }
+
+    if (document.readyState === 'complete') {
+      setTimeout(function () { tryBootstrap(0); }, 200);
+    } else {
+      window.addEventListener('load', function () {
+        setTimeout(function () { tryBootstrap(0); }, 200);
+      });
+    }
+  </script>
+
+  <!-- Capstone worksheet components -->
+  <script type="text/babel" src="capstone/WorksheetSections.jsx"></script>
+  <script type="text/babel" src="capstone/WorksheetSidebar.jsx"></script>
+
+  <!-- Capstone utilities (PDF export, verification) -->
+  <script src="capstone/Verifier.js"></script>
+  <script src="capstone/PDFExporter.js"></script>
+
+  <!-- Mode controller — manages pedagogical mode state and layout -->
+  <script src="modes/ModeController.js"></script>
+
+  <!-- Pedagogical mode components -->
+  <script type="text/babel" src="modes/CompanionMode.jsx"></script>
+
+  <!-- Mode components -->
+  <script type="text/babel" src="modes/FreeExplore.jsx"></script>
+  <script type="text/babel" src="modes/CapstoneModeShell.jsx"></script>
+
+  <!-- Instructor dashboard components -->
+  <script src="instructor/UnlockCapstone.jsx"></script>
+  <script src="instructor/Dashboard.jsx"></script>
+
+  <!-- Main application entry — Babel transforms JSX to React.createElement calls -->
+  <script type="text/babel" src="App.jsx"></script>
+
+</body>
+</html>
