@@ -8,7 +8,7 @@
  * Editable controls that drive the AHU46Controller state model.
  * Changing values here recalculates outputs shown on the diagram.
  *
- * Key difference from AHU-4-4 sidebar: Minimum Position defaults to 60%
+ * Key difference from AHU-4-4 sidebar: Minimum Position defaults to 50%
  * (meeting-room ASHRAE 62.1 ventilation requirement, vs 20% for the
  * Pre-Function/Ballroom). Min OA Airflow Active SP is 4500 CFM (vs 4900).
  *

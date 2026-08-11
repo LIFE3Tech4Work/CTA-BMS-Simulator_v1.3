@@ -14,21 +14,22 @@
  * │ Cooling Coil SP      → Modulates CHW valve % to maintain SAT              │
  * │ Heating Coil SP      → Modulates PHT valve %                              │
  * │ OAT + Enthalpy OK    → Determines if economizer active (OA damper > min)  │
- * │ Minimum Position 60% → OA damper floor (meeting-room ASHRAE 62.1 req.)   │
+ * │ Minimum Position 50% → OA damper floor (meeting-room ASHRAE 62.1 req.)   │
  * │ CO₂ > setpoint       → OA damper increases above minimum                  │
  * │ Fan Speed %          → CFM = fan speed × design CFM (9200) / 100          │
  * │ Interlock ON         → Related equipment interlocked                      │
  * └────────────────────────────────────────────────────────────────────────────┘
  *
- * Key structural difference from AHU-4-4: the OA_DAMPER_FLOOR is 60%,
+ * Key structural difference from AHU-4-4: the OA_DAMPER_FLOOR is 50%,
  * not 20%. Meeting rooms require significantly more fresh air per ASHRAE 62.1
  * than pre-function/ballroom spaces (higher design occupancy density), so the
- * configured minimum OA damper position is three times higher. At 60% minimum
- * and 9,200 CFM design, the base-case OA delivery is ~5,520 CFM — more than
- * the total supply of many smaller AHUs. This makes the N-04 ventilation
- * shortfall fault pedagogically distinct: a damper stuck at, say, 10% on
- * this unit starves a much larger fraction of required fresh air than the
- * same fault would on AHU-4-4.
+ * configured minimum OA damper position is well above AHU-4-4's. At 50%
+ * minimum and 9,200 CFM design, the base-case OA delivery is ~4,600 CFM,
+ * matching the SOO's own 4,500 CFM minOAAirflowSetpoint (4,500/9,000 CFM
+ * min/max = exactly 50%). This makes the M-04 ventilation shortfall fault
+ * pedagogically distinct: a damper stuck at, say, 10% on this unit starves
+ * a much larger fraction of required fresh air than the same fault would
+ * on AHU-4-4.
  *
  * oaDamperPosition is a true Manual-able output (same as AHU-4-4):
  * once set via setValue('oaDamperPosition', ...), recalculate() holds that
@@ -52,11 +53,12 @@
   // than ballroom/pre-function, but the screenshot shows 72.1°F return air.
   var RETURN_AIR_TEMP = 72.1;
 
-  // OA damper minimum position — 60% per ASHRAE 62.1 for this meeting-room
-  // occupancy category. Confirmed from both AHU-4-6 screenshots (repo image
-  // shows 60%; new screenshot shows 45%, which was a temporary operator
-  // setback; 60% is the design value and primary teaching reference).
-  var OA_DAMPER_FLOOR = 60;
+  // OA damper minimum position — 50% per the SOO's own min/max CFM table.
+  // "AHU-4-3 / RF-4-6: Sequence of Operation" states AHU-4-6's minimum/
+  // maximum CFM setpoints as 4,500/9,000 CFM = exactly 50%. The previously
+  // hardcoded 60% didn't match that table (or minOAAirflowSetpoint, which
+  // was already 4,500 CFM) — see SCENARIO_TRACKING.md item #14.
+  var OA_DAMPER_FLOOR = 50;
 
   // Freeze protection pump start/stop thresholds — SOO "AHU-4-3 / RF-4-6:
   // Sequence of Operation", General Automatic Control Sequences item 5:
@@ -69,6 +71,25 @@
   // across a single threshold.
   var FREEZE_PUMP_START_TEMP = 35;
   var FREEZE_PUMP_STOP_TEMP = 40;
+
+  // CO2 sensor simulation (SCENARIO_TRACKING.md #25a) — steady-state
+  // ventilation dilution, computed instantaneously each recalculate() the
+  // same way every other reading in this file is (no time-integrated
+  // occupancy model). Falls toward an outdoor baseline as OA delivery
+  // approaches/exceeds the design minimum; rises toward a design-occupied
+  // ceiling as OA delivery is starved (low damper position, or the fan off
+  // delivering zero OA at all).
+  var CO2_OUTDOOR_BASELINE = 450;      // ppm — typical outdoor reference
+  var CO2_DESIGN_OCCUPIED_CEILING = 1200; // ppm — design-occupied, ~zero OA delivery
+
+  // Plant-level "global condition" readings (SCENARIO_TRACKING.md #25c/#25d)
+  // — simple load/weather-based reset, not a full plant model. Both are
+  // tied to oaTemperature (already TMY3-driven) as a proxy for building
+  // cooling load.
+  var CHW_SUPPLY_MIN = 40;   // °F — plant low limit
+  var CHW_SUPPLY_MAX = 48;   // °F — reset-up ceiling on mild/cold days
+  var CW_SUPPLY_MIN = 65;    // °F — condenser water floor (tower bypass/minimum)
+  var CW_SUPPLY_MAX = 85;    // °F — condenser water ceiling (design max entering condenser temp)
 
   // ─── Shared State Object ────────────────────────────────────────────────────
 
@@ -85,7 +106,7 @@
     lowOATLockout: false,
     oaEnthalpy: 35.1,                 // BTU/lb — TMY3-driven; see WEATHER_DRIVEN_KEYS
     enthalpyOKForEconomizer: false,
-    economizerMinPosition: 60,        // % — OA damper floor (meeting room requirement)
+    economizerMinPosition: 50,        // % — OA damper floor (meeting room requirement, 50% per SOO min/max CFM table)
     minPositionFanSpeedLock: 5,       // %
     economizerTempControlSP: 58.0,    // °F
     co2Sensor: 479,                   // PPM (from screenshot)
@@ -104,8 +125,8 @@
     fanRunning: true,
     fanSpeed: 75,
     cfm: 6901,                        // Supply air CFM (75% × 9200 ≈ 6900)
-    oaCFM: 5520,                      // OA CFM at 60% minimum (60% × minOA basis)
-    oaDamperPosition: 60,             // % (at minimum position)
+    oaCFM: 4500,                      // OA CFM at 50% minimum (= minOAAirflowSetpoint)
+    oaDamperPosition: 50,             // % (at minimum position)
     economizerActive: false,
     phtValvePosition: 0,              // %
     chwValvePosition: 38,             // % (from screenshot: 38%)
@@ -113,14 +134,15 @@
     preheatTemp: 81.6,                // °F — after preheat coil (= OAT when no heating)
     mixedAirTemp: 73.6,               // °F (from screenshot)
     returnAirTemp: 72.1,              // °F (from screenshot)
-    supplyStaticPressure: 72.3,       // %RH (mislabeled as static in code; actual = supply air %RH)
-    chwSupplyTemp: 41.9,              // °F (from screenshot global status bar)
-    cwSupplyTemp: 77.7,               // °F (from screenshot global status bar)
+    supplyAirRH: 72.3,                // %RH — renamed from supplyStaticPressure (SCENARIO_TRACKING.md
+                                       // item #25b); it was never static pressure, always supply air %RH
+    chwSupplyTemp: 41.9,              // °F — plant global condition, reset with load (see CHW_SUPPLY_MIN/MAX)
+    cwSupplyTemp: 77.7,               // °F — plant global condition, follows OAT (see CW_SUPPLY_MIN/MAX)
     phtValveStatus: 'OFF',
     chwValveStatus: 'ON',
     supplyFanStatus: 'ON',
     returnFanStatus: 'ON',
-    exhaustDamperPct: 60,             // % (follows OA damper)
+    exhaustDamperPct: 50,             // % (follows OA damper)
   };
 
   window.AHU46State = state;
@@ -205,7 +227,7 @@
           state.economizerActive = true;
           state.oaDamperPosition = 100;
         } else {
-          // At 60% minimum, the floor is the design requirement — not 20% like AHU-4-4
+          // At 50% minimum, the floor is the design requirement — not 20% like AHU-4-4
           state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
         }
 
@@ -296,6 +318,46 @@
     state.preheatTemp = Math.round(state.preheatTemp * 10) / 10;
     state.mixedAirTemp = Math.round(state.mixedAirTemp * 10) / 10;
     state.returnAirTemp = RETURN_AIR_TEMP;
+
+    // 5. CO2 SENSOR (SCENARIO_TRACKING.md #25a) — was frozen at its
+    // screenshot value forever; ties to the AHU's own ventilation rate.
+    // Respects Manual override the same way oaDamperPosition does (it's
+    // editable from the Controls Sidebar as "Controlling CO2 Sensor").
+    if (modes.co2Sensor !== 'Manual') {
+      var ventilationRatio = state.fanRunning
+        ? Math.min(1, state.oaCFM / state.minOAAirflowSetpoint)
+        : 0;
+      state.co2Sensor = Math.round(
+        CO2_DESIGN_OCCUPIED_CEILING - ventilationRatio * (CO2_DESIGN_OCCUPIED_CEILING - CO2_OUTDOOR_BASELINE)
+      );
+    }
+
+    // 6. SUPPLY AIR %RH (SCENARIO_TRACKING.md #25b, renamed from
+    // supplyStaticPressure — see item #9) — ties to whichever coil is
+    // actively conditioning the air: an active cooling coil pushes supply
+    // air toward saturation (condensing moisture off a wet coil), an
+    // active heating coil dries it out; idle holds a neutral baseline.
+    if (state.chwValvePosition > 0) {
+      state.supplyAirRH = 55 + (state.chwValvePosition / 100) * (90 - 55);
+    } else if (state.phtValvePosition > 0) {
+      state.supplyAirRH = 55 - (state.phtValvePosition / 100) * (55 - 25);
+    } else {
+      state.supplyAirRH = 55;
+    }
+    state.supplyAirRH = Math.round(state.supplyAirRH * 10) / 10;
+
+    // 7. PLANT-LEVEL CONDITIONS (SCENARIO_TRACKING.md #25c/#25d) — chilled
+    // water and condenser water supply temps, previously frozen at their
+    // screenshot values. Simple weather/load-based reset (not a full plant
+    // model): CHW resets colder as OAT (a proxy for building load) rises;
+    // CW follows OAT directly, as a cooling tower's output does.
+    var chwLoadFraction = Math.max(0, Math.min(1, (state.oaTemperature - 40) / 55));
+    state.chwSupplyTemp = Math.round(
+      (CHW_SUPPLY_MAX - chwLoadFraction * (CHW_SUPPLY_MAX - CHW_SUPPLY_MIN)) * 10
+    ) / 10;
+    state.cwSupplyTemp = Math.round(
+      Math.max(CW_SUPPLY_MIN, Math.min(CW_SUPPLY_MAX, state.oaTemperature - 3.9)) * 10
+    ) / 10;
 
     notifySubscribers();
   }

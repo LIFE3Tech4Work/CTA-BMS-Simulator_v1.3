@@ -71,6 +71,91 @@ to **Fixed** with the commit hash and a short verification summary.
 - **Verified:** 4 new regression tests — fan running, unit off, fire-alarm
   shutdown (overrides runSchedule=On), and recovery back to normal.
 
+### 6. M-04 / OA damper floor: 60% didn't match the SOO (item #14)
+- **Source:** SOO "AHU-4-3 / RF-4-6: Sequence of Operation" min/max CFM
+  table — AHU-4-6's setpoints are 4,500/9,000 CFM = exactly 50%, not 60%.
+  Provenance of the previous 60% value was unconfirmed.
+- **Bug:** `OA_DAMPER_FLOOR`, `economizerMinPosition`'s default, and M-04's
+  fault threshold in `AHU46FaultEngine.js` were all hardcoded to 60%,
+  contradicting both the SOO table and the existing `minOAAirflowSetpoint`
+  (already correctly 4,500 CFM).
+- **Fix:** All three changed to 50%. Also updated the M-04 warning text in
+  `AHU46VectorOverlay.jsx` / `AHU46ImageOverlay.jsx` and the sidebar
+  comment in `AHU46ControlsSidebar.jsx`, which both asserted "60%" as the
+  threshold in plain text.
+- **Verified:** Reviewed every existing test asserting the old 60% value
+  (design-constant, "60% OA damper minimum", and "Manual oaDamperPosition
+  (M-04 fault)" describe blocks in `AHU46Controller.test.mjs`) — updated
+  each to the correct 50%-based expected value rather than blindly editing
+  assertions; added a boundary test (50% vs 49%) and a new
+  `AHU46FaultEngine.test.mjs` covering the M-04 threshold directly
+  (boundary at exactly 50%, just-below at 49%, confirms 55% — inside the
+  *old* 60% threshold's territory — correctly no longer fires, fan-off
+  guard, and alarm clearing on recovery). 7 new fault-engine tests + 1 new
+  controller test.
+
+### 7. co2Sensor frozen forever, never simulated (item #25a)
+- **Source:** Found during the static-values audit below. `co2Sensor` is
+  declared as a live sensor and used as an input to the CO2 DCV override,
+  but was never reassigned anywhere in `recalculate()`.
+- **Bug:** Stuck permanently at its screenshot value (479 ppm) regardless
+  of the AHU's own ventilation rate.
+- **Fix:** Tied to ventilation the same way every other reading in this
+  file is computed — instantaneously from current state, no time-
+  integrated occupancy model. Falls toward a 450 ppm outdoor baseline as OA
+  delivery approaches/exceeds the design minimum; rises toward a 1,200 ppm
+  design-occupied ceiling as OA delivery is starved (low damper, or fan
+  off). Still respects Manual override via the Controls Sidebar's
+  "Controlling CO₂ Sensor" row, same pattern as `oaDamperPosition`.
+- **Verified:** 5 new regression tests — default (full ventilation →
+  outdoor baseline), fan-off (→ ceiling), manually-forced-low damper
+  (proportional rise, ties to the M-04 scenario), a midpoint ventilation
+  ratio, and Manual-override persistence across an unrelated recalculate.
+
+### 8. supplyStaticPressure mislabeled and frozen (item #25b)
+- **Source:** Found during the static-values audit below; the mislabel
+  itself (it's always been supply-air %RH, never static pressure) was
+  already documented in code comments prior to this fix.
+- **Bug:** Field name `supplyStaticPressure` didn't match what it actually
+  held (%RH), and — independent of the naming issue — it was never
+  reassigned in `recalculate()`, frozen at 72.3 forever.
+- **Decision:** Renamed to `supplyAirRH` rather than leaving the misleading
+  name in place, since the UI already labeled it "Supply Air %RH" / id
+  `supplyAirRH` everywhere it's displayed — the state key was the only
+  place still carrying the old name, and the blast radius was small (two
+  overlay files).
+- **Fix:** Renamed the state field in `AHU46Controller.js` and updated the
+  `stateKey` references in `AHU46VectorOverlay.jsx` and
+  `AHU46ImageOverlay.jsx`. Made it dynamic: ties to whichever coil is
+  actively conditioning the air — an open cooling coil pushes it toward
+  saturation (90%, condensing moisture off a wet coil), an open heating
+  coil dries it toward 25%, idle holds a neutral 55% baseline.
+- **Verified:** 5 new regression tests — old key confirmed gone, neutral
+  baseline with both coils idle, near-saturation at fully-open cooling,
+  dried-out at active heating, and a partial-open case confirming the
+  value scales proportionally rather than snapping between two fixed
+  states.
+
+### 9. chwSupplyTemp / cwSupplyTemp frozen plant readings (items #25c/#25d)
+- **Source:** Found during the static-values audit below; per Lev's
+  training material these are exactly the bottom-status-bar "global
+  condition" readings that should reflect real plant load/weather.
+- **Bug:** Both frozen at their original screenshot values (41.9°F / 77.7°F)
+  forever, regardless of outdoor conditions.
+- **Fix:** Simple weather/load-based reset tied to `oaTemperature` (already
+  TMY3-driven), not a full plant model. `chwSupplyTemp` resets colder
+  (40°F floor) as OAT rises and warmer (48°F ceiling) as it falls, standing
+  in for load-based CHW reset. `cwSupplyTemp` follows OAT with a fixed
+  approach offset, clamped to a 65–85°F plant range, standing in for a
+  cooling tower's behavior. Both formulas were tuned to land almost exactly
+  on the original screenshot values at the default 81.6°F OAT — good
+  independent confirmation the constants are reasonably calibrated, not
+  just directionally plausible.
+- **Verified:** 6 new regression tests — default-OAT sanity check against
+  the original screenshot values, both fields' clamps at extreme cold/hot
+  OAT, and a monotonic sweep (0–100°F) confirming CHW falls / CW rises as
+  OAT rises with no reversals.
+
 ---
 
 ## Open — static values audit (found while investigating item #5 above)
@@ -85,11 +170,10 @@ their own.
 
 | # | Field | Declared value | Why it's a problem |
 |---|---|---|---|
-| 25a | `co2Sensor` | 479 ppm | Labeled a sensor; used as an input to the OA-damper trim formula but never written back to — frozen regardless of simulated occupancy/time. Editable from the sidebar, but a real sensor shouldn't require a human to manually retype its own reading. |
-| 25b | `supplyStaticPressure` | 72.3 | Already known to be mislabeled (it's actually supply-air %RH, not static pressure — see item 9) — also frozen on top of that. |
-| 25c | `chwSupplyTemp` | 41.9°F | Plant-level "global condition" (per Lev's training material, this is exactly the bottom-status-bar reading that should reflect real plant load/weather). Frozen at the original screenshot value. |
-| 25d | `cwSupplyTemp` | 77.7°F | Same issue — condenser water supply, frozen. |
 | 25e | `systemStarting`, `startingTimeLeft` | `false` / `0` | These should drive a startup countdown — direct evidence of the missing staged fan-start sequence (overlaps with open item #8). |
+
+(Items 25a–25d — `co2Sensor`, `supplyStaticPressure`/`supplyAirRH`,
+`chwSupplyTemp`, `cwSupplyTemp` — fixed; see Fixed items 7-9 above.)
 
 ---
 
@@ -111,9 +195,10 @@ their own.
 
 | # | Scenario | Source | Notes |
 |---|---|---|---|
-| 14 | M-04's 60% threshold doesn't match SOO's own CFM ratio | SOO min/max CFM table | 4,500/9,000 CFM = 50%, not 60%; provenance of 60% unconfirmed |
 | 15 | M-03 has no direct SOO citation | — | Reasonable pattern (economizer + mechanical cooling together) but not sourced from a specific SOO clause |
 | 16 | "Manual override itself creates an alarm" not modeled | Lev Chesnov, BMS training session (07-31-26) | Stated rule: forcing any point to Manual should itself be alarm-worthy, independent of value |
+
+(Item 14 — M-04's threshold — fixed; see Fixed item 6 above.)
 
 ## Open — architecture/duplication
 

@@ -2,7 +2,10 @@
  * Unit tests for AHU46Controller.js
  * Meeting Room 2nd Level — formula-driven controller.
  *
- * Key difference under test: OA_DAMPER_FLOOR = 60% (meeting room), not 20%.
+ * Key difference under test: OA_DAMPER_FLOOR = 50% (meeting room), not 20%.
+ * Per the SOO's own min/max CFM table (4,500/9,000 CFM = 50%) — see
+ * SCENARIO_TRACKING.md item #14. Was previously 60%, which matched neither
+ * the SOO table nor minOAAirflowSetpoint (4,500 CFM).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
@@ -36,8 +39,8 @@ function loadWithWeather(dryBulb, enthalpy) {
 // ─── Design constants ────────────────────────────────────────────────────────
 
 describe('AHU46Controller — design constants', () => {
-  it('minimum OA damper position is 60% — meeting-room ASHRAE 62.1 requirement', () => {
-    expect(loadController().getState().economizerMinPosition).toBe(60);
+  it('minimum OA damper position is 50% — matches SOO min/max CFM table (4,500/9,000 CFM)', () => {
+    expect(loadController().getState().economizerMinPosition).toBe(50);
   });
 
   it('min OA airflow setpoint is 4500 CFM (smaller than AHU-4-4_NEW 4900)', () => {
@@ -148,17 +151,21 @@ describe('AHU46Controller — fan interlock chain tracks live status', () => {
   });
 });
 
-// ─── 60% OA damper floor ─────────────────────────────────────────────────────
+// ─── 50% OA damper floor ─────────────────────────────────────────────────────
+//
+// Was 60% — SOO "AHU-4-3 / RF-4-6: Sequence of Operation" states AHU-4-6's
+// minimum/maximum CFM setpoints as 4,500/9,000 CFM = exactly 50%, not 60%.
+// See SCENARIO_TRACKING.md item #14.
 
-describe('AHU46Controller — 60% OA damper minimum', () => {
-  it('default oaDamperPosition is 60% (the floor)', () => {
-    expect(loadController().getState().oaDamperPosition).toBe(60);
+describe('AHU46Controller — 50% OA damper minimum', () => {
+  it('default oaDamperPosition is 50% (the floor)', () => {
+    expect(loadController().getState().oaDamperPosition).toBe(50);
   });
 
-  it('damper stays at 60% floor when OAT is above economizer SP', () => {
+  it('damper stays at 50% floor when OAT is above economizer SP', () => {
     // Default OAT 81.6°F >> economizerTempControlSP 58°F → no economizer
     const ctrl = loadController();
-    expect(ctrl.getState().oaDamperPosition).toBe(60);
+    expect(ctrl.getState().oaDamperPosition).toBe(50);
     expect(ctrl.getState().economizerActive).toBe(false);
   });
 
@@ -170,22 +177,33 @@ describe('AHU46Controller — 60% OA damper minimum', () => {
     expect(ctrl.getState().economizerActive).toBe(true);
   });
 
-  it('oaCFM at 60% min equals minOAAirflowSetpoint × (60/60) = 4500 CFM', () => {
+  it('oaCFM at 50% min equals minOAAirflowSetpoint × (50/50) = 4500 CFM', () => {
     const ctrl = loadController();
     expect(ctrl.getState().oaCFM).toBeCloseTo(4500, -2);
   });
 
-  it('CO₂ DCV raises damper above 60% when co2 > co2Setpoint', () => {
+  it('CO₂ DCV raises damper above 50% when co2 > co2Setpoint', () => {
     const ctrl = loadController();
     ctrl.setValue('co2Sensor', 1200);  // 300 above 900 SP
-    expect(ctrl.getState().oaDamperPosition).toBeGreaterThan(60);
+    expect(ctrl.getState().oaDamperPosition).toBeGreaterThan(50);
+  });
+
+  it('boundary: damper exactly at 50% does not trip M-04, 49% does', () => {
+    // Regression guard against an off-by-one on the < vs <= boundary when
+    // the floor moved from 60 to 50.
+    const ctrl = loadController();
+    ctrl.setValue('oaDamperPosition', 50);
+    expect(ctrl.getState().oaDamperPosition).toBe(50);
+
+    ctrl.setValue('oaDamperPosition', 49);
+    expect(ctrl.getState().oaDamperPosition).toBe(49);
   });
 });
 
 // ─── Manual-output oaDamperPosition (M-04 fault scenario) ───────────────────
 
 describe('AHU46Controller — Manual oaDamperPosition (M-04 fault)', () => {
-  it('setValue forces oaDamperPosition below 60% floor and flags it Manual', () => {
+  it('setValue forces oaDamperPosition below 50% floor and flags it Manual', () => {
     const ctrl = loadController();
     ctrl.setValue('oaDamperPosition', 10);
     expect(ctrl.getState().oaDamperPosition).toBe(10);
@@ -196,9 +214,9 @@ describe('AHU46Controller — Manual oaDamperPosition (M-04 fault)', () => {
     const ctrl = loadController();
     ctrl.setValue('oaDamperPosition', 10);
     const s = ctrl.getState();
-    // oaCFM = 4500 × (10/60) ≈ 750 CFM (vs 4500 CFM minimum) = ~83% shortfall
+    // oaCFM = 4500 × (10/50) = 900 CFM (vs 4500 CFM minimum) = 80% shortfall
     expect(s.oaCFM).toBeLessThan(s.minOAAirflowSetpoint);
-    expect(s.oaCFM).toBeCloseTo(750, -1);
+    expect(s.oaCFM).toBeCloseTo(900, -1);
   });
 
   it('manual override survives a subsequent recalculate via an unrelated setValue', () => {
@@ -472,5 +490,165 @@ describe('AHU46Controller — subscribe / getModes', () => {
     const m = ctrl.getModes();
     m.coolingCoilSetpoint = 'tampered';
     expect(ctrl.getModes().coolingCoilSetpoint).toBe('Manual');
+  });
+});
+
+// ─── CO2 sensor simulation (SCENARIO_TRACKING.md #25a) ──────────────────────
+//
+// co2Sensor was frozen at its screenshot value (479 ppm) forever — declared
+// as a sensor, used as an input to the CO2 DCV override, but never itself
+// reassigned in recalculate(). It should fall toward an outdoor baseline as
+// OA delivery approaches/exceeds the design minimum, and rise toward a
+// design-occupied ceiling as OA delivery is starved.
+
+describe('AHU46Controller — CO2 sensor simulation (#25a)', () => {
+  it('sits at the outdoor baseline (450 ppm) when damper is at the design-minimum ventilation floor', () => {
+    // Default state: damper at 50% floor = exactly minOAAirflowSetpoint → full ventilation ratio
+    const ctrl = loadController();
+    expect(ctrl.getState().co2Sensor).toBe(450);
+  });
+
+  it('rises to the design-occupied ceiling (1200 ppm) when the fan is off — zero OA delivery', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', false);
+    expect(ctrl.getState().co2Sensor).toBe(1200);
+  });
+
+  it('rises proportionally when OA damper is manually forced low (ties CO2 to the M-04 ventilation shortfall)', () => {
+    const ctrl = loadController();
+    ctrl.setValue('oaDamperPosition', 10);
+    // oaCFM = 4500 × (10/50) = 900 → ventilation ratio 0.2
+    // co2Sensor = 1200 - 0.2 × (1200-450) = 1050
+    expect(ctrl.getState().co2Sensor).toBe(1050);
+  });
+
+  it('scales linearly with ventilation ratio at a midpoint (half of design-minimum delivery)', () => {
+    const ctrl = loadController();
+    ctrl.setValue('oaDamperPosition', 25);
+    // oaCFM = 4500 × (25/50) = 2250 → ventilation ratio 0.5
+    // co2Sensor = 1200 - 0.5 × 750 = 825
+    expect(ctrl.getState().co2Sensor).toBe(825);
+  });
+
+  it('respects Manual override — setValue holds the reading despite ventilation changes on later ticks', () => {
+    const ctrl = loadController();
+    ctrl.setValue('co2Sensor', 700);
+    expect(ctrl.getState().co2Sensor).toBe(700);
+    expect(ctrl.getModes().co2Sensor).toBe('Manual');
+
+    // Fan-off would normally push the auto-computed reading to 1200 —
+    // confirm the manual hold survives an unrelated recalculate.
+    ctrl.setValue('runSchedule', false);
+    expect(ctrl.getState().co2Sensor).toBe(700);
+  });
+});
+
+// ─── Supply air %RH (SCENARIO_TRACKING.md #25b) ──────────────────────────────
+//
+// Renamed from supplyStaticPressure (was mislabeled — always supply-air %RH,
+// never static pressure — see item #9) and made dynamic; it was previously
+// frozen at 72.3 forever on top of the mislabel. Ties to whichever coil is
+// actively conditioning the air.
+
+describe('AHU46Controller — supply air %RH (#25b, renamed from supplyStaticPressure)', () => {
+  it('the old supplyStaticPressure key no longer exists — replaced by supplyAirRH', () => {
+    const s = loadController().getState();
+    expect(s.supplyStaticPressure).toBeUndefined();
+    expect(s.supplyAirRH).toBeDefined();
+  });
+
+  it('is at the neutral baseline (55%) when neither coil is active', () => {
+    // OAT=55°F: no heating (55 == heating SP), economizer active (55 < 58°F
+    // econ SP) drops mixedAirTemp to 55°F < 60°F cooling SP → no cooling.
+    // Same setup as the existing "CHW valve closes ..." cooling-logic test.
+    const ctrl = loadWithWeather(55.0, 20.0);
+    ctrl.setValue('enthalpyOKForEconomizer', true);
+    ctrl.updateFromTMY3(1, 0);
+    const s = ctrl.getState();
+    expect(s.chwValvePosition).toBe(0);
+    expect(s.phtValvePosition).toBe(0);
+    expect(s.supplyAirRH).toBe(55);
+  });
+
+  it('rises to near-saturation (90%) when the cooling coil is fully open', () => {
+    const ctrl = loadController(); // default 81.6°F OAT drives chwValvePosition to 100
+    const s = ctrl.getState();
+    expect(s.chwValvePosition).toBe(100);
+    expect(s.supplyAirRH).toBe(90);
+  });
+
+  it('dries out (40%) when the heating coil is active', () => {
+    const ctrl = loadWithWeather(45.0, 15.0);
+    ctrl.updateFromTMY3(1, 0);
+    const s = ctrl.getState();
+    expect(s.phtValvePosition).toBeGreaterThan(0);
+    expect(s.chwValvePosition).toBe(0);
+    // phtValvePosition = 50 at this OAT → 55 - 0.5×30 = 40
+    expect(s.supplyAirRH).toBe(40);
+  });
+
+  it('scales proportionally with valve position rather than snapping between two fixed states', () => {
+    const ctrl = loadWithWeather(58.0, 20.0);
+    ctrl.updateFromTMY3(1, 0);
+    const s = ctrl.getState();
+    // Confirms this is a genuinely partial-open case, not the fully-open
+    // or fully-closed boundary already covered above.
+    expect(s.chwValvePosition).toBeGreaterThan(0);
+    expect(s.chwValvePosition).toBeLessThan(100);
+    expect(s.supplyAirRH).toBeGreaterThan(55);
+    expect(s.supplyAirRH).toBeLessThan(90);
+  });
+});
+
+// ─── Plant-level conditions: chwSupplyTemp / cwSupplyTemp (#25c/#25d) ───────
+//
+// Both were frozen at their original screenshot values forever. Simple
+// weather/load-based reset tied to oaTemperature (already TMY3-driven) as a
+// proxy for building cooling load — not a full plant model.
+
+describe('AHU46Controller — plant-level conditions (#25c/#25d)', () => {
+  it('at the default screenshot OAT (81.6°F), both readings land close to their original screenshot values', () => {
+    const ctrl = loadController();
+    const s = ctrl.getState();
+    expect(s.chwSupplyTemp).toBeCloseTo(41.9, 1);
+    expect(s.cwSupplyTemp).toBeCloseTo(77.7, 1);
+  });
+
+  it('chwSupplyTemp clamps to its reset-up ceiling (48°F) on a cold, low-load day', () => {
+    const ctrl = loadWithWeather(-10.0, 2.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().chwSupplyTemp).toBe(48);
+  });
+
+  it('chwSupplyTemp clamps to its plant floor (40°F) on a hot, high-load day', () => {
+    const ctrl = loadWithWeather(120.0, 40.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().chwSupplyTemp).toBe(40);
+  });
+
+  it('cwSupplyTemp clamps to its floor (65°F) on a cold day', () => {
+    const ctrl = loadWithWeather(-10.0, 2.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().cwSupplyTemp).toBe(65);
+  });
+
+  it('cwSupplyTemp clamps to its ceiling (85°F) on a hot day', () => {
+    const ctrl = loadWithWeather(120.0, 40.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().cwSupplyTemp).toBe(85);
+  });
+
+  it('chwSupplyTemp falls and cwSupplyTemp rises monotonically as OAT (load) increases', () => {
+    let prevChw = Infinity;
+    let prevCw = -Infinity;
+    for (let oat = 0; oat <= 100; oat += 20) {
+      const ctrl = loadWithWeather(oat, 15.0);
+      ctrl.updateFromTMY3(1, 0);
+      const s = ctrl.getState();
+      expect(s.chwSupplyTemp, `chwSupplyTemp not non-increasing at OAT=${oat}`).toBeLessThanOrEqual(prevChw);
+      expect(s.cwSupplyTemp, `cwSupplyTemp not non-decreasing at OAT=${oat}`).toBeGreaterThanOrEqual(prevCw);
+      prevChw = s.chwSupplyTemp;
+      prevCw = s.cwSupplyTemp;
+    }
   });
 });

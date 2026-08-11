@@ -120,7 +120,7 @@ const AHU46VectorOverlay = (() => {
       x: 57.0, y: 41.5, w: 9.5, h: 6.0 },
     { id: 'interlock',  stateKey: 'interlockOn',        label: 'Interlock',      units: '',    live: true,
       x: 57.0, y: 72.0, w: 9.5, h: 6.0 },
-    { id: 'supplyAirRH',  stateKey: 'supplyStaticPressure', label: 'Supply Air %RH', units: '%RH', live: true,
+    { id: 'supplyAirRH',  stateKey: 'supplyAirRH',          label: 'Supply Air %RH', units: '%RH', live: true,
       x: 77.0, y: 42.5, w: 4.5, h: 1.8 },
     { id: 'supplyAirTemp', stateKey: 'supplyAirTemp',  label: 'Supply Air Temp', units: '°F', live: true,
       x: 77.0, y: 52.0, w: 4.5, h: 1.8 },
@@ -293,7 +293,7 @@ const AHU46VectorOverlay = (() => {
       }, '⚠ M-03 Economizer active while mechanical cooling engaged'),
       activeFaultIds.includes('M-04') && React.createElement('div', {
         className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-700 bg-opacity-90 text-white text-xs font-bold text-center mt-18'
-      }, '⚠ M-04 OA damper below 60% minimum — meeting-room ventilation shortfall'),
+      }, '⚠ M-04 OA damper below 50% minimum — meeting-room ventilation shortfall'),
 
       // Vector background — replaces the old <img src={IMAGE_SRC}> PNG
       React.createElement(VectorBoard, null),

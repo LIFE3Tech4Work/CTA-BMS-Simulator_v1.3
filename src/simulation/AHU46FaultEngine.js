@@ -8,9 +8,9 @@
  * M-01: Supply air too warm — cooling coil cannot maintain setpoint
  * M-02: CO₂ exceeds 1,100 ppm (ASHRAE 62.1 upper guideline)
  * M-03: Economizer active while mechanical cooling still engaged
- * M-04: OA damper below ASHRAE 62.1 minimum (60% for meeting rooms)
- *        Note: the 60% floor makes this fault pedagogically distinct —
- *        a damper stuck at 30% on this unit starves 2× more fresh air
+ * M-04: OA damper below ASHRAE 62.1 minimum (50% for meeting rooms)
+ *        Note: the 50% floor makes this fault pedagogically distinct —
+ *        a damper stuck at 10% on this unit starves 2.5× more fresh air
  *        than the same fault would on AHU-4-4 (20% floor).
  *
  * Attached to window.AHU46FaultEngine (no import/export — Babel standalone).
@@ -67,13 +67,13 @@
     },
     {
       id: 'M-04',
-      description: 'OA damper below the ASHRAE 62.1 minimum position (60%) while fan is running — ventilation shortfall. At 60% min, this fault is especially significant: a stuck damper at 10% starves meeting-room occupants of ~5,000 CFM of required fresh air.',
+      description: 'OA damper below the ASHRAE 62.1 minimum position (50%, per the SOO min/max CFM table: 4,500/9,000 CFM) while fan is running — ventilation shortfall. At 50% min, this fault is especially significant: a stuck damper at 10% starves meeting-room occupants of ~3,600 CFM of required fresh air.',
       priority: 'high',
       sourceField: 'oaDamperPosition',
       relatedStateKeys: ['oaDamperPosition', 'oaCFM', 'minOAAirflowSetpoint'],
       condition: function(state) {
         if (state.fanRunning === undefined || state.oaDamperPosition === undefined) return false;
-        return state.fanRunning === true && state.oaDamperPosition < 60;
+        return state.fanRunning === true && state.oaDamperPosition < 50;
       }
     }
   ];
