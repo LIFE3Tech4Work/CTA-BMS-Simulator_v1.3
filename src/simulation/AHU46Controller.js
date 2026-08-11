@@ -173,6 +173,25 @@
       state.returnFanStatus = 'ON';
     }
 
+    // 1.5 FAN INTERLOCK CHAIN (SOO System Start #1-2, General #2)
+    // "Safety devices shall be hardwired interlocked with 'hand' and
+    // 'automatic' positions in series with motor controller holding coil
+    // circuit" (General #2), and "When the supply fan is started its
+    // interlocked return fan shall also start" (System Start #1). These
+    // three points were previously hardcoded `true` forever, regardless of
+    // whether the unit was even running — meaning they'd stay reported as
+    // "on/open" through a shutdown, a fire-alarm trip, or before the unit
+    // had ever been started. They now track live fan/interlock status.
+    // NOTE: the SOO's mixing-box flow diagram labels the "common damper"
+    // point (DA-AK/AL, N.O. HOLD CLOSED) as applying only to AHU-4-3 and
+    // AHU-4-4 — it's unclear from the documents available whether AHU-4-6
+    // has an equivalent point at all, or whether it should track fan status
+    // the same way. Kept simple (tied to fanRunning like the other two)
+    // pending clarification, rather than guessing at different logic.
+    state.interlockOn = state.fanRunning;
+    state.exhaustFanOn = state.fanRunning;
+    state.commonDamperOpen = state.fanRunning;
+
     // 2. ECONOMIZER LOGIC
     state.economizerActive = false;
 

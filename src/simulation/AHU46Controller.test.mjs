@@ -99,6 +99,55 @@ describe('AHU46Controller — fan logic', () => {
   });
 });
 
+// ─── Fan interlock chain (SOO System Start #1-2, General #2) ────────────────
+//
+// interlockOn, exhaustFanOn, and commonDamperOpen were previously hardcoded
+// `true` forever — meaning they'd stay reported as on/open even through a
+// shutdown or fire-alarm trip. They should track live fan status instead.
+
+describe('AHU46Controller — fan interlock chain tracks live status', () => {
+  it('all three are true when the fan is running (default state)', () => {
+    const ctrl = loadController();
+    const s = ctrl.getState();
+    expect(s.fanRunning).toBe(true);
+    expect(s.interlockOn).toBe(true);
+    expect(s.exhaustFanOn).toBe(true);
+    expect(s.commonDamperOpen).toBe(true);
+  });
+
+  it('all three go false when the unit is off (runSchedule=false)', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', false);
+    const s = ctrl.getState();
+    expect(s.fanRunning).toBe(false);
+    expect(s.interlockOn).toBe(false);
+    expect(s.exhaustFanOn).toBe(false);
+    expect(s.commonDamperOpen).toBe(false);
+  });
+
+  it('all three go false during fire alarm shutdown, even if runSchedule is On', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', true);
+    ctrl.setValue('fireAlarmShutdown', true);
+    const s = ctrl.getState();
+    expect(s.fanRunning).toBe(false);
+    expect(s.interlockOn).toBe(false);
+    expect(s.exhaustFanOn).toBe(false);
+    expect(s.commonDamperOpen).toBe(false);
+  });
+
+  it('return to true once fire alarm clears and schedule is On', () => {
+    const ctrl = loadController();
+    ctrl.setValue('fireAlarmShutdown', true);
+    ctrl.setValue('fireAlarmShutdown', false);
+    const s = ctrl.getState();
+    expect(s.fanRunning).toBe(true);
+    expect(s.interlockOn).toBe(true);
+    expect(s.exhaustFanOn).toBe(true);
+    expect(s.commonDamperOpen).toBe(true);
+  });
+});
+
 // ─── 60% OA damper floor ─────────────────────────────────────────────────────
 
 describe('AHU46Controller — 60% OA damper minimum', () => {

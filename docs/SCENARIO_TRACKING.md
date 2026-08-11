@@ -52,6 +52,45 @@ to **Fixed** with the commit hash and a short verification summary.
 - **Verified:** Full cool-down/warm-up cycle including both-direction
   deadband-holding and fan-independence; 5 new regression tests.
 
+### 5. Fan interlock chain (interlockOn / exhaustFanOn / commonDamperOpen)
+- **Source:** SOO General Automatic Control Sequences #2 ("safety devices
+  shall be hardwired interlocked with 'hand' and 'automatic' positions in
+  series with motor controller holding coil circuit") and System Start #1
+  ("when the supply fan is started its interlocked return fan shall also
+  start"). Found while investigating a broader report of static values on
+  AHU-4-6 that shouldn't be, per the BMS Figure Rules document's AI/setpoint
+  taxonomy.
+- **Bug:** All three fields were hardcoded `true` at initialization and
+  never reassigned anywhere in `recalculate()` — they'd stay reported as
+  on/open even through a shutdown or a fire-alarm trip.
+- **Fix:** All three now track `state.fanRunning` live.
+- **Note:** the SOO's mixing-box flow diagram labels the "common damper"
+  point as applying only to AHU-4-3/AHU-4-4 — unclear whether AHU-4-6 has
+  a true equivalent point at all. Kept simple (tied to fan status like the
+  other two) pending clarification rather than guessing at different logic.
+- **Verified:** 4 new regression tests — fan running, unit off, fire-alarm
+  shutdown (overrides runSchedule=On), and recovery back to normal.
+
+---
+
+## Open — static values audit (found while investigating item #5 above)
+
+A full sweep of every state field in `AHU46Controller.js` for fields that
+are *never* reassigned anywhere in `recalculate()` (i.e., permanently
+frozen after initialization) turned up more candidates beyond the three
+just fixed. Per the BMS Figure Rules doc, operator setpoints (white boxes)
+are correctly static until a human changes them — the items below are all
+things labeled as live sensor/plant readings that currently never move on
+their own.
+
+| # | Field | Declared value | Why it's a problem |
+|---|---|---|---|
+| 25a | `co2Sensor` | 479 ppm | Labeled a sensor; used as an input to the OA-damper trim formula but never written back to — frozen regardless of simulated occupancy/time. Editable from the sidebar, but a real sensor shouldn't require a human to manually retype its own reading. |
+| 25b | `supplyStaticPressure` | 72.3 | Already known to be mislabeled (it's actually supply-air %RH, not static pressure — see item 9) — also frozen on top of that. |
+| 25c | `chwSupplyTemp` | 41.9°F | Plant-level "global condition" (per Lev's training material, this is exactly the bottom-status-bar reading that should reflect real plant load/weather). Frozen at the original screenshot value. |
+| 25d | `cwSupplyTemp` | 77.7°F | Same issue — condenser water supply, frozen. |
+| 25e | `systemStarting`, `startingTimeLeft` | `false` / `0` | These should drive a startup countdown — direct evidence of the missing staged fan-start sequence (overlaps with open item #8). |
+
 ---
 
 ## Open — control logic gaps (`AHU46Controller.js`)
