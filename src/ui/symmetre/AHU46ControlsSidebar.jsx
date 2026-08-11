@@ -195,10 +195,13 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(SectionHeader, { title: 'Schedule' }),
       React.createElement(ToggleRow, { label: 'Run Schedule', stateKey: 'runSchedule' }),
 
-      // TIMER CONTROL
+      // TIMER CONTROL — System Starting/Starting Time Left are now derived
+      // outputs of the staged fan-start sequence (SOO System Start #1-2),
+      // not operator inputs — read-only, same as Economizer Active.
       React.createElement(SectionHeader, { title: 'Timer Control' }),
-      React.createElement(ToggleRow, { label: 'System Starting', stateKey: 'systemStarting' }),
-      React.createElement(EditableRow, { label: 'Starting Time Setpoint', stateKey: 'startingTimeSetpoint', units: 'SEC', min: 0, max: 600 }),
+      React.createElement(ReadOnlyRow, { label: 'System Starting', stateKey: 'systemStarting', units: '',
+        format: function(v) { return v ? 'YES' : 'NO'; } }),
+      React.createElement(EditableRow, { label: 'Starting Time Setpoint', stateKey: 'startingTimeSetpoint', units: 'SEC', min: 0, max: 900 }),
       React.createElement(ReadOnlyRow, { label: 'Starting Time Left', stateKey: 'startingTimeLeft', units: 'SEC' }),
 
       // SUPPLY AIR TEMPERATURE CONTROL

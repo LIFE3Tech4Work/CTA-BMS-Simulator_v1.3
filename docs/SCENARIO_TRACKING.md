@@ -250,6 +250,71 @@ to **Fixed** with the commit hash and a short verification summary.
   codebase as a side effect of a full rebuild; purely additive, no
   removals.
 
+### 13. No staged fan-start sequence (items #8 / #25e)
+- **Source:** SOO page 3, System Run #1-2: fans commanded to start
+  simultaneously (90s to prove status or abort with an alarm); SF VFD
+  starts after a 90-second hardwired damper-travel delay, then ramps to
+  setpoint over 2 minutes; the interlocked RF starts after its own
+  30-second hardwired delay once SF proves status, then ramps over 2 more
+  minutes. Page 3 top also describes a 2-minute hold at speed polling the
+  connected VAV boxes before the mixed air dampers are released to normal
+  minimum-flow control. 90+120+30+120+120 = 480 seconds total. Confirmed
+  against the original SOO scan (`AHU_4_3_4_6_SOO_Page3.png`).
+- **Bug:** A start command snapped straight to fully running — no damper
+  travel, no fan ramp, no RF lag, no VAV-poll hold. `systemStarting` and
+  `startingTimeLeft` existed on state but were never driven (item #25e).
+- **Design choice (flagged to the user before building — see chat):**
+  this is a real wall-clock sequence (`Date.now()`-based), not tied to the
+  app's compressed TMY3 weather clock — the only place in this file that
+  depends on elapsed time rather than being a pure function of current
+  inputs. `startingTimeSetpoint` default changed from 120 SEC (an
+  unexplained screenshot artifact that didn't match any SOO timing) to
+  480 SEC, matching the SOO's literal stage sum; adjusting it scales every
+  stage proportionally (General Automatic Control Sequences #9: "all
+  control setpoints and variables shall be fully adjustable").
+- **Fix:** Detects a rising edge on the run command (`runSchedule` on AND
+  no fire-alarm shutdown) and, instead of snapping to running, walks
+  through the staged sequence: OA damper ramps 0→floor during the 90s
+  delay (SF/RF both off) → SF ramps from `minPositionFanSpeedLock` (a
+  previously-declared-but-unused field, now meaningfully reused as the
+  ramp's starting speed) up to `fanSpeedSetpoint` over 2 minutes (damper
+  held at floor) → RF flips ON after its 30s delay → both hold at speed
+  through the VAV-poll window. No economizer/CO₂ DCV authority at any
+  point during staging — the SOO holds the mixed air damper at minimum
+  through the whole sequence. A fire-alarm trip or `runSchedule=false` at
+  any point aborts immediately (life-safety overrides win — General
+  Automatic Control Sequences #4) and the next start begins fresh, not
+  resumed. `systemStarting` converted from a manual sidebar toggle to a
+  read-only derived status (like `economizerActive`) since it's no longer
+  meaningful as an operator input.
+- **Investigated during live-app testing:** an off→on cycle showed the
+  M-02 CO₂ alarm firing during stage 1 and initially looked like a new
+  bug caused by staging. Traced it through and confirmed it isn't one —
+  `co2Sensor` (item #25a) already correctly shows the design-occupied
+  ceiling the moment the fan is genuinely off (a real "unventilated"
+  reading), and stage 1's brief fan-off delay just carries that
+  already-elevated value forward rather than manufacturing a new one; it
+  self-corrects once stage 2 restores ventilation. No code change needed
+  — documented with a regression test instead so this doesn't get
+  mistaken for a bug again later.
+- **Verified:** 10 new regression tests using `vi.useFakeTimers()` to
+  advance through the sequence without waiting real minutes — default
+  (already running, no staging on boot), rising-edge trigger, each stage's
+  values (damper travel fraction, SF ramp midpoint, RF coming on, both
+  holding at speed), economizer/CO₂ DCV locked out throughout, clean
+  hand-off at `startingTimeSetpoint`, mid-sequence abort-and-fresh-restart,
+  proportional scaling when the setpoint is adjusted, M-04 never
+  spuriously firing during the ramp, and the CO₂-during-staging
+  investigation above. Rewrote the one existing test whose assumption the
+  new behavior legitimately invalidates (fire-alarm clear was previously
+  instant; it now correctly re-triggers the full staged sequence — same
+  "update the test with the correct expected value, don't just edit the
+  assertion" standard as prior batches). Also manually verified end-to-end
+  in the running app via the browser console against the live controller
+  instance: triggered a real restart, watched `systemStarting`/
+  `startingTimeLeft`/damper/interlock update correctly in the sidebar in
+  real time.
+
 ---
 
 ## Open — static values audit (found while investigating item #5 above)
@@ -262,12 +327,12 @@ are correctly static until a human changes them — the items below are all
 things labeled as live sensor/plant readings that currently never move on
 their own.
 
-| # | Field | Declared value | Why it's a problem |
-|---|---|---|---|
-| 25e | `systemStarting`, `startingTimeLeft` | `false` / `0` | These should drive a startup countdown — direct evidence of the missing staged fan-start sequence (overlaps with open item #8). |
+All items in this table are now fixed.
 
 (Items 25a–25d — `co2Sensor`, `supplyStaticPressure`/`supplyAirRH`,
-`chwSupplyTemp`, `cwSupplyTemp` — fixed; see Fixed items 7-9 above.)
+`chwSupplyTemp`, `cwSupplyTemp` — fixed; see Fixed items 7-9 above. Item
+25e — `systemStarting`/`startingTimeLeft` — fixed as part of item #8; see
+Fixed item 13 below.)
 
 ---
 
@@ -275,12 +340,13 @@ their own.
 
 | # | Scenario | Source | Notes |
 |---|---|---|---|
-| 8 | No staged fan-start sequence | SOO System Start #1-2 | Currently instant on/off; real sequence is 90s damper delay → 2-min SF ramp → RF follows with 30s delay + 2-min ramp → 2-min VAV poll hold |
 | 9 | No duct static-pressure control loop | SOO Closed Loop Controller #5 | `fanSpeedSetpoint` is a raw operator number, zero automatic modulation from any pressure feedback |
 | 10 | No return-fan flow-tracking control | SOO Closed Loop Controller #6 | Return fan has no independent speed/CFM logic; should track 90% of supply flow |
 | 11 | Only 2 of 3 mixing-box dampers modeled | SOO Item 11a, Points List DA-2/DA-3 | Return Air damper and Spill Air damper aren't separately represented |
 | 12 | Return air conditions incomplete | Points List AFMS-2, THS-4 (humidity) | No return CFM or return humidity fields; `returnAirTemp` is a hardcoded constant |
 | 13 | No RH-driven automatic cooling-setpoint reset | SOO Item 6 ("Automatic" mode) | Model only has the manual mode |
+
+(Item 8 — no staged fan-start sequence — fixed; see Fixed item 13 below.)
 
 (Items 5 and 6 — economizer hysteresis, plenum reset — fixed; see Fixed
 items 10-11 above. Item 7 — VFD-in-bypass alarm — fixed; see Fixed item 12

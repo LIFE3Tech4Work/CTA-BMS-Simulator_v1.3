@@ -118,13 +118,36 @@
   var CW_SUPPLY_MIN = 65;    // °F — condenser water floor (tower bypass/minimum)
   var CW_SUPPLY_MAX = 85;    // °F — condenser water ceiling (design max entering condenser temp)
 
+  // Staged fan-start sequence — SOO "AHU-4-3 / RF-4-6: Sequence of
+  // Operation", System Start #1-2: a start command doesn't snap straight to
+  // running. The OA/RA dampers travel while the SF VFD waits out a 90-second
+  // hardwired delay, then SF ramps to setpoint over 2 minutes (adjustable
+  // minimum); once SF proves status the RF VFD waits its own 30-second
+  // hardwired delay, then RF ramps over 2 more minutes; the assembly then
+  // holds at speed for 2 minutes polling the connected VAV boxes before the
+  // mixed air dampers are released to normal minimum-fresh-air-flow control.
+  // 90 + 120 + 30 + 120 + 120 = 480 seconds total, which is
+  // startingTimeSetpoint's default. These are fractions of that total so
+  // adjusting it (SOO General Automatic Control Sequences #9: "all control
+  // setpoints and variables shall be fully adjustable") scales every stage
+  // proportionally. Real wall-clock seconds — tracked via Date.now(), the
+  // only place in this file that depends on elapsed time rather than being
+  // a pure function of current inputs. SCENARIO_TRACKING.md items #8/#25e.
+  var START_STAGE_SF_DELAY_END = 90 / 480;   // damper travel / SF start delay ends
+  var START_STAGE_SF_RAMP_END = 210 / 480;   // SF ramp (90+120) ends
+  var START_STAGE_RF_DELAY_END = 240 / 480;  // RF start delay (210+30) ends
+  // RF ramp + VAV-poll hold (240→480) aren't separately observable in this
+  // model — there's no numeric return-fan speed field to ramp (open item
+  // #10), so RF simply flips to ON at START_STAGE_RF_DELAY_END and the rest
+  // of the hold is just SF/RF holding at speed until startingTimeSetpoint.
+
   // ─── Shared State Object ────────────────────────────────────────────────────
 
   var state = {
     // ═══ INPUTS (editable from Controls Sidebar) ════════════════════════════
     runSchedule: true,
     systemStarting: false,
-    startingTimeSetpoint: 120,        // seconds (from screenshot: 120 SEC)
+    startingTimeSetpoint: 480,         // seconds — SOO System Start #1-2 stage sum (90+120+30+120+120)
     startingTimeLeft: 0,
     coolingCoilSetpoint: 60.0,        // °F
     heatingCoilSetpoint: 55.0,        // °F
@@ -184,9 +207,99 @@
   // field that can also be flagged Manual (see file header).
   var modes = {};
 
+  // Staged fan-start bookkeeping (SCENARIO_TRACKING.md #8). wasRunCommanded
+  // starts true to match the default state's runSchedule=true/
+  // fireAlarmShutdown=false — the unit boots up already running (matching
+  // every other screenshot-derived default in this file), not mid-startup.
+  // Only a LATER false→true edge (e.g. a fire-alarm shutdown clearing, or
+  // runSchedule being turned back on) kicks off the staged sequence.
+  var wasRunCommanded = true;
+  var startCommandedAt = null;
+
   // ─── Engineering Calculations ───────────────────────────────────────────────
 
+  // Computes every output field the normal steps 1/1.5/2 below would
+  // otherwise compute, for one tick partway through the staged start
+  // sequence. See the START_STAGE_* constants' comment for the stage
+  // breakdown this implements.
+  function applyStagedStart(elapsedSec, total) {
+    var sfDelayEnd = total * START_STAGE_SF_DELAY_END;
+    var sfRampEnd = total * START_STAGE_SF_RAMP_END;
+    var rfDelayEnd = total * START_STAGE_RF_DELAY_END;
+
+    var fanOn = elapsedSec >= sfDelayEnd;
+    state.fanRunning = fanOn;
+    state.supplyFanStatus = fanOn ? 'ON' : 'OFF';
+    state.returnFanStatus = (elapsedSec >= rfDelayEnd) ? 'ON' : 'OFF';
+    state.interlockOn = fanOn;
+    state.exhaustFanOn = fanOn;
+    state.commonDamperOpen = fanOn;
+
+    if (!fanOn) {
+      // Pre-start: OA/RA dampers traveling, SF/RF both still off.
+      state.fanSpeed = 0;
+      state.cfm = 0;
+      var travelFraction = sfDelayEnd > 0 ? Math.min(1, elapsedSec / sfDelayEnd) : 1;
+      state.oaDamperPosition = Math.round(OA_DAMPER_FLOOR * travelFraction);
+    } else if (elapsedSec < sfRampEnd) {
+      // SF ramping from its minimum-position lock speed up to setpoint.
+      var rampSpan = sfRampEnd - sfDelayEnd;
+      var rampFraction = rampSpan > 0 ? (elapsedSec - sfDelayEnd) / rampSpan : 1;
+      state.fanSpeed = Math.round(
+        state.minPositionFanSpeedLock + rampFraction * (state.fanSpeedSetpoint - state.minPositionFanSpeedLock)
+      );
+      state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
+      state.oaDamperPosition = OA_DAMPER_FLOOR;
+    } else {
+      // SF holding at setpoint speed; RF starting/holding; VAV poll hold.
+      state.fanSpeed = state.fanSpeedSetpoint;
+      state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
+      state.oaDamperPosition = OA_DAMPER_FLOOR;
+    }
+
+    // No economizer/CO₂ DCV authority until the sequence completes — the
+    // SOO holds the mixed air dampers at minimum through the whole start.
+    state.economizerActive = false;
+    state.oaCFM = fanOn
+      ? Math.min(Math.round(state.minOAAirflowSetpoint * (state.oaDamperPosition / state.economizerMinPosition)), state.cfm)
+      : 0;
+    state.exhaustDamperPct = fanOn ? state.oaDamperPosition : 0;
+  }
+
   function recalculate() {
+
+    // STAGED FAN-START SEQUENCING (SOO System Start #1-2) — detects a
+    // start command (runSchedule on AND no fire-alarm shutdown) and, on
+    // the rising edge, begins the staged sequence rather than snapping
+    // straight to running. See applyStagedStart() above for the stage
+    // breakdown. A fire alarm or runSchedule=false at any point aborts the
+    // sequence immediately (life-safety overrides win — General Automatic
+    // Control Sequences #4) and the next start command begins fresh.
+    var runCommanded = state.runSchedule && !state.fireAlarmShutdown;
+    if (runCommanded && !wasRunCommanded) {
+      startCommandedAt = Date.now();
+      state.systemStarting = true;
+    }
+    wasRunCommanded = runCommanded;
+
+    if (!runCommanded) {
+      state.systemStarting = false;
+      state.startingTimeLeft = 0;
+    } else if (state.systemStarting) {
+      var elapsedSec = (Date.now() - startCommandedAt) / 1000;
+      if (elapsedSec >= state.startingTimeSetpoint) {
+        state.systemStarting = false;
+        state.startingTimeLeft = 0;
+        // Falls through to the normal steps below for this tick — a clean
+        // hand-off since applyStagedStart()'s final-stage values already
+        // match what step 1/2 compute for a fully-running unit at floor.
+      } else {
+        state.startingTimeLeft = Math.max(0, Math.round(state.startingTimeSetpoint - elapsedSec));
+        applyStagedStart(elapsedSec, state.startingTimeSetpoint);
+      }
+    } else {
+      state.startingTimeLeft = 0;
+    }
 
     // 0. FREEZE PROTECTION PUMP (SOO General Automatic Control Sequences #5)
     // Runs independent of fan status — this protects the hot water coil and
@@ -225,8 +338,12 @@
       ) / 10;
     }
 
-    // 1. FAN LOGIC
-    if (state.fireAlarmShutdown || !state.runSchedule) {
+    // 1. FAN LOGIC — skipped while a staged start is in progress;
+    // applyStagedStart() already set fanRunning/fanSpeed/cfm/status for
+    // this tick (see the sequencing block above).
+    if (state.systemStarting) {
+      // handled above
+    } else if (state.fireAlarmShutdown || !state.runSchedule) {
       state.fanRunning = false;
       state.fanSpeed = 0;
       state.cfm = 0;
@@ -262,9 +379,14 @@
     // has an equivalent point at all, or whether it should track fan status
     // the same way. Kept simple (tied to fanRunning like the other two)
     // pending clarification, rather than guessing at different logic.
-    state.interlockOn = state.fanRunning;
-    state.exhaustFanOn = state.fanRunning;
-    state.commonDamperOpen = state.fanRunning;
+    // Skipped during staging — applyStagedStart() already set these to
+    // track the staged fanOn state, which lags the plain "commanded to
+    // run" signal by design (SOO System Start #1-2).
+    if (!state.systemStarting) {
+      state.interlockOn = state.fanRunning;
+      state.exhaustFanOn = state.fanRunning;
+      state.commonDamperOpen = state.fanRunning;
+    }
 
     // 1.6 ECONOMIZER ENTHALPY/OAT HYSTERESIS (SOO Closed Loop Controller #2
     // item 4d-e, AUTO mode) — was a pure manual toggle. Enable free cooling
@@ -289,37 +411,42 @@
       // else: inside the deadband on one or both axes — hold last state.
     }
 
-    // 2. ECONOMIZER LOGIC
-    state.economizerActive = false;
+    // 2. ECONOMIZER LOGIC — skipped during staging (applyStagedStart()
+    // already held oaDamperPosition/oaCFM/economizerActive appropriately;
+    // the SOO gives the economizer/CO₂ DCV no authority until the staged
+    // sequence completes).
+    if (!state.systemStarting) {
+      state.economizerActive = false;
 
-    if (state.fanRunning) {
-      var oaDamperManual = modes.oaDamperPosition === 'Manual';
+      if (state.fanRunning) {
+        var oaDamperManual = modes.oaDamperPosition === 'Manual';
 
-      if (!oaDamperManual) {
-        if (state.oaTemperature < state.economizerTempControlSP &&
-            state.enthalpyOKForEconomizer &&
-            !state.lowOATLockout) {
-          state.economizerActive = true;
-          state.oaDamperPosition = 100;
-        } else {
-          // At 50% minimum, the floor is the design requirement — not 20% like AHU-4-4
-          state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
+        if (!oaDamperManual) {
+          if (state.oaTemperature < state.economizerTempControlSP &&
+              state.enthalpyOKForEconomizer &&
+              !state.lowOATLockout) {
+            state.economizerActive = true;
+            state.oaDamperPosition = 100;
+          } else {
+            // At 50% minimum, the floor is the design requirement — not 20% like AHU-4-4
+            state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
+          }
+
+          // CO₂ DCV override — raises above minimum, never below
+          if (state.co2Sensor > state.co2Setpoint && !state.economizerActive) {
+            var co2Excess = state.co2Sensor - state.co2Setpoint;
+            var co2DamperCommand = Math.min(100, state.economizerMinPosition + (co2Excess / 5));
+            state.oaDamperPosition = Math.round(co2DamperCommand);
+          }
         }
+        // else: Manual hold — program yields authority (same as AHU-4-4)
 
-        // CO₂ DCV override — raises above minimum, never below
-        if (state.co2Sensor > state.co2Setpoint && !state.economizerActive) {
-          var co2Excess = state.co2Sensor - state.co2Setpoint;
-          var co2DamperCommand = Math.min(100, state.economizerMinPosition + (co2Excess / 5));
-          state.oaDamperPosition = Math.round(co2DamperCommand);
-        }
+        state.oaCFM = Math.round(state.minOAAirflowSetpoint * (state.oaDamperPosition / state.economizerMinPosition));
+        state.oaCFM = Math.min(state.oaCFM, state.cfm);
+      } else {
+        state.oaDamperPosition = 0;
+        state.oaCFM = 0;
       }
-      // else: Manual hold — program yields authority (same as AHU-4-4)
-
-      state.oaCFM = Math.round(state.minOAAirflowSetpoint * (state.oaDamperPosition / state.economizerMinPosition));
-      state.oaCFM = Math.min(state.oaCFM, state.cfm);
-    } else {
-      state.oaDamperPosition = 0;
-      state.oaCFM = 0;
     }
 
     state.exhaustDamperPct = state.fanRunning ? state.oaDamperPosition : 0;
@@ -398,6 +525,11 @@
     // screenshot value forever; ties to the AHU's own ventilation rate.
     // Respects Manual override the same way oaDamperPosition does (it's
     // editable from the Controls Sidebar as "Controlling CO2 Sensor").
+    // Note (SCENARIO_TRACKING.md #8): a unit that was truly off (fan not
+    // running) legitimately shows an elevated reading here going into a
+    // staged start, and stage 1's ~90s fan-off delay simply holds that
+    // already-elevated value — it isn't a new artifact of staging, and it
+    // self-corrects within stage 2 once ventilation resumes.
     if (modes.co2Sensor !== 'Manual') {
       var ventilationRatio = state.fanRunning
         ? Math.min(1, state.oaCFM / state.minOAAirflowSetpoint)

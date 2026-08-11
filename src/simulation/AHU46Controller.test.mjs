@@ -7,7 +7,7 @@
  * SCENARIO_TRACKING.md item #14. Was previously 60%, which matched neither
  * the SOO table nor minOAAirflowSetpoint (4,500 CFM).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -139,15 +139,36 @@ describe('AHU46Controller — fan interlock chain tracks live status', () => {
     expect(s.commonDamperOpen).toBe(false);
   });
 
-  it('return to true once fire alarm clears and schedule is On', () => {
-    const ctrl = loadController();
-    ctrl.setValue('fireAlarmShutdown', true);
-    ctrl.setValue('fireAlarmShutdown', false);
-    const s = ctrl.getState();
-    expect(s.fanRunning).toBe(true);
-    expect(s.interlockOn).toBe(true);
-    expect(s.exhaustFanOn).toBe(true);
-    expect(s.commonDamperOpen).toBe(true);
+  it('clearing a fire alarm re-triggers the staged start sequence, not an instant return to running (SOO System Start #1-2)', () => {
+    // Was: instant fanRunning=true right after the alarm cleared. Per the
+    // staged fan-start sequence added for SCENARIO_TRACKING.md item #8, a
+    // fire-alarm clear is just another rising edge on the run command —
+    // it re-triggers the full staged sequence rather than snapping back to
+    // running. See the "staged fan-start sequence (#8)" describe block
+    // below for the sequence's own detailed tests.
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('fireAlarmShutdown', true);
+      ctrl.setValue('fireAlarmShutdown', false);
+      const s = ctrl.getState();
+      expect(s.systemStarting).toBe(true);
+      expect(s.fanRunning).toBe(false);
+      expect(s.interlockOn).toBe(false);
+      expect(s.exhaustFanOn).toBe(false);
+      expect(s.commonDamperOpen).toBe(false);
+
+      vi.advanceTimersByTime((ctrl.getState().startingTimeSetpoint + 1) * 1000);
+      ctrl.recalculate();
+      const s2 = ctrl.getState();
+      expect(s2.systemStarting).toBe(false);
+      expect(s2.fanRunning).toBe(true);
+      expect(s2.interlockOn).toBe(true);
+      expect(s2.exhaustFanOn).toBe(true);
+      expect(s2.commonDamperOpen).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -891,5 +912,232 @@ describe('AHU46Controller — VFD-in-bypass (#7)', () => {
     ctrl.setValue('fanSpeedSetpoint', 55);
     ctrl.setValue('returnFanVFDBypass', true);
     expect(ctrl.getState().fanSpeed).toBe(55);
+  });
+});
+
+// ─── Staged fan-start sequence (SCENARIO_TRACKING.md #8 / #25e) ────────────
+//
+// SOO System Start #1-2: a start command doesn't snap straight to running.
+// Default startingTimeSetpoint (480s) breaks down as 90s damper-travel/SF
+// delay, 2min SF ramp (→ t=210s), 30s RF delay (→ t=240s), then RF holds ON
+// through a 2min VAV-poll hold (→ t=480s) before the economizer/CO₂ DCV
+// regain authority. Real wall-clock seconds — tests use vi.useFakeTimers()
+// to advance through the sequence without actually waiting.
+
+describe('AHU46Controller — staged fan-start sequence (#8)', () => {
+  it('boots up already running by default — no staging on initial load', () => {
+    const s = loadController().getState();
+    expect(s.systemStarting).toBe(false);
+    expect(s.startingTimeLeft).toBe(0);
+    expect(s.fanRunning).toBe(true);
+  });
+
+  it('a runSchedule off→on edge triggers staging instead of an instant restart', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      expect(ctrl.getState().systemStarting).toBe(false); // off is still instant, no staging to turn off
+
+      ctrl.setValue('runSchedule', true);
+      const s = ctrl.getState();
+      expect(s.systemStarting).toBe(true);
+      expect(s.fanRunning).toBe(false);
+      expect(s.startingTimeLeft).toBe(480);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stage 1 (0-90s): OA damper travels toward the floor while SF/RF stay off', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+
+      vi.advanceTimersByTime(45 * 1000); // halfway through the 90s delay
+      ctrl.recalculate();
+      const s = ctrl.getState();
+      expect(s.fanRunning).toBe(false);
+      expect(s.supplyFanStatus).toBe('OFF');
+      expect(s.returnFanStatus).toBe('OFF');
+      expect(s.oaDamperPosition).toBe(25); // 50% floor × 45/90
+      expect(s.startingTimeLeft).toBe(435);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stage 2 (90-210s): SF ramps from the min-position lock speed to setpoint; RF still off', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+
+      vi.advanceTimersByTime(150 * 1000); // halfway through the 120s ramp (90+60)
+      ctrl.recalculate();
+      const s = ctrl.getState();
+      expect(s.fanRunning).toBe(true);
+      expect(s.supplyFanStatus).toBe('ON');
+      expect(s.returnFanStatus).toBe('OFF');
+      expect(s.fanSpeed).toBe(40); // 5 + 0.5×(75-5) — minPositionFanSpeedLock to setpoint
+      expect(s.cfm).toBe(3680);
+      expect(s.oaDamperPosition).toBe(50); // held at floor throughout the ramp
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stage 3+ (240-480s): RF comes on, SF holds at setpoint, damper still held at floor', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+
+      vi.advanceTimersByTime(300 * 1000);
+      ctrl.recalculate();
+      const s = ctrl.getState();
+      expect(s.fanRunning).toBe(true);
+      expect(s.returnFanStatus).toBe('ON');
+      expect(s.fanSpeed).toBe(75);
+      expect(s.cfm).toBe(6900);
+      expect(s.oaDamperPosition).toBe(50);
+      expect(s.startingTimeLeft).toBe(180);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('economizer/CO₂ DCV have no authority during staging, even when conditions would otherwise trigger them', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('co2Sensor', 2000); // would normally force the damper well above the floor
+      ctrl.setValue('enthalpyOKForEconomizer', true); // would normally trigger the economizer
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+
+      vi.advanceTimersByTime(300 * 1000); // deep into the sequence, SF/RF both on
+      ctrl.recalculate();
+      const s = ctrl.getState();
+      expect(s.economizerActive).toBe(false);
+      expect(s.oaDamperPosition).toBe(50); // pinned at the floor, not pushed up by CO₂ DCV
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('completes at startingTimeSetpoint and hands off cleanly to normal running logic', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+
+      vi.advanceTimersByTime(481 * 1000);
+      ctrl.recalculate();
+      const s = ctrl.getState();
+      expect(s.systemStarting).toBe(false);
+      expect(s.startingTimeLeft).toBe(0);
+      expect(s.fanRunning).toBe(true);
+      expect(s.fanSpeed).toBe(75);
+      expect(s.interlockOn).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts immediately on a fire-alarm trip mid-sequence, and a later restart begins fresh (not resumed)', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+      vi.advanceTimersByTime(150 * 1000); // mid SF-ramp — fan already spinning
+      ctrl.recalculate();
+      expect(ctrl.getState().fanRunning).toBe(true);
+
+      ctrl.setValue('fireAlarmShutdown', true);
+      var aborted = ctrl.getState();
+      expect(aborted.fanRunning).toBe(false);
+      expect(aborted.systemStarting).toBe(false);
+      expect(aborted.startingTimeLeft).toBe(0);
+
+      ctrl.setValue('fireAlarmShutdown', false); // restart — should NOT resume at the old 150s mark
+      var restarted = ctrl.getState();
+      expect(restarted.systemStarting).toBe(true);
+      expect(restarted.fanRunning).toBe(false);
+      expect(restarted.oaDamperPosition).toBe(0); // fresh stage 1, not the 50% it held before the trip
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('scales all stage boundaries proportionally when startingTimeSetpoint is adjusted', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('startingTimeSetpoint', 48); // 10× faster — SF delay now 9s, not 90s
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+
+      vi.advanceTimersByTime(8500); // 8.5s — still inside the shortened delay
+      ctrl.recalculate();
+      expect(ctrl.getState().fanRunning).toBe(false);
+
+      vi.advanceTimersByTime(1000); // 9.5s — past the shortened 9s delay
+      ctrl.recalculate();
+      expect(ctrl.getState().fanRunning).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('M-04 does not spuriously fire during staging — the damper never reports below the floor once the fan is on', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+      vi.advanceTimersByTime(150 * 1000);
+      ctrl.recalculate();
+      const s = ctrl.getState();
+      expect(s.fanRunning).toBe(true);
+      expect(s.oaDamperPosition).toBeGreaterThanOrEqual(50);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('co2Sensor reflects a genuinely-off unit through stage 1, then recovers once stage 2 restores ventilation', () => {
+    // Investigated during live-app testing: an off→on cycle shows co2Sensor
+    // already at the design-occupied ceiling before the restart (correct —
+    // #25a's model has fanRunning=false imply zero ventilation), and stage
+    // 1's fan-off delay simply carries that already-elevated reading —
+    // it's not a new artifact of staging. It self-corrects once stage 2
+    // brings the fan back on.
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      expect(ctrl.getState().co2Sensor).toBe(1200);
+
+      ctrl.setValue('runSchedule', true); // rising edge — staging begins
+      const s = ctrl.getState();
+      expect(s.systemStarting).toBe(true);
+      expect(s.fanRunning).toBe(false);
+      expect(s.co2Sensor).toBe(1200); // still off in stage 1, correctly still elevated
+
+      vi.advanceTimersByTime(150 * 1000); // into stage 2 — fan now on
+      ctrl.recalculate();
+      const s2 = ctrl.getState();
+      expect(s2.fanRunning).toBe(true);
+      expect(s2.co2Sensor).toBeLessThan(1200); // recovering now that ventilation has resumed
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
