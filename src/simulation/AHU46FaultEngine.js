@@ -2,7 +2,7 @@
  * AHU46FaultEngine.js — Fault detection rules for AHU-4-6
  *
  * Mirrors AHU44NewFaultEngine.js's rule pattern, adapted for the Meeting
- * Room 2nd Level AHU. Fault rule IDs use the M-series prefix (M-01..M-04)
+ * Room 2nd Level AHU. Fault rule IDs use the M-series prefix (M-01..M-06)
  * to distinguish from AHU-4-4's N-series rules.
  *
  * M-01: Supply air too warm — cooling coil cannot maintain setpoint
@@ -12,6 +12,8 @@
  *        Note: the 50% floor makes this fault pedagogically distinct —
  *        a damper stuck at 10% on this unit starves 2.5× more fresh air
  *        than the same fault would on AHU-4-4 (20% floor).
+ * M-05: Supply Fan VFD in bypass (SOO General Automatic Control Sequences #16)
+ * M-06: Return Fan VFD in bypass (SOO General Automatic Control Sequences #16)
  *
  * Attached to window.AHU46FaultEngine (no import/export — Babel standalone).
  */
@@ -74,6 +76,28 @@
       condition: function(state) {
         if (state.fanRunning === undefined || state.oaDamperPosition === undefined) return false;
         return state.fanRunning === true && state.oaDamperPosition < 50;
+      }
+    },
+    {
+      id: 'M-05',
+      description: 'Supply Fan VFD in bypass — drive is out of the control loop, motor running across-the-line at uncontrolled speed (SOO General Automatic Control Sequences #16: "an alarm shall be annunciated at the BAS whenever the drive is placed in bypass")',
+      priority: 'high',
+      sourceField: 'supplyFanVFDBypass',
+      relatedStateKeys: ['supplyFanVFDBypass', 'fanSpeed', 'fanSpeedSetpoint'],
+      condition: function(state) {
+        if (state.supplyFanVFDBypass === undefined) return false;
+        return state.supplyFanVFDBypass === true;
+      }
+    },
+    {
+      id: 'M-06',
+      description: 'Return Fan VFD in bypass — drive is out of the control loop, motor running across-the-line at uncontrolled speed (SOO General Automatic Control Sequences #16: "an alarm shall be annunciated at the BAS whenever the drive is placed in bypass")',
+      priority: 'high',
+      sourceField: 'returnFanVFDBypass',
+      relatedStateKeys: ['returnFanVFDBypass'],
+      condition: function(state) {
+        if (state.returnFanVFDBypass === undefined) return false;
+        return state.returnFanVFDBypass === true;
       }
     }
   ];

@@ -143,6 +143,8 @@
     fanSpeedSetpoint: 75,             // %
     fireAlarmShutdown: false,
     fireAlarmSmokePurge: false,
+    supplyFanVFDBypass: false,        // SOO General Automatic Control Sequences #16
+    returnFanVFDBypass: false,        // (VFD-in-bypass alarm) — SCENARIO_TRACKING.md item #7
     interlockOn: true,
     exhaustFanOn: true,
     commonDamperOpen: true,
@@ -233,7 +235,13 @@
       state.returnFanStatus = 'OFF';
     } else {
       state.fanRunning = true;
-      state.fanSpeed = state.fanSpeedSetpoint;
+      // SOO General Automatic Control Sequences #16: "For each variable
+      // speed motor an alarm shall be annunciated at the BAS whenever the
+      // drive is placed in bypass." In bypass the VFD is out of the
+      // control loop entirely — the motor runs across-the-line at full,
+      // uncontrolled speed rather than tracking fanSpeedSetpoint. See M-05
+      // in AHU46FaultEngine.js (SCENARIO_TRACKING.md item #7).
+      state.fanSpeed = state.supplyFanVFDBypass ? 100 : state.fanSpeedSetpoint;
       state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
       state.supplyFanStatus = 'ON';
       state.returnFanStatus = 'ON';

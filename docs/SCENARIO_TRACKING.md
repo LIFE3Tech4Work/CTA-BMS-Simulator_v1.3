@@ -213,6 +213,43 @@ to **Fixed** with the commit hash and a short verification summary.
   and a monotonic sweep (80°F down to 20°F) confirming the floor never
   drops as OAT falls.
 
+### 12. No VFD-in-bypass alarm (item #7)
+- **Source:** SOO page 1, General Automatic Control Sequences #16: "For
+  each variable speed motor an alarm shall be annunciated at the BAS
+  whenever the drive is placed in bypass." Confirmed against the original
+  SOO scan (`AHU_4_3_4_6_SOO_Page1.png`). The AHU has two variable-speed
+  motors per page 2 item 4 ("variable speed supply fan and a variable
+  speed return fan"), so this is two points, not one.
+- **Bug:** No bypass field existed on controller state at all for either
+  drive — nothing to alarm on.
+- **Fix:** Added `supplyFanVFDBypass` / `returnFanVFDBypass` (plain
+  operator-settable booleans, same as `fireAlarmShutdown` — bypass is a
+  technician action at the physical drive, not something the control
+  sequence derives from environmental conditions). Added fault rules
+  M-05/M-06 to `AHU46FaultEngine.js`, unconditional on fan-running status
+  per the SOO's plain wording. Tied a minimal behavioral consequence to
+  the supply fan bypass: in bypass the VFD is out of the control loop, so
+  the motor runs across-the-line at full/uncontrolled speed (100%) instead
+  of tracking `fanSpeedSetpoint` — makes the fault meaningful rather than
+  a flag nobody reacts to. No equivalent tie-in for the return fan since
+  it has no independent speed model at all (open item #10). New sidebar
+  "Fan VFD Status" section (NormToggleRow, matching the Fire Alarm
+  section's style) and M-05/M-06 banners in both overlay files.
+- **Verified:** 5 new controller regression tests (default-off, forced
+  full speed overriding the setpoint, restoration when bypass clears, no
+  effect while the fan is off, return-fan bypass not touching supply
+  speed) and 6 new fault-engine tests (both quiet, each fires
+  independently, both fire together, fires regardless of fan-running
+  status, clears on recovery) in the new `AHU46FaultEngine.test.mjs`
+  describe block. Also manually verified end-to-end in the running app
+  (toggled `supplyFanVFDBypass` live): M-05 banner appeared, sidebar
+  status flipped to ACTIVE, Supply CFM jumped to 9,200; cleared correctly
+  on toggle-off. `output.css` regenerated via the Tailwind CLI to include
+  the new banners' spacing utilities (`mt-24`/`mt-30`) — picked up some
+  other previously-missing utility classes already used elsewhere in the
+  codebase as a side effect of a full rebuild; purely additive, no
+  removals.
+
 ---
 
 ## Open — static values audit (found while investigating item #5 above)
@@ -238,7 +275,6 @@ their own.
 
 | # | Scenario | Source | Notes |
 |---|---|---|---|
-| 7 | No VFD-in-bypass alarm | SOO General #16, Points List item 33 | Field doesn't exist on controller state at all |
 | 8 | No staged fan-start sequence | SOO System Start #1-2 | Currently instant on/off; real sequence is 90s damper delay → 2-min SF ramp → RF follows with 30s delay + 2-min ramp → 2-min VAV poll hold |
 | 9 | No duct static-pressure control loop | SOO Closed Loop Controller #5 | `fanSpeedSetpoint` is a raw operator number, zero automatic modulation from any pressure feedback |
 | 10 | No return-fan flow-tracking control | SOO Closed Loop Controller #6 | Return fan has no independent speed/CFM logic; should track 90% of supply flow |
@@ -247,7 +283,8 @@ their own.
 | 13 | No RH-driven automatic cooling-setpoint reset | SOO Item 6 ("Automatic" mode) | Model only has the manual mode |
 
 (Items 5 and 6 — economizer hysteresis, plenum reset — fixed; see Fixed
-items 10-11 above.)
+items 10-11 above. Item 7 — VFD-in-bypass alarm — fixed; see Fixed item 12
+below.)
 
 ## Open — fault engine gaps (`AHU46FaultEngine.js`)
 

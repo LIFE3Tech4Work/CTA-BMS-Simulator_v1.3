@@ -838,3 +838,58 @@ describe('AHU46Controller — minimum plenum temperature OAT reset (#6)', () => 
     }
   });
 });
+
+// ─── VFD-in-bypass (SCENARIO_TRACKING.md #7) ────────────────────────────────
+//
+// SOO General Automatic Control Sequences #16: "For each variable speed
+// motor an alarm shall be annunciated at the BAS whenever the drive is
+// placed in bypass." supplyFanVFDBypass/returnFanVFDBypass previously
+// didn't exist on controller state at all. In bypass, the VFD is out of
+// the control loop — the motor runs across-the-line at full, uncontrolled
+// speed rather than tracking fanSpeedSetpoint.
+
+describe('AHU46Controller — VFD-in-bypass (#7)', () => {
+  it('defaults to false for both supply and return fan VFD bypass', () => {
+    const s = loadController().getState();
+    expect(s.supplyFanVFDBypass).toBe(false);
+    expect(s.returnFanVFDBypass).toBe(false);
+  });
+
+  it('supply fan runs at full speed (100%), ignoring fanSpeedSetpoint, when its VFD is in bypass', () => {
+    const ctrl = loadController();
+    ctrl.setValue('fanSpeedSetpoint', 50);
+    expect(ctrl.getState().fanSpeed).toBe(50); // sanity: normally tracks setpoint
+
+    ctrl.setValue('supplyFanVFDBypass', true);
+    const s = ctrl.getState();
+    expect(s.fanSpeed).toBe(100);
+    expect(s.cfm).toBe(9200);
+  });
+
+  it('bypass fan speed is restored to setpoint-tracking once bypass clears', () => {
+    const ctrl = loadController();
+    ctrl.setValue('fanSpeedSetpoint', 60);
+    ctrl.setValue('supplyFanVFDBypass', true);
+    expect(ctrl.getState().fanSpeed).toBe(100);
+
+    ctrl.setValue('supplyFanVFDBypass', false);
+    expect(ctrl.getState().fanSpeed).toBe(60);
+  });
+
+  it('bypass has no effect while the fan is off (fireAlarmShutdown/runSchedule take precedence)', () => {
+    const ctrl = loadController();
+    ctrl.setValue('supplyFanVFDBypass', true);
+    ctrl.setValue('runSchedule', false);
+    const s = ctrl.getState();
+    expect(s.fanRunning).toBe(false);
+    expect(s.fanSpeed).toBe(0);
+    expect(s.cfm).toBe(0);
+  });
+
+  it('returnFanVFDBypass does not affect supply fan speed (no return-fan speed model to couple it to)', () => {
+    const ctrl = loadController();
+    ctrl.setValue('fanSpeedSetpoint', 55);
+    ctrl.setValue('returnFanVFDBypass', true);
+    expect(ctrl.getState().fanSpeed).toBe(55);
+  });
+});

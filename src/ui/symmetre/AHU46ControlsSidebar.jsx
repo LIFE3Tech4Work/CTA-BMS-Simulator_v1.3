@@ -232,6 +232,11 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(EditableRow, { label: 'Fan Speed Setpoint', stateKey: 'fanSpeedSetpoint', units: '%', min: 0, max: 100 }),
       React.createElement(ReadOnlyRow, { label: 'Return Fan Track Mode', stateKey: 'fanTrackMode', units: '' }),
 
+      // FAN VFD STATUS — SOO General Automatic Control Sequences #16
+      React.createElement(SectionHeader, { title: 'Fan VFD Status' }),
+      React.createElement(NormToggleRow, { label: 'Supply Fan VFD Bypass', stateKey: 'supplyFanVFDBypass' }),
+      React.createElement(NormToggleRow, { label: 'Return Fan VFD Bypass', stateKey: 'returnFanVFDBypass' }),
+
       // CALCULATED OUTPUTS — OA Damper Position is Manual-able (same as AHU-4-4)
       React.createElement(SectionHeader, { title: 'Calculated Outputs  ·  Read-Only' }),
       React.createElement(ReadOnlyRow, { label: 'Fan Status', stateKey: 'fanRunning', units: '',

@@ -31,13 +31,15 @@ function baseState(overrides) {
     oaDamperPosition: 50,
     oaCFM: 4500,
     minOAAirflowSetpoint: 4500,
+    supplyFanVFDBypass: false,
+    returnFanVFDBypass: false,
   }, overrides || {});
 }
 
 describe('AHU46FaultEngine', () => {
-  it('has 4 fault rules with IDs M-01..M-04', () => {
+  it('has 6 fault rules with IDs M-01..M-06', () => {
     const ids = window.AHU46FaultEngine.rules.map(r => r.id);
-    expect(ids).toEqual(['M-01', 'M-02', 'M-03', 'M-04']);
+    expect(ids).toEqual(['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06']);
   });
 
   describe('M-04: OA damper below the 50% ASHRAE 62.1 minimum (was 60%)', () => {
@@ -72,6 +74,45 @@ describe('AHU46FaultEngine', () => {
       window.AHU46FaultEngine.evaluate(baseState({ oaDamperPosition: 10 }));
       const alarms = window.AHU46FaultEngine.evaluate(baseState({ oaDamperPosition: 50 }));
       expect(alarms.find(a => a.condition === 'M-04')).toBeUndefined();
+    });
+  });
+
+  describe('M-05/M-06: VFD-in-bypass (SOO General Automatic Control Sequences #16)', () => {
+    it('does not fire when neither VFD is in bypass', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState());
+      expect(alarms.find(a => a.condition === 'M-05')).toBeUndefined();
+      expect(alarms.find(a => a.condition === 'M-06')).toBeUndefined();
+    });
+
+    it('M-05 fires when the supply fan VFD is in bypass', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDBypass: true }));
+      const m05 = alarms.find(a => a.condition === 'M-05');
+      expect(m05).toBeDefined();
+      expect(m05.value).toBe(true);
+      expect(alarms.find(a => a.condition === 'M-06')).toBeUndefined();
+    });
+
+    it('M-06 fires when the return fan VFD is in bypass', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ returnFanVFDBypass: true }));
+      expect(alarms.find(a => a.condition === 'M-06')).toBeDefined();
+      expect(alarms.find(a => a.condition === 'M-05')).toBeUndefined();
+    });
+
+    it('both fire independently and simultaneously when both VFDs are in bypass', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDBypass: true, returnFanVFDBypass: true }));
+      expect(alarms.find(a => a.condition === 'M-05')).toBeDefined();
+      expect(alarms.find(a => a.condition === 'M-06')).toBeDefined();
+    });
+
+    it('fires regardless of fan-running status — a bypassed drive is alarm-worthy even if the unit is otherwise off', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDBypass: true, fanRunning: false }));
+      expect(alarms.find(a => a.condition === 'M-05')).toBeDefined();
+    });
+
+    it('clears once bypass is switched off', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDBypass: true }));
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDBypass: false }));
+      expect(alarms.find(a => a.condition === 'M-05')).toBeUndefined();
     });
   });
 });

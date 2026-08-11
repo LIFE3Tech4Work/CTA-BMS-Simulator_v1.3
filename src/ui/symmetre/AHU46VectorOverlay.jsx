@@ -294,6 +294,12 @@ const AHU46VectorOverlay = (() => {
       activeFaultIds.includes('M-04') && React.createElement('div', {
         className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-700 bg-opacity-90 text-white text-xs font-bold text-center mt-18'
       }, '⚠ M-04 OA damper below 50% minimum — meeting-room ventilation shortfall'),
+      activeFaultIds.includes('M-05') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-700 bg-opacity-90 text-white text-xs font-bold text-center mt-24'
+      }, '⚠ M-05 Supply Fan VFD in bypass'),
+      activeFaultIds.includes('M-06') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-700 bg-opacity-90 text-white text-xs font-bold text-center mt-30'
+      }, '⚠ M-06 Return Fan VFD in bypass'),
 
       // Vector background — replaces the old <img src={IMAGE_SRC}> PNG
       React.createElement(VectorBoard, null),
