@@ -652,3 +652,189 @@ describe('AHU46Controller — plant-level conditions (#25c/#25d)', () => {
     }
   });
 });
+
+// ─── Economizer enthalpy/OAT hysteresis (SCENARIO_TRACKING.md #5) ───────────
+//
+// enthalpyOKForEconomizer was a pure manual toggle. Per SOO "AHU-4-3 /
+// RF-4-6: Sequence of Operation", Closed Loop Controller #2 item 4d-e (AUTO
+// mode): enable free cooling when OA enthalpy is favorable (RA - 5.0
+// BTU/lb) AND OAT > 38°F; disable when OA enthalpy is unfavorable
+// (RA - 2.5 BTU/lb) OR OAT < 35°F. Between those, hold last state
+// (asymmetric hysteresis, same pattern as the freeze pump).
+// RETURN_AIR_ENTHALPY = 26.7 BTU/lb → enable threshold 21.7, disable
+// threshold 24.2.
+
+describe('AHU46Controller — economizer enthalpy/OAT hysteresis (#5)', () => {
+  it('defaults to disabled (default OAT/enthalpy are both unfavorable)', () => {
+    expect(loadController().getState().enthalpyOKForEconomizer).toBe(false);
+  });
+
+  it('enables when enthalpy is favorable and OAT is above the enable floor (38°F)', () => {
+    const ctrl = loadWithWeather(40.0, 20.0); // enthalpy 20 < 21.7, OAT 40 > 38
+    ctrl.updateFromTMY3(1, 0);
+    const s = ctrl.getState();
+    expect(s.enthalpyOKForEconomizer).toBe(true);
+    expect(s.economizerActive).toBe(true);
+  });
+
+  it('stays disabled when enthalpy is favorable but OAT has not cleared the enable floor', () => {
+    const ctrl = loadWithWeather(37.0, 20.0); // favorable enthalpy, but OAT 37 is not > 38
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false);
+  });
+
+  it('disables once OAT drops below the disable floor (35°F), even with favorable enthalpy', () => {
+    const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+    const w = {};
+    mockTMY3(w, 40, 20);
+    new Function('window', code)(w);
+    const ctrl = w.AHU46Controller;
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // sanity: enabled first
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 34, enthalpy: 20, relHumidity: 60, dewPoint: 28, wetBulb: 31 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false);
+  });
+
+  it('disables once enthalpy becomes unfavorable, even with OAT above the enable floor', () => {
+    const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+    const w = {};
+    mockTMY3(w, 40, 20);
+    new Function('window', code)(w);
+    const ctrl = w.AHU46Controller;
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // sanity: enabled first
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 40, enthalpy: 30, relHumidity: 60, dewPoint: 35, wetBulb: 38 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false);
+  });
+
+  it('holds last state inside the enthalpy deadband (21.7-24.2 BTU/lb), becoming favorable (no chatter)', () => {
+    const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+    const w = {};
+    mockTMY3(w, 50, 30); // OAT fixed above both OAT thresholds; enthalpy 30 unfavorable
+    new Function('window', code)(w);
+    const ctrl = w.AHU46Controller;
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false); // starts off
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 50, enthalpy: 23, relHumidity: 60, dewPoint: 40, wetBulb: 45 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false); // in deadband, holds off
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 50, enthalpy: 20, relHumidity: 60, dewPoint: 38, wetBulb: 42 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // below 21.7, now on
+  });
+
+  it('holds last state inside the enthalpy deadband, becoming unfavorable (no chatter)', () => {
+    const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+    const w = {};
+    mockTMY3(w, 50, 15); // OAT fixed above both OAT thresholds; enthalpy 15 favorable
+    new Function('window', code)(w);
+    const ctrl = w.AHU46Controller;
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // starts on
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 50, enthalpy: 23, relHumidity: 60, dewPoint: 40, wetBulb: 45 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // in deadband, holds on
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 50, enthalpy: 26, relHumidity: 60, dewPoint: 42, wetBulb: 48 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false); // above 24.2, now off
+  });
+
+  it('holds last state inside the OAT deadband (35-38°F), no chatter', () => {
+    const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+    const w = {};
+    mockTMY3(w, 40, 15); // enthalpy fixed favorable; OAT starts above the enable floor
+    new Function('window', code)(w);
+    const ctrl = w.AHU46Controller;
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // starts on
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 36, enthalpy: 15, relHumidity: 60, dewPoint: 30, wetBulb: 33 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // in the 35-38 gap, holds on
+
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 34, enthalpy: 15, relHumidity: 60, dewPoint: 28, wetBulb: 31 });
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false); // below 35, now off
+  });
+
+  it('respects Manual override — sidebar toggle holds regardless of subsequent weather', () => {
+    // Hot, humid weather: unfavorable enthalpy — would auto-disable if not manually held.
+    const ctrl = loadWithWeather(80.0, 35.0);
+    ctrl.setValue('enthalpyOKForEconomizer', true);
+    expect(ctrl.getModes().enthalpyOKForEconomizer).toBe('Manual');
+
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true);
+  });
+});
+
+// ─── Minimum plenum temperature OAT reset (SCENARIO_TRACKING.md #6) ────────
+//
+// plenumMinSetpoint was static 40°F. Per SOO Closed Loop Controller #1
+// item 2, it resets linearly: 60°F OAT → 40°F floor, 40°F OAT → 50°F floor,
+// clamped outside that OAT range.
+
+describe('AHU46Controller — minimum plenum temperature OAT reset (#6)', () => {
+  it('defaults to 40°F (design OAT 81.6°F is above the 60°F calibration point)', () => {
+    expect(loadController().getState().plenumMinSetpoint).toBe(40);
+  });
+
+  it('is exactly 40°F at the 60°F OAT calibration point', () => {
+    const ctrl = loadWithWeather(60.0, 20.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().plenumMinSetpoint).toBe(40);
+  });
+
+  it('is exactly 50°F at the 40°F OAT calibration point', () => {
+    const ctrl = loadWithWeather(40.0, 20.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().plenumMinSetpoint).toBe(50);
+  });
+
+  it('is the linear midpoint (45°F) at 50°F OAT', () => {
+    const ctrl = loadWithWeather(50.0, 15.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().plenumMinSetpoint).toBeCloseTo(45, 1);
+  });
+
+  it('clamps to the 40°F floor above the 60°F calibration point', () => {
+    const ctrl = loadWithWeather(100.0, 30.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().plenumMinSetpoint).toBe(40);
+  });
+
+  it('clamps to the 50°F ceiling below the 40°F calibration point', () => {
+    const ctrl = loadWithWeather(0.0, 5.0);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().plenumMinSetpoint).toBe(50);
+  });
+
+  it('respects Manual override — sidebar setpoint holds regardless of OAT', () => {
+    const ctrl = loadController();
+    ctrl.setValue('plenumMinSetpoint', 42);
+    expect(ctrl.getModes().plenumMinSetpoint).toBe('Manual');
+
+    // Would otherwise reset to 50°F at this OAT.
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().plenumMinSetpoint).toBe(42);
+  });
+
+  it('rises monotonically as OAT falls, across a sweep from 80°F down to 20°F', () => {
+    let prevFloor = -Infinity;
+    for (let oat = 80; oat >= 20; oat -= 10) {
+      const ctrl = loadWithWeather(oat, 15.0);
+      ctrl.updateFromTMY3(1, 0);
+      const floor = ctrl.getState().plenumMinSetpoint;
+      expect(floor, `plenumMinSetpoint not non-decreasing at OAT=${oat}`).toBeGreaterThanOrEqual(prevFloor);
+      prevFloor = floor;
+    }
+  });
+});

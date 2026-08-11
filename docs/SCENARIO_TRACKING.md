@@ -156,6 +156,63 @@ to **Fixed** with the commit hash and a short verification summary.
   OAT, and a monotonic sweep (0–100°F) confirming CHW falls / CW rises as
   OAT rises with no reversals.
 
+### 10. Economizer enable/disable was a pure manual toggle (item #5)
+- **Source:** SOO "AHU-4-3 / RF-4-6: Sequence of Operation", page 4,
+  Closed Loop Controller #2 item 4d-e (AUTO mode of the WINTER-SUMMER-AUTO
+  enthalpy switch): "IF [Enthalpy@THS-x < (Enthalpy@THS-4 MINUS 5.0
+  BTU/Lb)] AND [Outside Air Temperature > 38°F] THEN Allow fresh air flow
+  setpoint to be above minimum" (enable), and "IF [Enthalpy@THS-x >
+  (Enthalpy@THS-4 MINUS 2.5 BTU/Lb)] OR [Outside Air Temperature < 35°F]
+  THEN Minimum fresh air flow setpoint" (disable). Confirmed against the
+  original SOO scan (`AHU_4_3_4_6_SOO_Page4.png`), not just the earlier
+  paraphrase in this doc.
+- **Bug:** `enthalpyOKForEconomizer` was a static sidebar toggle a human
+  had to flip by hand — never computed from actual OA/RA enthalpy or OAT.
+- **Fix:** Added `RETURN_AIR_ENTHALPY` (26.7 BTU/lb — approximated from the
+  SOO's own Closed Loop Controller #4 item 1, which holds return air RH at
+  50% at the design 72.1°F return air temp) as a reference, and implemented
+  the compound enable/disable hysteresis exactly as specified: enable
+  requires both the enthalpy margin AND OAT > 38°F; disable fires on
+  either the enthalpy margin closing OR OAT < 35°F. Between thresholds,
+  holds last commanded state — same asymmetric hysteresis-deadband pattern
+  as the freeze pump (item #4 above), which prevents chattering as
+  conditions drift near a boundary. Still Manual-overridable via the
+  existing "Enthalpy OK — Economizer" sidebar toggle.
+- **Verified:** Reviewed every existing test that used
+  `setValue('enthalpyOKForEconomizer', true)` to force economizer
+  scenarios — all still pass unmodified, since Manual override always
+  takes precedence over the new auto-hysteresis. Added 9 new regression
+  tests: default-disabled sanity, enable (both conditions met), stays
+  disabled (enthalpy favorable but OAT floor not cleared), disable via OAT
+  alone, disable via enthalpy alone, two deadband-hold sequences on the
+  enthalpy axis (becoming favorable / becoming unfavorable), one
+  deadband-hold sequence on the OAT axis, and Manual-override persistence.
+  Full suite confirmed no other AHU46 test's behavior changed as a side
+  effect (traced through why each `loadWithWeather(...)` call in existing
+  tests either already set enthalpyOKForEconomizer manually, or happened
+  to land outside the new hysteresis's enable zone).
+
+### 11. Minimum plenum temperature was static, not OAT-reset (item #6)
+- **Source:** SOO page 3, Closed Loop Controller #1 item 2: "The Minimum
+  Plenum Temperature control setpoint shall be reset based off of the
+  following schedule: OaTemp=60°F → MinPlenumtemp=40°F; OaTemp=40°F →
+  MinPlenumtemp=50°F," and "The Minimum Plenum loop shall be active at all
+  times." Confirmed against the original SOO scan
+  (`AHU_4_3_4_6_SOO_Page3.png`).
+- **Bug:** `plenumMinSetpoint` was a static 40.0°F regardless of OAT.
+- **Fix:** Linear reset between the two calibration points (60°F OAT →
+  40°F floor, 40°F OAT → 50°F floor), clamped outside that OAT range per
+  General Automatic Control Sequences #6 ("the output of the reset
+  schedules should be limited between maximum and minimum values"). Runs
+  independent of fan status, matching the SOO's "active at all times" and
+  the freeze pump's precedent. Still Manual-overridable via the sidebar's
+  "Active Minimum Setpoint" row.
+- **Verified:** 8 new regression tests — default (design OAT above the
+  60°F point → 40°F), both exact calibration points, the linear midpoint
+  (45°F at 50°F OAT), both clamped extremes, Manual-override persistence,
+  and a monotonic sweep (80°F down to 20°F) confirming the floor never
+  drops as OAT falls.
+
 ---
 
 ## Open — static values audit (found while investigating item #5 above)
@@ -181,8 +238,6 @@ their own.
 
 | # | Scenario | Source | Notes |
 |---|---|---|---|
-| 5 | Economizer enable/disable is a pure manual toggle | SOO Item 4c-e | Real logic needs asymmetric enthalpy hysteresis (enable RA-5.0 BTU/lb, disable RA-2.5 BTU/lb) plus OAT floor/ceiling (enable >38°F, disable <35°F) |
-| 6 | Minimum plenum temp is static 40°F, not OAT-reset | SOO Item 2 | Schedule: 60°F OAT→40°F floor, 40°F OAT→50°F floor (linear reset) |
 | 7 | No VFD-in-bypass alarm | SOO General #16, Points List item 33 | Field doesn't exist on controller state at all |
 | 8 | No staged fan-start sequence | SOO System Start #1-2 | Currently instant on/off; real sequence is 90s damper delay → 2-min SF ramp → RF follows with 30s delay + 2-min ramp → 2-min VAV poll hold |
 | 9 | No duct static-pressure control loop | SOO Closed Loop Controller #5 | `fanSpeedSetpoint` is a raw operator number, zero automatic modulation from any pressure feedback |
@@ -190,6 +245,9 @@ their own.
 | 11 | Only 2 of 3 mixing-box dampers modeled | SOO Item 11a, Points List DA-2/DA-3 | Return Air damper and Spill Air damper aren't separately represented |
 | 12 | Return air conditions incomplete | Points List AFMS-2, THS-4 (humidity) | No return CFM or return humidity fields; `returnAirTemp` is a hardcoded constant |
 | 13 | No RH-driven automatic cooling-setpoint reset | SOO Item 6 ("Automatic" mode) | Model only has the manual mode |
+
+(Items 5 and 6 — economizer hysteresis, plenum reset — fixed; see Fixed
+items 10-11 above.)
 
 ## Open — fault engine gaps (`AHU46FaultEngine.js`)
 

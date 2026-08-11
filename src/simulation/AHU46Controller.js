@@ -72,6 +72,33 @@
   var FREEZE_PUMP_START_TEMP = 35;
   var FREEZE_PUMP_STOP_TEMP = 40;
 
+  // Economizer (free-cooling) enable/disable hysteresis — SOO "AHU-4-3 /
+  // RF-4-6: Sequence of Operation", Closed Loop Controller #2 item 4d-e
+  // (AUTO mode): enable free cooling when OA enthalpy is well below return
+  // air's AND OAT is above a floor; disable when OA enthalpy approaches
+  // return air's OR OAT drops below a lower floor. The asymmetric enthalpy
+  // deltas (5.0 to enable vs 2.5 to disable) and the 3°F gap between the
+  // OAT enable/disable thresholds (38°F/35°F) are both hysteresis
+  // deadbands, same pattern as the freeze pump above — they stop the
+  // economizer from chattering as conditions drift near the boundary.
+  // SCENARIO_TRACKING.md item #5.
+  var RETURN_AIR_ENTHALPY = 26.7;      // BTU/lb — approx. enthalpy at 72.1°F/50% RH
+                                        // (SOO Closed Loop Controller #4 item 1: RA RH held at 50%)
+  var ECONOMIZER_ENABLE_ENTHALPY_DELTA = 5.0;   // BTU/lb below RA enthalpy
+  var ECONOMIZER_DISABLE_ENTHALPY_DELTA = 2.5;  // BTU/lb below RA enthalpy
+  var ECONOMIZER_OAT_ENABLE = 38;      // °F
+  var ECONOMIZER_OAT_DISABLE = 35;     // °F
+
+  // Minimum plenum temperature reset — SOO Closed Loop Controller #1 item 2:
+  // linear reset between (60°F OAT → 40°F floor) and (40°F OAT → 50°F
+  // floor), clamped outside that OAT range per General Automatic Control
+  // Sequences #6 ("output of the reset schedules should be limited between
+  // maximum and minimum values"). SCENARIO_TRACKING.md item #6.
+  var PLENUM_RESET_OAT_HIGH = 60;   // °F — floor pins to PLENUM_RESET_MIN above this
+  var PLENUM_RESET_OAT_LOW = 40;    // °F — floor pins to PLENUM_RESET_MAX below this
+  var PLENUM_RESET_MIN = 40;        // °F
+  var PLENUM_RESET_MAX = 50;        // °F
+
   // CO2 sensor simulation (SCENARIO_TRACKING.md #25a) — steady-state
   // ventilation dilution, computed instantaneously each recalculate() the
   // same way every other reading in this file is (no time-integrated
@@ -179,6 +206,23 @@
       // else: within the deadband — hold last state, no change.
     }
 
+    // 0.5 MINIMUM PLENUM TEMPERATURE RESET (SOO Closed Loop Controller #1
+    // item 2 — "The Minimum Plenum loop shall be active at all times")
+    // Colder OAT means more preheat margin is needed to protect the coil
+    // and piping, hence a HIGHER minimum floor as OAT drops — the opposite
+    // direction of a comfort setpoint reset. Was previously a static 40°F
+    // regardless of OAT. Runs independent of fan status, same as the
+    // freeze pump above (and per its own "active at all times" language).
+    // Respects Manual override via the sidebar's "Active Minimum Setpoint" row.
+    if (modes.plenumMinSetpoint !== 'Manual') {
+      var plenumReset = PLENUM_RESET_MIN +
+        (PLENUM_RESET_OAT_HIGH - state.oaTemperature) / (PLENUM_RESET_OAT_HIGH - PLENUM_RESET_OAT_LOW) *
+        (PLENUM_RESET_MAX - PLENUM_RESET_MIN);
+      state.plenumMinSetpoint = Math.round(
+        Math.max(PLENUM_RESET_MIN, Math.min(PLENUM_RESET_MAX, plenumReset)) * 10
+      ) / 10;
+    }
+
     // 1. FAN LOGIC
     if (state.fireAlarmShutdown || !state.runSchedule) {
       state.fanRunning = false;
@@ -213,6 +257,29 @@
     state.interlockOn = state.fanRunning;
     state.exhaustFanOn = state.fanRunning;
     state.commonDamperOpen = state.fanRunning;
+
+    // 1.6 ECONOMIZER ENTHALPY/OAT HYSTERESIS (SOO Closed Loop Controller #2
+    // item 4d-e, AUTO mode) — was a pure manual toggle. Enable free cooling
+    // when OA enthalpy is favorably below return air's (5.0 BTU/lb margin)
+    // AND OAT is above the enable floor (38°F); disable when OA enthalpy is
+    // no longer favorable (within 2.5 BTU/lb of return air's) OR OAT drops
+    // below the disable floor (35°F). Between those, hold last commanded
+    // state — same hysteresis-deadband pattern as the freeze pump above.
+    // Still respects Manual override via the "Enthalpy OK — Economizer"
+    // sidebar toggle.
+    if (modes.enthalpyOKForEconomizer !== 'Manual') {
+      var enthalpyFavorable = state.oaEnthalpy < (RETURN_AIR_ENTHALPY - ECONOMIZER_ENABLE_ENTHALPY_DELTA);
+      var enthalpyUnfavorable = state.oaEnthalpy > (RETURN_AIR_ENTHALPY - ECONOMIZER_DISABLE_ENTHALPY_DELTA);
+      var oatAboveEnableFloor = state.oaTemperature > ECONOMIZER_OAT_ENABLE;
+      var oatBelowDisableFloor = state.oaTemperature < ECONOMIZER_OAT_DISABLE;
+
+      if (enthalpyFavorable && oatAboveEnableFloor) {
+        state.enthalpyOKForEconomizer = true;
+      } else if (enthalpyUnfavorable || oatBelowDisableFloor) {
+        state.enthalpyOKForEconomizer = false;
+      }
+      // else: inside the deadband on one or both axes — hold last state.
+    }
 
     // 2. ECONOMIZER LOGIC
     state.economizerActive = false;
