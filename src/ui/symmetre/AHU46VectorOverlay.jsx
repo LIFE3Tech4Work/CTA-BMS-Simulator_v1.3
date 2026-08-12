@@ -126,6 +126,8 @@ const AHU46VectorOverlay = (() => {
       x: 77.0, y: 52.0, w: 4.5, h: 1.8 },
     { id: 'returnAirTemp', stateKey: 'returnAirTemp',  label: 'Return Air Temp', units: '°F', live: true,
       x: 70.5, y: 21.5, w: 4.0, h: 1.8 },
+    { id: 'returnAirRH', stateKey: 'returnAirRH',      label: 'Return Air %RH', units: '%RH', live: true,
+      x: 75.5, y: 21.5, w: 4.0, h: 1.8 },
     { id: 'co2Sensor',  stateKey: 'co2Sensor',          label: 'CO₂ Sensor',     units: 'PPM', live: true,
       x: 80.5, y: 21.5, w: 4.5, h: 1.8 },
     { id: 'freezePump', stateKey: 'freezePumpOn',       label: 'Freeze Pump',    units: '',    live: true,
@@ -140,6 +142,10 @@ const AHU46VectorOverlay = (() => {
       x: 87.0, y: 68.5, w: 4.0, h: 1.8 },
     { id: 'returnFanCfm', stateKey: 'returnFanCFM', label: 'Return Fan CFM', units: 'CFM', live: true,
       x: 63.0, y: 21.5, w: 5.0, h: 1.8 },
+    { id: 'returnAirDamper', stateKey: 'returnAirDamperPosition', label: 'Return Air Damper', units: '%', live: true,
+      x: 63.0, y: 33.5, w: 3.5, h: 1.6 },
+    { id: 'spillDamper', stateKey: 'spillDamperPosition', label: 'Spill Damper', units: '%', live: true,
+      x: 68.5, y: 33.5, w: 3.5, h: 1.6 },
   ];
 
   // ─── Alarm key map — unchanged from AHU46ImageOverlay.jsx ──────────────────

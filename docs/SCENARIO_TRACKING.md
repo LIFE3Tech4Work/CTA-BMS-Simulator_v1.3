@@ -373,6 +373,63 @@ to **Fixed** with the commit hash and a short verification summary.
   exactly against real TMY3 weather, not just synthetic test conditions)
   and visually confirmed the new sidebar sections and diagram hotspots.
 
+### 15. Return air/spill dampers + return air conditions (items #11, #12)
+- **Source:** SOO page 5, Closed Loop Controller #8 item 11a-b: "The mixed
+  air dampers consist of three modulating dampers that shall be together
+  controlled to maintain a fresh air intake flow (AFMS-3)... The outside
+  air damper (N.C.), return air damper (N.C.) and spill damper (N.O.)
+  shall each be wired to their individual BAS analog out control
+  signal[;] [t]he outside and spill damper shall gradually open upon a
+  demand for additional fresh air as the return damper closes
+  accordingly." Confirmed against the original SOO scan
+  (`AHU_4_3_4_6_SOO_Page5.png`).
+- **Bug:** Only the OA damper was modeled at all. `returnAirTemp` was a
+  hardcoded constant despite being a live Points List sensor (THS-4); no
+  return CFM or return humidity fields existed.
+- **Fix:**
+  - Added `returnAirDamperPosition` (= 100 − `oaDamperPosition`, per 11b's
+    "closes accordingly") and `spillDamperPosition` (tracks
+    `oaDamperPosition` directly, per 11b's "gradually open... as"). Both
+    close fully when the fan is off, matching SOO System Off #1's literal
+    "return air... spill air dampers will be closed" — not the naive
+    complementary value (100 − 0 = 100) that formula would otherwise give.
+  - `returnAirTemp` is now modeled as `supplyAirTemp` + a fixed rise from
+    internal space heat gains (`ROOM_DELTA_T`, 12.2°F), reading the
+    PREVIOUS tick's `supplyAirTemp` — same one-tick-lag pattern as item #9
+    (`mixedAirTemp` depends on `returnAirTemp`, which would otherwise
+    depend circularly on `mixedAirTemp` within the same tick). Calibrated
+    to the screenshot's supply/return pair (59.9°F/72.1°F); the default
+    state now lands on 72.2°F, independently confirming the constant is
+    well-scaled. Bounded 60–85°F; the low bound is a defensive clamp not
+    actually reachable through this model's own heating/cooling formulas,
+    the high bound IS reached on deep-cold days as a (correct, if
+    initially surprising) consequence of the existing preheat-saturation
+    behavior compounding through the new feedback loop — documented in a
+    regression test rather than treated as a bug, same as the CO₂/staging
+    interaction found in item #8's batch.
+  - `returnAirRH` added, held at a flat 50% per the SOO's own citation
+    (Closed Loop Controller #4 item 1) that it's actively maintained
+    there by a separate, not-otherwise-modeled reset loop — explicitly
+    reassigned each tick rather than left untouched, so it doesn't read as
+    the same class of bug as the frozen sensors fixed in #25a/#25c/#25d.
+  - No new field was added for return CFM — `returnFanCFM` (item #10,
+    already shipped) reads directly off the return fan's own inlet flow,
+    which is exactly what the Points List's AFMS-2 measures per SOO
+    Closed Loop Controller #6's own description.
+  - New sidebar rows and diagram hotspots for all of the above, including
+    wiring the screenshot's baked-in "59.8%RH" (previously flagged
+    alongside "2.02 IWC" as a static reference) to `returnAirRH`.
+- **Verified:** 11 new regression tests — damper complementary/tracking
+  relationship at the floor, fully-open economizer, a Manual OA override,
+  a sum-to-100 sweep across OAT, both dampers closing during fan-off and
+  staging stage 1; `returnAirTemp`'s default convergence, its response to
+  a milder heating-call day, the (correct) high-side clamp on a deep-cold
+  day, and its lag-consistent feed into `mixedAirTemp`; `returnAirRH`
+  staying flat across hot and cold scenarios. Also manually verified
+  end-to-end in the running app against live TMY3 weather (not just
+  synthetic test conditions): read state via the browser console and
+  visually confirmed the new sidebar rows and hotspots.
+
 ---
 
 ## Open — static values audit (found while investigating item #5 above)
@@ -398,8 +455,6 @@ Fixed item 13 below.)
 
 | # | Scenario | Source | Notes |
 |---|---|---|---|
-| 11 | Only 2 of 3 mixing-box dampers modeled | SOO Item 11a, Points List DA-2/DA-3 | Return Air damper and Spill Air damper aren't separately represented |
-| 12 | Return air conditions incomplete | Points List AFMS-2, THS-4 (humidity) | No return CFM or return humidity fields; `returnAirTemp` is a hardcoded constant |
 | 13 | No RH-driven automatic cooling-setpoint reset | SOO Item 6 ("Automatic" mode) | Model only has the manual mode |
 
 (Item 8 — no staged fan-start sequence — fixed; see Fixed item 13 below.)
@@ -407,7 +462,8 @@ Fixed item 13 below.)
 (Items 5 and 6 — economizer hysteresis, plenum reset — fixed; see Fixed
 items 10-11 above. Item 7 — VFD-in-bypass alarm — fixed; see Fixed item 12
 below. Items 9 and 10 — duct static pressure loop, return fan flow
-tracking — fixed; see Fixed item 14 below.)
+tracking — fixed; see Fixed item 14 below. Items 11 and 12 — return
+air/spill dampers, return air conditions — fixed; see Fixed item 15 below.)
 
 ## Open — fault engine gaps (`AHU46FaultEngine.js`)
 

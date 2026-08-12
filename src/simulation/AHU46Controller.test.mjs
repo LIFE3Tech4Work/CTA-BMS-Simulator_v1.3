@@ -1300,3 +1300,133 @@ describe('AHU46Controller — return fan flow tracking (#10)', () => {
     }
   });
 });
+
+// ─── Return air / spill dampers (SCENARIO_TRACKING.md #11) ─────────────────
+//
+// SOO Closed Loop Controller #8 item 11a-b: "The mixed air dampers consist
+// of three modulating dampers that shall be together controlled..." Only
+// the OA damper was modeled. Per 11b, the return air damper (N.C.) is
+// complementary to the OA damper, and the spill damper (N.O.) tracks it
+// directly ("shall gradually open upon a demand for additional fresh air
+// as the return damper closes accordingly").
+
+describe('AHU46Controller — return air / spill dampers (#11)', () => {
+  it('default: complementary to the OA damper floor (50/50)', () => {
+    const s = loadController().getState();
+    expect(s.oaDamperPosition).toBe(50);
+    expect(s.returnAirDamperPosition).toBe(50);
+    expect(s.spillDamperPosition).toBe(50);
+  });
+
+  it('both close fully when the fan is off — not the naive complementary value', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', false);
+    const s = ctrl.getState();
+    expect(s.oaDamperPosition).toBe(0);
+    expect(s.returnAirDamperPosition).toBe(0);
+    expect(s.spillDamperPosition).toBe(0); // NOT 100 (the naive 100 - 0 complementary result)
+  });
+
+  it('economizer fully open: return air damper fully closed, spill fully open', () => {
+    const ctrl = loadWithWeather(40.0, 10.0);
+    ctrl.setValue('enthalpyOKForEconomizer', true);
+    ctrl.updateFromTMY3(1, 0);
+    const s = ctrl.getState();
+    expect(s.oaDamperPosition).toBe(100);
+    expect(s.returnAirDamperPosition).toBe(0);
+    expect(s.spillDamperPosition).toBe(100);
+  });
+
+  it('tracks a manually-forced OA damper position', () => {
+    const ctrl = loadController();
+    ctrl.setValue('oaDamperPosition', 30);
+    const s = ctrl.getState();
+    expect(s.returnAirDamperPosition).toBe(70);
+    expect(s.spillDamperPosition).toBe(30);
+  });
+
+  it('OA + return air damper always sum to 100 while the fan is running, across a sweep', () => {
+    for (let oat = -10; oat <= 100; oat += 10) {
+      const ctrl = loadWithWeather(oat, 15.0);
+      ctrl.updateFromTMY3(1, 0);
+      const s = ctrl.getState();
+      expect(s.oaDamperPosition + s.returnAirDamperPosition, `at OAT=${oat}`).toBe(100);
+      expect(s.spillDamperPosition, `at OAT=${oat}`).toBe(s.oaDamperPosition);
+    }
+  });
+
+  it('both close during stage 1 of a staged start (fan not yet on)', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+      vi.advanceTimersByTime(45 * 1000); // mid stage 1 — fan still off
+      ctrl.recalculate();
+      const s = ctrl.getState();
+      expect(s.fanRunning).toBe(false);
+      expect(s.returnAirDamperPosition).toBe(0);
+      expect(s.spillDamperPosition).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ─── Return air conditions (SCENARIO_TRACKING.md #12) ───────────────────────
+//
+// returnAirTemp was a hardcoded constant despite being a live sensor point
+// (THS-4). Now modeled as supplyAirTemp + a fixed space-heat-gain rise,
+// read from the PREVIOUS tick (same lag pattern as item #9 — this tick's
+// supplyAirTemp depends on mixedAirTemp, which depends on returnAirTemp).
+// returnAirRH is explicitly held at 50% per the SOO's own citation that
+// it's actively maintained there by a separate, unmodeled reset loop.
+// returnFanCFM (item #10) already doubles as the AFMS-2 return-flow
+// reading the SOO describes, so no separate field was added for that.
+
+describe('AHU46Controller — return air conditions (#12)', () => {
+  it('returnAirTemp defaults to ~72.2°F — matches the original screenshot (72.1°F) almost exactly', () => {
+    const s = loadController().getState();
+    expect(s.returnAirTemp).toBeCloseTo(72.1, 0);
+    expect(s.supplyAirTemp).toBe(60); // cooling coil saturated at setpoint by default
+  });
+
+  it('returnAirRH is held at the SOO-cited 50% design value, unaffected by other conditions', () => {
+    const hot = loadWithWeather(100.0, 40.0);
+    hot.updateFromTMY3(1, 0);
+    expect(hot.getState().returnAirRH).toBe(50.0);
+
+    const cold = loadWithWeather(-10.0, 2.0);
+    cold.updateFromTMY3(1, 0);
+    expect(cold.getState().returnAirRH).toBe(50.0);
+  });
+
+  it('returnAirTemp responds to a milder heating-call day, settling below the default', () => {
+    const ctrl = loadWithWeather(50.0, 15.0);
+    ctrl.updateFromTMY3(1, 0);
+    const s = ctrl.getState();
+    expect(s.returnAirTemp).toBeCloseTo(68.5, 1);
+    expect(s.returnAirTemp).toBeLessThan(72.2);
+  });
+
+  it('clamps to the 85°F ceiling on a deep-cold day (preheat-saturation feedback pushes it up, not down)', () => {
+    // Counterintuitive but correct: once the preheat valve saturates at
+    // 100%, the preheat coil discharge temp is a fixed 75°F regardless of
+    // how cold OAT actually is (existing heating-logic behavior, not new
+    // here), so the returnAirTemp feedback loop settles high rather than
+    // low on extreme-cold days. RETURN_AIR_TEMP_MIN exists as a defensive
+    // bound but isn't reachable through this model's own formulas.
+    const ctrl = loadWithWeather(-20.0, 1.0);
+    ctrl.updateFromTMY3(1, 0);
+    const s = ctrl.getState();
+    expect(s.phtValvePosition).toBe(100);
+    expect(s.returnAirTemp).toBe(85);
+  });
+
+  it('feeds into mixedAirTemp the same way the old constant did (one-tick-lagged, not circular)', () => {
+    const ctrl = loadController();
+    const s = ctrl.getState();
+    // At the floor (50/50 OA/RA split): mixedAirTemp = preheatTemp*0.5 + returnAirTemp*0.5
+    expect(s.mixedAirTemp).toBeCloseTo((s.preheatTemp * 0.5 + s.returnAirTemp * 0.5), 1);
+  });
+});

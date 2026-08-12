@@ -49,9 +49,20 @@
   // screenshot's live supply fan reading (6901 CFM at 47 Hz ≈ 75% speed).
   var DESIGN_CFM = 9200;
 
-  // Return air temperature — meeting room occupants tend to run warmer
-  // than ballroom/pre-function, but the screenshot shows 72.1°F return air.
-  var RETURN_AIR_TEMP = 72.1;
+  // Return air temperature (SCENARIO_TRACKING.md item #12) — was a
+  // hardcoded constant despite being labeled a live sensor (THS-4 in the
+  // Points List). Modeled as supply air temp plus a fixed rise from
+  // internal space heat gains (people, lights, equipment) — always
+  // positive regardless of heating/cooling mode, since those gains are
+  // present either way. Calibrated to the screenshot's supply/return pair
+  // (59.9°F / 72.1°F, a 12.2°F rise); reads from the PREVIOUS tick's
+  // supplyAirTemp (same one-tick-lag pattern as the duct pressure loop in
+  // item #9 — this tick's supplyAirTemp depends on mixedAirTemp, which
+  // depends on returnAirTemp, so it can't be both an input and an output
+  // of the same tick). Bounded to a plausible comfort range.
+  var ROOM_DELTA_T = 12.2;          // °F — space heat gain, supply → return
+  var RETURN_AIR_TEMP_MIN = 60;     // °F
+  var RETURN_AIR_TEMP_MAX = 85;     // °F
 
   // OA damper minimum position — 50% per the SOO's own min/max CFM table.
   // "AHU-4-3 / RF-4-6: Sequence of Operation" states AHU-4-6's minimum/
@@ -224,7 +235,14 @@
     supplyAirTemp: 59.9,              // °F (from screenshot)
     preheatTemp: 81.6,                // °F — after preheat coil (= OAT when no heating)
     mixedAirTemp: 73.6,               // °F (from screenshot)
-    returnAirTemp: 72.1,              // °F (from screenshot)
+    returnAirTemp: 72.1,               // °F — dynamic (supplyAirTemp + ROOM_DELTA_T, previous tick);
+                                        // initial value from screenshot, SCENARIO_TRACKING.md item #12
+    returnAirRH: 50.0,                // %RH — SOO Closed Loop Controller #4 item 1: "Relative Humidity@
+                                       // THS-4 (Return Air) shall be maintained at 50%" by a separate,
+                                       // not-otherwise-modeled reset loop — held at design value rather
+                                       // than freely floating, since the SOO itself describes this as an
+                                       // actively controlled-to setpoint, not a passive reading.
+                                       // SCENARIO_TRACKING.md item #12.
     supplyAirRH: 72.3,                // %RH — renamed from supplyStaticPressure (SCENARIO_TRACKING.md
                                        // item #25b); it was never static pressure, always supply air %RH
     chwSupplyTemp: 41.9,              // °F — plant global condition, reset with load (see CHW_SUPPLY_MIN/MAX)
@@ -234,6 +252,9 @@
     supplyFanStatus: 'ON',
     returnFanStatus: 'ON',
     exhaustDamperPct: 50,             // % (follows OA damper)
+    returnAirDamperPosition: 50,      // % — complementary to oaDamperPosition; SOO Closed Loop
+                                       // Controller #8 item 11b. SCENARIO_TRACKING.md item #11.
+    spillDamperPosition: 50,          // % — tracks oaDamperPosition (N.O., opens for more fresh air)
   };
 
   window.AHU46State = state;
@@ -547,6 +568,26 @@
 
     state.exhaustDamperPct = state.fanRunning ? state.oaDamperPosition : 0;
 
+    // 2.5 RETURN AIR / SPILL DAMPERS (SOO Closed Loop Controller #8 item
+    // 11a-b) — "The mixed air dampers consist of three modulating dampers
+    // that shall be together controlled..." Only the outside air damper
+    // was modeled; return air (N.C.) and spill (N.O.) were missing
+    // entirely. Per 11b, "[t]he outside and spill damper shall gradually
+    // open upon a demand for additional fresh air as the return damper
+    // closes accordingly" — return air damper is complementary to the OA
+    // damper, spill tracks it directly. Both close fully when the fan is
+    // off, matching SOO System Off #1 ("the outside air, return air
+    // [and] spill air dampers will be closed"), not the naive
+    // complementary value (100 − 0 = 100) that formula would otherwise
+    // give at a closed OA damper. SCENARIO_TRACKING.md item #11.
+    if (state.fanRunning) {
+      state.returnAirDamperPosition = 100 - state.oaDamperPosition;
+      state.spillDamperPosition = state.oaDamperPosition;
+    } else {
+      state.returnAirDamperPosition = 0;
+      state.spillDamperPosition = 0;
+    }
+
     // 3. HEATING LOGIC
     if (state.fanRunning) {
       if (state.oaTemperature < state.heatingCoilSetpoint) {
@@ -577,7 +618,7 @@
     if (state.fanRunning) {
       var oaFraction = state.oaDamperPosition / 100;
       state.mixedAirTemp = Math.round(
-        (state.preheatTemp * oaFraction + RETURN_AIR_TEMP * (1 - oaFraction)) * 10
+        (state.preheatTemp * oaFraction + state.returnAirTemp * (1 - oaFraction)) * 10
       ) / 10;
 
       // SOO "AHU-4-3 / RF-4-6: Sequence of Operation" — General Automatic
@@ -608,14 +649,16 @@
     } else {
       state.chwValvePosition = 0;
       state.chwValveStatus = 'OFF';
-      state.mixedAirTemp = RETURN_AIR_TEMP;
+      state.mixedAirTemp = state.returnAirTemp;
       state.supplyAirTemp = state.oaTemperature;
     }
 
     state.supplyAirTemp = Math.round(state.supplyAirTemp * 10) / 10;
     state.preheatTemp = Math.round(state.preheatTemp * 10) / 10;
     state.mixedAirTemp = Math.round(state.mixedAirTemp * 10) / 10;
-    state.returnAirTemp = RETURN_AIR_TEMP;
+    state.returnAirTemp = Math.round(
+      Math.max(RETURN_AIR_TEMP_MIN, Math.min(RETURN_AIR_TEMP_MAX, state.supplyAirTemp + ROOM_DELTA_T)) * 10
+    ) / 10;
 
     // 5. CO2 SENSOR (SCENARIO_TRACKING.md #25a) — was frozen at its
     // screenshot value forever; ties to the AHU's own ventilation rate.
@@ -634,6 +677,16 @@
         CO2_DESIGN_OCCUPIED_CEILING - ventilationRatio * (CO2_DESIGN_OCCUPIED_CEILING - CO2_OUTDOOR_BASELINE)
       );
     }
+
+    // 5.5 RETURN AIR %RH (SCENARIO_TRACKING.md item #12) — per SOO Closed
+    // Loop Controller #4 item 1, this is actively maintained at 50% by a
+    // separate reset loop (on the supply temp setpoint) that isn't
+    // otherwise modeled here. Explicitly held at that design value each
+    // tick rather than left untouched — the same "no field frozen without
+    // a reason" standard as every other sensor field in this file — so a
+    // future audit doesn't mistake this for the same class of bug as
+    // co2Sensor/chwSupplyTemp/cwSupplyTemp (#25a/#25c/#25d) were.
+    state.returnAirRH = 50.0;
 
     // 6. SUPPLY AIR %RH (SCENARIO_TRACKING.md #25b, renamed from
     // supplyStaticPressure — see item #9) — ties to whichever coil is

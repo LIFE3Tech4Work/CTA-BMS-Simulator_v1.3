@@ -18,12 +18,16 @@
  *
  * Constant values on the image (leave as-is, no hotspot overlay):
  *   8376 CFM / 6172 CFM / 47 Hz — return fan (RF unit, separate, not modeled)
- *   28 BTU / 59.8%RH / 72.1°F  — return air properties (static reference)
+ *   28 BTU                       — return air enthalpy (not individually modeled)
  *   56.9°F                       — freeze coil reference (not individually modeled)
  *
- * "2.02 IWC" (supply duct static) is now live — see the ductStaticPressure
- * hotspot below (SCENARIO_TRACKING.md item #9). Its x/y is an estimated
- * position near the baked-in screenshot number, not yet hand-calibrated
+ * "2.02 IWC" (supply duct static) and "59.8%RH" (return air %RH) are now
+ * live — see the ductStaticPressure/returnAirRH hotspots below
+ * (SCENARIO_TRACKING.md items #9/#12). returnAirTemp ("72.1°F") was
+ * already a live hotspot despite the note that used to be here — it was
+ * just a frozen constant underneath (SCENARIO_TRACKING.md item #12),
+ * fixed along with the above. All of these estimated x/y positions are
+ * near the baked-in screenshot numbers, not yet hand-calibrated
  * pixel-for-pixel (same caveat as the vector overlay's own hotspots).
  *
  * No import/export — exposed as window.AHU46ImageOverlay
@@ -92,6 +96,8 @@ const AHU46ImageOverlay = (() => {
       x: 77.0, y: 52.0, w: 4.5, h: 1.8 },
     { id: 'returnAirTemp', stateKey: 'returnAirTemp',  label: 'Return Air Temp', units: '°F', live: true,
       x: 70.5, y: 21.5, w: 4.0, h: 1.8 },
+    { id: 'returnAirRH', stateKey: 'returnAirRH',      label: 'Return Air %RH', units: '%RH', live: true,
+      x: 75.5, y: 21.5, w: 4.0, h: 1.8 },
     { id: 'co2Sensor',  stateKey: 'co2Sensor',          label: 'CO₂ Sensor',     units: 'PPM', live: true,
       x: 80.5, y: 21.5, w: 4.5, h: 1.8 },
     { id: 'freezePump', stateKey: 'freezePumpOn',       label: 'Freeze Pump',    units: '',    live: true,
@@ -106,6 +112,12 @@ const AHU46ImageOverlay = (() => {
       x: 63.0, y: 21.5, w: 5.0, h: 1.8 },
     { id: 'commonDamper', stateKey: 'commonDamperOpen', label: 'Common Damper', units: '',    live: true,
       x: 17.5, y: 36.5, w: 3.5, h: 2.0 },
+    // Estimated positions (SCENARIO_TRACKING.md item #11) — near the
+    // return-air duct, not yet hand-calibrated pixel-for-pixel.
+    { id: 'returnAirDamper', stateKey: 'returnAirDamperPosition', label: 'Return Air Damper', units: '%', live: true,
+      x: 63.0, y: 33.5, w: 3.5, h: 1.6 },
+    { id: 'spillDamper', stateKey: 'spillDamperPosition', label: 'Spill Damper', units: '%', live: true,
+      x: 68.5, y: 33.5, w: 3.5, h: 1.6 },
   ];
 
   // ─── Alarm key map ──────────────────────────────────────────────────────────

@@ -273,6 +273,10 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(ReadOnlyRow, { label: 'Supply Air Temp', stateKey: 'supplyAirTemp', units: '°F' }),
       React.createElement(ReadOnlyRow, { label: 'Preheat Temp', stateKey: 'preheatTemp', units: '°F' }),
       React.createElement(ReadOnlyRow, { label: 'Mixed Air Temp', stateKey: 'mixedAirTemp', units: '°F' }),
+      React.createElement(ReadOnlyRow, { label: 'Return Air Temp', stateKey: 'returnAirTemp', units: '°F' }),
+      React.createElement(ReadOnlyRow, { label: 'Return Air %RH', stateKey: 'returnAirRH', units: '%RH' }),
+      React.createElement(ReadOnlyRow, { label: 'Return Air Damper', stateKey: 'returnAirDamperPosition', units: '%' }),
+      React.createElement(ReadOnlyRow, { label: 'Spill Damper', stateKey: 'spillDamperPosition', units: '%' }),
 
       // LL97 PANEL
       window.LL97Panel
