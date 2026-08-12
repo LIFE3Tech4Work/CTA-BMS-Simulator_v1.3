@@ -315,6 +315,64 @@ to **Fixed** with the commit hash and a short verification summary.
   `startingTimeLeft`/damper/interlock update correctly in the sidebar in
   real time.
 
+### 14. Duct static pressure loop + return fan flow tracking (items #9, #10)
+- **Source:** SOO page 5. Closed Loop Controller #5: "The supply fan
+  variable frequency drive's speed shall be modulated to maintain the
+  static pressure at a sensor located 2/3 down the main supply duct at an
+  adjustable setpoint of 1.0 in w.c." — as zone VAV dampers open for more
+  cooling, static pressure drops and the loop speeds the fan up to
+  compensate; as they throttle back, pressure rises and the loop slows the
+  fan down. Closed Loop Controller #6: the return fan VFD tracks "a flow
+  control setpoint that shall be dynamically calculated at 90% (adjustable)
+  of the supply fan['s] flow[,] for slightly positive pressurization of the
+  areas." Confirmed against the original SOO scan
+  (`AHU_4_3_4_6_SOO_Page5.png`).
+- **Bug:** `fanSpeedSetpoint` was a raw operator number with zero automatic
+  modulation — item #9's exact description. The return fan had no numeric
+  speed/CFM field at all, only the `returnFanStatus` ON/OFF text.
+- **No zone-level VAV model exists in this file** to drive Controller #5
+  directly, so `chwValvePosition` (already modeled, 0-100%) stands in as
+  the cooling-demand proxy — the SOO's own worked example for this loop is
+  phrased entirely in terms of the cooling call. Modeled with a standard
+  fan-affinity relationship (pressure ∝ speed²) plus a load term, solved
+  algebraically for the fan speed that hits the setpoint exactly — an
+  instantaneous steady-state solve, not an iterative PI loop, consistent
+  with the rest of this file. Calibrated (`DUCT_PRESSURE_LOAD_SENSITIVITY`
+  / `DUCT_PRESSURE_NOMINAL`) so the default state (chwValvePosition=100%,
+  setpoint=1.0 in w.c.) lands on 75% fan speed — the original screenshot's
+  `fanSpeedSetpoint` default — an independent sanity check, same
+  calibration approach used for the CHW/CW supply temps in items #25c/#25d.
+- **Fix:** Added `ductStaticPressureSetpoint` (input, default 1.0 in w.c.)
+  and `ductStaticPressure` (output). `fanSpeedSetpoint` becomes a Manual
+  override (same pattern as `oaDamperPosition`) rather than being read
+  directly; when not overridden, fan speed is solved from the pressure
+  loop. VFD bypass (item #7) still forces 100% regardless. Added
+  `returnFanFlowTrackingSetpoint` (input, default 90%) and `returnFanCFM`
+  (output) for the return fan, with the same VFD-bypass override. Both
+  loops read `chwValvePosition`/`cfm` from the state as it stands when
+  their step runs, one step ahead of COOLING LOGIC recomputing
+  `chwValvePosition` for the current tick — a one-tick lag, same as any
+  real control loop only ever acting on its last measurement. Two
+  `recalculate()` calls now run at module bootstrap instead of one, so
+  this lag doesn't leave the *default* state looking unconverged to any
+  caller. Added a live hotspot for the screenshot's baked-in "2.02 IWC"
+  (previously documented in `AHU46ImageOverlay.jsx` as "not modeled") and
+  a new one for return fan CFM, in both overlay files — positions are
+  estimates, not yet hand-calibrated against the actual screenshot/vector
+  art, same caveat the vector overlay's other hotspots already carry.
+- **Verified:** 14 new regression tests — default convergence, demand-
+  driven speed changes (with the one-tick lag exercised deliberately),
+  setpoint adjustment, Manual override bypassing the loop, VFD bypass
+  interaction, off-state zeroing, both solve-clamp boundaries (floor and
+  ceiling), and the return fan's tracking/bypass/staging-interaction
+  behavior. Updated one batch-4 test whose "instant 75% on staging
+  completion" assumption the new lag legitimately changes (documented
+  in-test why, same standard as prior batches). Also manually verified
+  end-to-end in the running app: read live state via the browser console
+  (fan speed, duct pressure, return fan CFM all matched the formulas
+  exactly against real TMY3 weather, not just synthetic test conditions)
+  and visually confirmed the new sidebar sections and diagram hotspots.
+
 ---
 
 ## Open — static values audit (found while investigating item #5 above)
@@ -340,8 +398,6 @@ Fixed item 13 below.)
 
 | # | Scenario | Source | Notes |
 |---|---|---|---|
-| 9 | No duct static-pressure control loop | SOO Closed Loop Controller #5 | `fanSpeedSetpoint` is a raw operator number, zero automatic modulation from any pressure feedback |
-| 10 | No return-fan flow-tracking control | SOO Closed Loop Controller #6 | Return fan has no independent speed/CFM logic; should track 90% of supply flow |
 | 11 | Only 2 of 3 mixing-box dampers modeled | SOO Item 11a, Points List DA-2/DA-3 | Return Air damper and Spill Air damper aren't separately represented |
 | 12 | Return air conditions incomplete | Points List AFMS-2, THS-4 (humidity) | No return CFM or return humidity fields; `returnAirTemp` is a hardcoded constant |
 | 13 | No RH-driven automatic cooling-setpoint reset | SOO Item 6 ("Automatic" mode) | Model only has the manual mode |
@@ -350,7 +406,8 @@ Fixed item 13 below.)
 
 (Items 5 and 6 — economizer hysteresis, plenum reset — fixed; see Fixed
 items 10-11 above. Item 7 — VFD-in-bypass alarm — fixed; see Fixed item 12
-below.)
+below. Items 9 and 10 — duct static pressure loop, return fan flow
+tracking — fixed; see Fixed item 14 below.)
 
 ## Open — fault engine gaps (`AHU46FaultEngine.js`)
 

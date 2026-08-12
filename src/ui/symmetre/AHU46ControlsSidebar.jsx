@@ -230,10 +230,27 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(EditableRow, { label: 'CO₂ Fresh Air Monitor SP', stateKey: 'co2Setpoint', units: 'PPM', min: 400, max: 2000 }),
       React.createElement(EditableRow, { label: 'Min OA Airflow Setpoint', stateKey: 'minOAAirflowSetpoint', units: 'CFM', min: 0, max: 12000 }),
 
-      // FAN TRACKING
+      // FAN TRACKING — Fan Speed Setpoint is a Manual override (same
+      // pattern as OA Damper Position): normally the duct static pressure
+      // loop below computes fanSpeed automatically, but setting this row
+      // takes over. Return Fan Track Mode is the tracking BASIS ("CFM" —
+      // see the Return Fan Flow Tracking section below for the actual
+      // numeric target).
       React.createElement(SectionHeader, { title: 'Fan Tracking' }),
-      React.createElement(EditableRow, { label: 'Fan Speed Setpoint', stateKey: 'fanSpeedSetpoint', units: '%', min: 0, max: 100 }),
+      React.createElement(EditableRow, { label: 'Fan Speed Setpoint (Manual Override)', stateKey: 'fanSpeedSetpoint', units: '%', min: 0, max: 100 }),
       React.createElement(ReadOnlyRow, { label: 'Return Fan Track Mode', stateKey: 'fanTrackMode', units: '' }),
+
+      // DUCT STATIC PRESSURE CONTROL — SOO Closed Loop Controller #5
+      React.createElement(SectionHeader, { title: 'Duct Static Pressure Control' }),
+      React.createElement(EditableRow, { label: 'Duct Static Pressure SP', stateKey: 'ductStaticPressureSetpoint', units: 'in w.c.', min: 0.1, max: 3.0, step: 0.05 }),
+      React.createElement(ReadOnlyRow, { label: 'Duct Static Pressure', stateKey: 'ductStaticPressure', units: 'in w.c.' }),
+      React.createElement(ReadOnlyRow, { label: 'Supply Fan Speed', stateKey: 'fanSpeed', units: '%' }),
+
+      // RETURN FAN FLOW TRACKING — SOO Closed Loop Controller #6
+      React.createElement(SectionHeader, { title: 'Return Fan Flow Tracking' }),
+      React.createElement(EditableRow, { label: 'RF Tracking SP (% of Supply)', stateKey: 'returnFanFlowTrackingSetpoint', units: '%', min: 0, max: 100 }),
+      React.createElement(ReadOnlyRow, { label: 'Return Fan CFM', stateKey: 'returnFanCFM', units: 'CFM',
+        format: function(v) { return Math.round(v).toLocaleString(); } }),
 
       // FAN VFD STATUS — SOO General Automatic Control Sequences #16
       React.createElement(SectionHeader, { title: 'Fan VFD Status' }),

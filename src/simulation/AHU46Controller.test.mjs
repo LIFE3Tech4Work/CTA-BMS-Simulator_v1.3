@@ -1031,6 +1031,15 @@ describe('AHU46Controller — staged fan-start sequence (#8)', () => {
   });
 
   it('completes at startingTimeSetpoint and hands off cleanly to normal running logic', () => {
+    // Note on fanSpeed here (SCENARIO_TRACKING.md item #9): the duct
+    // static pressure loop reads chwValvePosition from the PREVIOUS tick
+    // as its load proxy. The fan being off for stage 1 (and for the
+    // runSchedule=false blip before that) zeroed chwValvePosition on the
+    // tick just before this one, so the very first tick of normal running
+    // still sees that stale zero and lands on a lower speed — it only
+    // reaches the coil's actual (100%, since nothing else changed)
+    // demand one tick later. This is expected lag, same as any real
+    // control loop only ever acting on its last measurement — not a bug.
     vi.useFakeTimers();
     try {
       const ctrl = loadController();
@@ -1043,8 +1052,10 @@ describe('AHU46Controller — staged fan-start sequence (#8)', () => {
       expect(s.systemStarting).toBe(false);
       expect(s.startingTimeLeft).toBe(0);
       expect(s.fanRunning).toBe(true);
-      expect(s.fanSpeed).toBe(75);
       expect(s.interlockOn).toBe(true);
+
+      ctrl.recalculate(); // one more tick to let the pressure loop catch up
+      expect(ctrl.getState().fanSpeed).toBe(75);
     } finally {
       vi.useRealTimers();
     }
@@ -1136,6 +1147,154 @@ describe('AHU46Controller — staged fan-start sequence (#8)', () => {
       const s2 = ctrl.getState();
       expect(s2.fanRunning).toBe(true);
       expect(s2.co2Sensor).toBeLessThan(1200); // recovering now that ventilation has resumed
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ─── Duct static pressure control (SCENARIO_TRACKING.md #9) ────────────────
+//
+// SOO Closed Loop Controller #5: SF VFD speed is modulated to hold duct
+// static pressure at an adjustable setpoint (default 1.0 in w.c.), rising
+// as zone cooling demand (proxied here by chwValvePosition, since there's
+// no zone-level VAV model) opens dampers and drops pressure. The loop reads
+// chwValvePosition from the PREVIOUS tick — same lag as any real control
+// loop only ever acting on its last measurement — so tests that change load
+// conditions call updateFromTMY3/recalculate() twice: once to let
+// chwValvePosition settle, once more for the pressure loop to react to it.
+
+describe('AHU46Controller — duct static pressure control (#9)', () => {
+  it('defaults to the setpoint (1.0 in w.c.) at 75% fan speed — matches the original screenshot default', () => {
+    const s = loadController().getState();
+    expect(s.fanSpeed).toBe(75);
+    expect(s.ductStaticPressure).toBeCloseTo(1.0, 1);
+    expect(s.cfm).toBeCloseTo(6900, -2);
+  });
+
+  it('fan speed rises with cooling demand and falls as demand eases', () => {
+    const hot = loadWithWeather(90.0, 30.0); // well above cooling SP -> chwValvePosition saturates at 100
+    hot.updateFromTMY3(1, 0);
+    hot.updateFromTMY3(1, 0); // let the pressure loop react to the settled chwValvePosition
+    expect(hot.getState().chwValvePosition).toBe(100);
+    const hotSpeed = hot.getState().fanSpeed;
+
+    const cool = loadWithWeather(55.0, 20.0); // same setup as the existing "CHW valve closes" test
+    cool.setValue('enthalpyOKForEconomizer', true);
+    cool.updateFromTMY3(1, 0);
+    cool.updateFromTMY3(1, 0);
+    expect(cool.getState().chwValvePosition).toBe(0);
+    const coolSpeed = cool.getState().fanSpeed;
+
+    expect(hotSpeed).toBeGreaterThan(coolSpeed);
+  });
+
+  it('ductStaticPressure converges toward a new setpoint when it is adjusted', () => {
+    const ctrl = loadController();
+    ctrl.setValue('ductStaticPressureSetpoint', 0.5);
+    ctrl.recalculate(); // let the loop react to the new setpoint
+    const s = ctrl.getState();
+    expect(s.ductStaticPressure).toBeCloseTo(0.5, 1);
+    expect(s.fanSpeed).toBeLessThan(75); // lower setpoint -> lower speed at the same demand
+  });
+
+  it('Manual override on fanSpeedSetpoint bypasses the pressure loop entirely', () => {
+    const ctrl = loadController();
+    ctrl.setValue('fanSpeedSetpoint', 60);
+    const s = ctrl.getState();
+    expect(s.fanSpeed).toBe(60);
+    expect(ctrl.getModes().fanSpeedSetpoint).toBe('Manual');
+    // Sensor still reflects reality — the loop isn't tracking, so this
+    // won't generally equal ductStaticPressureSetpoint (1.0).
+    expect(s.ductStaticPressure).not.toBeCloseTo(1.0, 1);
+  });
+
+  it('VFD bypass forces 100% speed regardless of the pressure loop, and the pressure reading follows', () => {
+    const ctrl = loadController();
+    ctrl.setValue('supplyFanVFDBypass', true);
+    const s = ctrl.getState();
+    expect(s.fanSpeed).toBe(100);
+    expect(s.ductStaticPressure).toBeGreaterThan(1.0); // full speed overshoots the setpoint
+  });
+
+  it('ductStaticPressure is 0 when the fan is off', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', false);
+    expect(ctrl.getState().ductStaticPressure).toBe(0);
+  });
+
+  it('clamps the solved speed to the minPositionFanSpeedLock floor at a very low setpoint', () => {
+    const ctrl = loadController();
+    ctrl.setValue('ductStaticPressureSetpoint', 0.001); // unrealistically low — unclamped solve would be ~2.4%
+    ctrl.recalculate();
+    expect(ctrl.getState().fanSpeed).toBe(ctrl.getState().minPositionFanSpeedLock);
+  });
+
+  it('clamps the solved speed to 100% at a very high setpoint under full demand', () => {
+    const ctrl = loadController(); // default chwValvePosition is already 100
+    ctrl.setValue('ductStaticPressureSetpoint', 3.0);
+    ctrl.recalculate();
+    expect(ctrl.getState().fanSpeed).toBe(100);
+  });
+});
+
+// ─── Return fan flow tracking (SCENARIO_TRACKING.md #10) ───────────────────
+//
+// SOO Closed Loop Controller #6: RF VFD speed tracks a flow setpoint
+// "dynamically calculated at 90% (adjustable) of the supply fan's flow."
+
+describe('AHU46Controller — return fan flow tracking (#10)', () => {
+  it('defaults to 90% of supply CFM once running', () => {
+    const s = loadController().getState();
+    expect(s.returnFanStatus).toBe('ON');
+    expect(s.returnFanCFM).toBe(Math.round(s.cfm * 0.9));
+  });
+
+  it('is 0 when the fan is off', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', false);
+    expect(ctrl.getState().returnFanCFM).toBe(0);
+  });
+
+  it('scales with supply CFM when fanSpeedSetpoint is manually changed', () => {
+    const ctrl = loadController();
+    ctrl.setValue('fanSpeedSetpoint', 50);
+    const s = ctrl.getState();
+    expect(s.cfm).toBeCloseTo(4600, -1);
+    expect(s.returnFanCFM).toBe(Math.round(s.cfm * 0.9));
+  });
+
+  it('respects an adjusted returnFanFlowTrackingSetpoint', () => {
+    const ctrl = loadController();
+    ctrl.setValue('returnFanFlowTrackingSetpoint', 80);
+    const s = ctrl.getState();
+    expect(s.returnFanCFM).toBe(Math.round(s.cfm * 0.8));
+  });
+
+  it('returnFanVFDBypass forces full design CFM, ignoring the tracking setpoint', () => {
+    const ctrl = loadController();
+    ctrl.setValue('returnFanVFDBypass', true);
+    expect(ctrl.getState().returnFanCFM).toBe(9200);
+  });
+
+  it('stays 0 through stage 1-3 of a staged start and only tracks flow once RF actually comes on', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.setValue('runSchedule', true);
+
+      vi.advanceTimersByTime(150 * 1000); // SF ramping, RF still off
+      ctrl.recalculate();
+      let s = ctrl.getState();
+      expect(s.returnFanStatus).toBe('OFF');
+      expect(s.returnFanCFM).toBe(0);
+
+      vi.advanceTimersByTime(150 * 1000); // t=300s — past the RF delay
+      ctrl.recalculate();
+      s = ctrl.getState();
+      expect(s.returnFanStatus).toBe('ON');
+      expect(s.returnFanCFM).toBe(Math.round(s.cfm * 0.9));
     } finally {
       vi.useRealTimers();
     }

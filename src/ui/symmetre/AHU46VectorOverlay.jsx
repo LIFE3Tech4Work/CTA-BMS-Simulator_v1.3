@@ -134,6 +134,12 @@ const AHU46VectorOverlay = (() => {
       x: 25.0, y: 33.5, w: 3.5, h: 1.6 },
     { id: 'commonDamper', stateKey: 'commonDamperOpen', label: 'Common Damper', units: '',    live: true,
       x: 17.5, y: 36.5, w: 3.5, h: 2.0 },
+    // Copy-pasted from AHU46ImageOverlay.jsx, same as the rest of this
+    // list — needs recalibration against the vector art (see file header).
+    { id: 'ductStaticPressure', stateKey: 'ductStaticPressure', label: 'Duct Static', units: 'IWC', live: true,
+      x: 87.0, y: 68.5, w: 4.0, h: 1.8 },
+    { id: 'returnFanCfm', stateKey: 'returnFanCFM', label: 'Return Fan CFM', units: 'CFM', live: true,
+      x: 63.0, y: 21.5, w: 5.0, h: 1.8 },
   ];
 
   // ─── Alarm key map — unchanged from AHU46ImageOverlay.jsx ──────────────────

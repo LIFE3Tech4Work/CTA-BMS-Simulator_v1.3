@@ -136,10 +136,44 @@
   var START_STAGE_SF_DELAY_END = 90 / 480;   // damper travel / SF start delay ends
   var START_STAGE_SF_RAMP_END = 210 / 480;   // SF ramp (90+120) ends
   var START_STAGE_RF_DELAY_END = 240 / 480;  // RF start delay (210+30) ends
-  // RF ramp + VAV-poll hold (240→480) aren't separately observable in this
-  // model — there's no numeric return-fan speed field to ramp (open item
-  // #10), so RF simply flips to ON at START_STAGE_RF_DELAY_END and the rest
-  // of the hold is just SF/RF holding at speed until startingTimeSetpoint.
+  // RF ramp + VAV-poll hold (240→480) aren't separately observable during
+  // staging — RF's flow-tracking value (#10, below) only has meaning once
+  // it's running against a settled SF flow, so RF simply flips to ON at
+  // START_STAGE_RF_DELAY_END and the rest of the hold is just SF/RF holding
+  // at speed until startingTimeSetpoint.
+
+  // Duct static pressure control — SOO "AHU-4-3 / RF-4-6: Sequence of
+  // Operation", page 5, Closed Loop Controller #5: the SF VFD's speed is
+  // modulated to hold static pressure at a sensor 2/3 down the main supply
+  // duct at an adjustable setpoint (1.0 in w.c.). As zone VAV boxes open
+  // wider for more cooling, duct static pressure drops and the loop speeds
+  // the fan up to compensate; as they throttle back, pressure rises and the
+  // loop slows the fan down. There's no zone-level VAV model in this file
+  // to drive that directly, so cooling coil demand (chwValvePosition, 0-1)
+  // stands in as the load proxy — the SOO's own worked example is phrased
+  // entirely in terms of the cooling call. Modeled with a standard
+  // fan-affinity relationship (pressure ∝ speed²) plus a load term, then
+  // solved algebraically for the fan speed that hits the setpoint exactly
+  // — an instantaneous steady-state solve, not an iterative PI loop,
+  // consistent with the rest of this file (no time-integration anywhere
+  // else either). SCENARIO_TRACKING.md item #9.
+  var DUCT_PRESSURE_LOAD_SENSITIVITY = 0.5;  // fraction pressure drops from load=0 to load=1
+  // Calibrated so that at the default state (chwValvePosition=100%,
+  // setpoint=1.0 in w.c.) the loop lands on 75% fan speed — matching the
+  // screenshot's original fanSpeedSetpoint default, an independent sanity
+  // check that this is a reasonably-scaled constant (same calibration
+  // approach used for CHW_SUPPLY_*/CW_SUPPLY_* in items #25c/#25d).
+  var DUCT_PRESSURE_NOMINAL = 1.0 / (0.75 * 0.75 * (1 - DUCT_PRESSURE_LOAD_SENSITIVITY));
+
+  // Return fan flow-tracking control — SOO page 5, Closed Loop Controller
+  // #6: RF VFD speed is modulated to track return flow at a setpoint
+  // "dynamically calculated at 90% (adjustable) of the supply fan's flow,"
+  // for slightly positive space pressurization. SCENARIO_TRACKING.md item
+  // #10. No independent RF design-CFM figure is cited anywhere in the SOO,
+  // so DESIGN_CFM (the SF figure) doubles as RF's 100%-speed capacity too
+  // — same simplification VFD bypass (#7) already made for the supply
+  // side.
+  var RETURN_FAN_TRACKING_DEFAULT = 90; // % of supply CFM
 
   // ─── Shared State Object ────────────────────────────────────────────────────
 
@@ -163,7 +197,10 @@
     co2Setpoint: 900,                 // PPM
     minOAAirflowSetpoint: 4500,       // CFM (from screenshot: 4500 CFM)
     fanTrackMode: 'CFM',
-    fanSpeedSetpoint: 75,             // %
+    fanSpeedSetpoint: 75,             // % — Manual-able; auto-modulated by the duct static
+                                       // pressure loop otherwise (SCENARIO_TRACKING.md item #9)
+    ductStaticPressureSetpoint: 1.0,  // in w.c. — SOO Closed Loop Controller #5
+    returnFanFlowTrackingSetpoint: 90, // % of supply CFM — SOO Closed Loop Controller #6
     fireAlarmShutdown: false,
     fireAlarmSmokePurge: false,
     supplyFanVFDBypass: false,        // SOO General Automatic Control Sequences #16
@@ -177,6 +214,8 @@
     fanRunning: true,
     fanSpeed: 75,
     cfm: 6901,                        // Supply air CFM (75% × 9200 ≈ 6900)
+    ductStaticPressure: 1.0,          // in w.c. — SCENARIO_TRACKING.md item #9
+    returnFanCFM: 0,                  // CFM — 90% of supply flow once running; SCENARIO_TRACKING.md item #10
     oaCFM: 4500,                      // OA CFM at 50% minimum (= minOAAirflowSetpoint)
     oaDamperPosition: 50,             // % (at minimum position)
     economizerActive: false,
@@ -264,6 +303,21 @@
       ? Math.min(Math.round(state.minOAAirflowSetpoint * (state.oaDamperPosition / state.economizerMinPosition)), state.cfm)
       : 0;
     state.exhaustDamperPct = fanOn ? state.oaDamperPosition : 0;
+
+    // Duct static pressure (#9) and return fan flow tracking (#10) — no
+    // closed-loop authority during staging either (SF/RF are following the
+    // fixed ramp above, not a pressure/flow setpoint), but the sensor
+    // readings still reflect whatever fanSpeed/cfm actually are.
+    var loadProxy = state.chwValvePosition / 100;
+    state.ductStaticPressure = fanOn
+      ? Math.round(
+          DUCT_PRESSURE_NOMINAL * Math.pow(state.fanSpeed / 100, 2) *
+          (1 - DUCT_PRESSURE_LOAD_SENSITIVITY * loadProxy) * 100
+        ) / 100
+      : 0;
+    state.returnFanCFM = (state.returnFanStatus === 'ON')
+      ? (state.returnFanVFDBypass ? DESIGN_CFM : Math.round(state.cfm * (state.returnFanFlowTrackingSetpoint / 100)))
+      : 0;
   }
 
   function recalculate() {
@@ -348,18 +402,42 @@
       state.fanSpeed = 0;
       state.cfm = 0;
       state.oaCFM = 0;
+      state.ductStaticPressure = 0;
       state.supplyFanStatus = 'OFF';
       state.returnFanStatus = 'OFF';
     } else {
       state.fanRunning = true;
-      // SOO General Automatic Control Sequences #16: "For each variable
-      // speed motor an alarm shall be annunciated at the BAS whenever the
-      // drive is placed in bypass." In bypass the VFD is out of the
-      // control loop entirely — the motor runs across-the-line at full,
-      // uncontrolled speed rather than tracking fanSpeedSetpoint. See M-05
-      // in AHU46FaultEngine.js (SCENARIO_TRACKING.md item #7).
-      state.fanSpeed = state.supplyFanVFDBypass ? 100 : state.fanSpeedSetpoint;
+      if (state.supplyFanVFDBypass) {
+        // SOO General Automatic Control Sequences #16: "For each variable
+        // speed motor an alarm shall be annunciated at the BAS whenever
+        // the drive is placed in bypass." In bypass the VFD is out of the
+        // control loop entirely — the motor runs across-the-line at
+        // full, uncontrolled speed. See M-05 in AHU46FaultEngine.js
+        // (SCENARIO_TRACKING.md item #7).
+        state.fanSpeed = 100;
+      } else if (modes.fanSpeedSetpoint === 'Manual') {
+        state.fanSpeed = state.fanSpeedSetpoint;
+      } else {
+        // DUCT STATIC PRESSURE CONTROL (SOO Closed Loop Controller #5) —
+        // was a raw, un-modulated operator number. Solves for the fan
+        // speed that hits ductStaticPressureSetpoint given the current
+        // load proxy (chwValvePosition from the PREVIOUS tick — see the
+        // bootstrap comment above). See the DUCT_PRESSURE_* constants'
+        // comment for the model. SCENARIO_TRACKING.md item #9.
+        var loadProxy = state.chwValvePosition / 100;
+        var pressureFactor = DUCT_PRESSURE_NOMINAL * (1 - DUCT_PRESSURE_LOAD_SENSITIVITY * loadProxy);
+        var solvedSpeed = 100 * Math.sqrt(state.ductStaticPressureSetpoint / pressureFactor);
+        state.fanSpeed = Math.round(Math.max(state.minPositionFanSpeedLock, Math.min(100, solvedSpeed)));
+      }
       state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
+      // Sensor reading reflects whatever fanSpeed actually is (manual/
+      // bypass included) — the closed loop only converges this to the
+      // setpoint when it's actually in control.
+      var loadForReading = state.chwValvePosition / 100;
+      state.ductStaticPressure = Math.round(
+        DUCT_PRESSURE_NOMINAL * Math.pow(state.fanSpeed / 100, 2) *
+        (1 - DUCT_PRESSURE_LOAD_SENSITIVITY * loadForReading) * 100
+      ) / 100;
       state.supplyFanStatus = 'ON';
       state.returnFanStatus = 'ON';
     }
@@ -386,6 +464,24 @@
       state.interlockOn = state.fanRunning;
       state.exhaustFanOn = state.fanRunning;
       state.commonDamperOpen = state.fanRunning;
+    }
+
+    // 1.55 RETURN FAN FLOW TRACKING (SOO Closed Loop Controller #6) — was
+    // no numeric field at all, just the ON/OFF returnFanStatus text. Once
+    // RF is actually running (post-interlock, and — during a staged start
+    // — past its own 30s delay), it tracks a flow setpoint dynamically
+    // calculated as returnFanFlowTrackingSetpoint% (default 90%, adjustable)
+    // of the supply fan's current flow, "for slightly positive
+    // pressurization of the areas." In bypass the drive is out of the
+    // loop and runs across-the-line at full capacity instead (same
+    // pattern as supplyFanVFDBypass — see M-06, SCENARIO_TRACKING.md item
+    // #7). SCENARIO_TRACKING.md item #10.
+    if (state.returnFanStatus === 'ON') {
+      state.returnFanCFM = state.returnFanVFDBypass
+        ? DESIGN_CFM
+        : Math.round(state.cfm * (state.returnFanFlowTrackingSetpoint / 100));
+    } else {
+      state.returnFanCFM = 0;
     }
 
     // 1.6 ECONOMIZER ENTHALPY/OAT HYSTERESIS (SOO Closed Loop Controller #2
@@ -616,6 +712,15 @@
     };
   }
 
+  // Two ticks at bootstrap: the duct static pressure loop (item #9) reads
+  // chwValvePosition to gauge load, but chwValvePosition itself isn't
+  // computed until COOLING LOGIC runs later in the same recalculate() —
+  // one tick behind, same as a real control loop only ever acting on its
+  // most recent measurement. The first call here settles chwValvePosition
+  // from its stale declared default; the second lets the pressure loop
+  // converge against that settled value before any caller ever observes
+  // the state, so default-state reads are already at steady state.
+  recalculate();
   recalculate();
 
   window.AHU46Controller = {
