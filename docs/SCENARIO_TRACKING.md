@@ -589,12 +589,69 @@ below.)
 
 ## Open — architecture/duplication
 
-| # | Scenario | Notes |
-|---|---|---|
-| 17 | Legacy `FaultEngine.js` F-01 is a stale AHU-4-6 twin of M-01 | Driven by static `PointRegistry` historical playback (`AHU04_06CHWCoilValve.js` / `AHU04_06PHTCoil01Valve.js`, 1,017 canned hourly values each), completely disconnected from the live `AHU46Controller.js`. Still active in the global Alarms tab regardless of live state. |
-| 18 | Companion Mode slide 29 promises an overlay that can't appear on AHU-4-6 | `SimultaneousHeatCool.jsx` is explicitly excluded for `ahuId === 'AHU-4-6'` in `App.jsx`, but the slide script and its linked scenario data still reference it |
-| 19 | Same disconnected-legacy pattern confirmed for AHU-4-4 | `FaultEngine.js` F-02/F-03/F-04/F-06 are all `DEV4004`-scoped; `AHU44NewFaultEngine.js`'s own header comment already documents this exact problem |
-| 20 | F-05 depends on a cooling tower point with no live counterpart | `BI801@DEV6000` — no live controller, no nav route/screen anywhere in the app, canned-off for virtually the entire historical dataset |
+All items in this table are now fixed — see Fixed item 19 below.
+
+---
+
+### 19. Legacy FaultEngine.js's stale duplicate rules retired from the global Alarm Summary (items #17, #18, #19, #20)
+
+- **Source:** Confirmed by device-address audit of every rule in the legacy
+  `FaultEngine.js`: F-01 (`DEV4006`) duplicates the live `AHU46FaultEngine`'s
+  M-01; F-02/F-03/F-04/F-06 (all `DEV4004`) duplicate the live
+  `AHU44NewFaultEngine`'s N-01 through N-04 — confirmed 1:1 by description
+  match (temp band, CO2, economizer+cooling, damper floor); F-05
+  (`BI801@DEV6000`, cooling tower) has no live controller anywhere in the
+  app and is canned-off for virtually its entire historical dataset.
+- **Decision — filter at the consumption point, not the source:** rather
+  than emptying `FaultEngine.js`'s rules array (which would require
+  rewriting all 21 of its own passing tests) or deleting the file entirely
+  (the exact category of mistake that caused the 57-file accidental
+  deletion earlier in this project), the six legacy rule IDs are filtered
+  out specifically where the duplication actually becomes visible to a
+  user: `AlarmSummary.jsx`'s alarm aggregation, which concats
+  `FaultEngine.getAllAlarms()` with the live per-unit engines into one
+  combined list. `FaultEngine.js` itself — rules, `evaluate()`, its own
+  21-test suite, and `App.jsx`'s per-tick evaluation call — is completely
+  untouched and continues to function exactly as before; it simply no
+  longer contributes duplicate-looking entries to the combined view.
+  `AlarmsTab.jsx` (a different consumer — a per-point reference view shown
+  only when browsing one specific legacy `PointRegistry` point's own
+  detail modal, not a combined list) was deliberately left alone — it
+  doesn't have the "many alarms shown together, confusingly overlapping"
+  symptom the audit items describe, and still has legitimate reference
+  value for a point browsed directly by its raw address.
+- **Item #18 (Companion Mode slide 29):** the promised "amber warning
+  overlay" was already structurally impossible on AHU-4-6
+  (`SimultaneousHeatCool.jsx` is excluded for that `ahuId` in `App.jsx`).
+  Investigating further surfaced a second, independent reason it no longer
+  makes sense even ignoring the first: the mutual-exclusivity fix (Fixed
+  item #1) means AHU-4-6's live controller now actively *prevents* the
+  condition this slide describes from ever occurring, and the scenario's
+  `pointOverrides` only ever wrote to the legacy `PointRegistry` (which the
+  live controller never reads) regardless. Deliberately **not** rewritten
+  — added a detailed comment in `companionSlides.js` documenting both
+  reasons and flagging that retargeting this slide (e.g. to AHU-4-4, which
+  does render the overlay and has no equivalent fix applied) is a
+  curriculum-content decision for a curriculum author, not something to
+  unilaterally rewrite as a code fix.
+- **New gap found while investigating this, not previously tracked:**
+  `AlarmSummary.jsx`'s aggregation never included AHU-4-6's own live
+  M-01 through M-13 alarms at all — only the legacy engine (now filtered),
+  AHU-4-4, and VAV are concatenated in. AHU-4-6's alarms are currently
+  only visible via the on-screen banners in `AHU46VectorOverlay.jsx` /
+  `AHU46ImageOverlay.jsx`, not the global Alarm Summary screen. Flagged
+  here rather than fixed, since it's outside this item's original scope —
+  worth its own tracked item if it should be addressed next.
+- **Verified:** filter logic checked in isolation (four mock alarms —
+  two legacy superseded IDs, two live IDs — confirms only the live ones
+  survive). Full suite: 554 passed, 36 failed (same pre-existing,
+  unrelated failures throughout this entire tracking log). Not yet
+  manually verified end-to-end in the running browser app — recommend
+  checking the Alarm Summary screen with a legacy scenario active (e.g.
+  scenario id 3 or 4 from `scenarios.js`) to confirm no F-0X entries
+  appear, before considering this fully closed.
+
+---
 
 ## Open — safety/interlock layer (not modeled at all)
 

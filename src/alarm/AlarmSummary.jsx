@@ -464,9 +464,27 @@
 
     // Refresh alarms from FaultEngine periodically
     useEffect(function () {
+      // SCENARIO_TRACKING.md items #17, #19, #20: FaultEngine.js's F-01
+      // through F-06 are legacy rules driven by static PointRegistry
+      // historical playback, completely disconnected from any live
+      // controller. F-01 (AHU-4-6) is fully superseded by the live
+      // AHU46FaultEngine's M-01; F-02/F-03/F-04/F-06 (AHU-4-4) are each
+      // fully superseded by AHU44NewFaultEngine's N-01 through N-04 (1:1
+      // description match, confirmed below); F-05 (cooling tower,
+      // BI801@DEV6000) has no live counterpart anywhere in the app and is
+      // canned-off for virtually its entire historical dataset. Left
+      // undisplayed here rather than shown alongside — and disagreeing
+      // with — the live alarms these same conditions now generate.
+      // FaultEngine.js itself is intentionally left untouched (rules,
+      // evaluate(), and its own test suite all still work exactly as
+      // before) — this filters only what reaches this screen.
+      var LEGACY_RULE_IDS_SUPERSEDED_BY_LIVE_ENGINES = ['F-01', 'F-02', 'F-03', 'F-04', 'F-05', 'F-06'];
+
       function refreshAlarms() {
         if (window.FaultEngine && typeof window.FaultEngine.getAllAlarms === 'function') {
-          var engineAlarms = window.FaultEngine.getAllAlarms();
+          var engineAlarms = window.FaultEngine.getAllAlarms().filter(function (a) {
+            return LEGACY_RULE_IDS_SUPERSEDED_BY_LIVE_ENGINES.indexOf(a.condition) === -1;
+          });
 
           // AHU-4-4 alarms come from a separate engine (its own
           // formula-driven state isn't part of PointRegistry) — merge them

@@ -183,6 +183,30 @@ export const CompanionSlides = [
     scenario: null
   },
   {
+    // ⚠ SCENARIO_TRACKING.md item #18 — this slide's premise no longer
+    // holds, for two independent reasons:
+    //   1. The "amber warning overlay" it tells students to look for
+    //      (SimultaneousHeatCool.jsx) is explicitly excluded from
+    //      rendering when ahuId === 'AHU-4-6' (see App.jsx) — it
+    //      structurally cannot appear on this unit's screen.
+    //   2. As of the mutual-exclusivity fix (SCENARIO_TRACKING.md item
+    //      #1, SOO General Sequences #10), AHU-4-6's live controller
+    //      (AHU46Controller.js) now actively PREVENTS the preheat and
+    //      chilled water valves from being open simultaneously — the
+    //      condition this slide describes can no longer occur on this
+    //      unit at all, live-controller-side, independent of whether the
+    //      overlay would show it.
+    // This scenario's pointOverrides (see scenarios.js, id 3) only ever
+    // wrote to the legacy PointRegistry (AO102/AO103@DEV4006), which the
+    // live AHU-4-6 controller never reads — so even before the above,
+    // this scenario was demonstrating a canned historical snapshot, not
+    // anything a student's own actions on the live screen could
+    // reproduce or affect.
+    // Left as-is rather than rewritten here — retargeting this slide
+    // (e.g. to AHU-4-4, which does render the overlay and has no
+    // equivalent mutual-exclusivity fix applied) is a curriculum-content
+    // decision, not a code fix, and deserves a curriculum author's
+    // judgment rather than an unreviewed rewrite.
     slide: 29,
     title: "Simultaneous Heating and Cooling",
     prompt: "This fault occurs when both the preheat coil and chilled water coil are open above 20%. The system is heating and cooling simultaneously — a major energy waste. Look for the amber warning overlay.",
