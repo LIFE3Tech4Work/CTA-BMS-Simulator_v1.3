@@ -818,6 +818,81 @@ All items in this table are now fixed — see Fixed item 18 below.
 
 ---
 
+### 21. Live point-detail modal for AHU-4-6 (found via real BMS training video analysis)
+
+- **Source:** Frame-by-frame analysis of two real BMS training videos
+  (`07-31-26_BMS_Application_Design_Pt_1/2.mp4`) — the real SymmetrE
+  AHU-4-6 screen and Alarm Summary screen were both captured directly, not
+  just their transcript. Confirmed against the code: `AHU46VectorOverlay.jsx`'s
+  hotspots had zero click handlers at all — purely display-only badges.
+- **Why not reuse the existing point-detail system:** `PointSidebar.jsx` /
+  `EBIAppChrome.jsx` / `GeneralTab.jsx` / `AlarmsTab.jsx` / `HistoryTab.jsx`
+  / `RecentEventsTab.jsx` are all built entirely around
+  `window.PointRegistry.getMetadata(pointId)` — the same static/canned
+  historical dataset already flagged as disconnected from live state in
+  items #17, #19, #20. Wiring AHU-4-6's live hotspots into that system
+  would have shown stale canned data instead of the live value just
+  clicked — actively wrong, not just incomplete.
+- **Fix:** new file `AHU46PointDetail.jsx` — a modal replicating the real
+  screen's visual design (vertical bar gauge, 4 status dots, 5-tab layout:
+  General/Command Priorities/Alarms/History/Recent Events) but reading
+  exclusively from `window.AHU46Controller` / `window.AHU46FaultEngine`.
+  Does not modify `AHU46Controller.js`, `AHU46FaultEngine.js`, or any
+  existing EBI file — genuinely additive. `AHU46VectorOverlay.jsx`'s
+  hotspots gained click/keyboard handlers (removed `pointer-events-none`,
+  added `cursor-pointer`, hover ring, `role="button"`, Enter/Space
+  activation) that open the new modal for that point's `stateKey`.
+- **Scope decisions, made explicit rather than silently simplified:**
+  - **General and Alarms tabs are fully live and real** — Alarms
+    specifically reuses the same `relatedStateKeys` filtering logic
+    `AHU46VectorOverlay.jsx` already uses for its alarm-ring styling.
+  - **History and Recent Events use a lightweight in-memory rolling
+    buffer** (`historyBuffers`, capped at 120 recorded changes per point,
+    records on value-change not every tick), not the real `HistoryTab.jsx`'s
+    full trending infrastructure (615 lines, built for paid per-point
+    PointRegistry subscriptions). Starts empty each page load — the empty
+    state explicitly says so, echoing the "not everything is trended,
+    that's a billable subscription" lesson from the BMS training material
+    rather than pretending otherwise.
+  - **Command Priorities is a simple live Auto/Manual status display**,
+    not the real tab's 16-level BACnet priority array. While building
+    this, found and **explicitly did not fix**: there is currently no way
+    to release a point back to Auto once `setValue()` sets it to Manual —
+    `modes[key]` latches permanently in `AHU46Controller.js`. This is a
+    real, separate backend gap (not something this modal's scope should
+    fix without a deliberate decision to touch the controller) — the tab
+    says so honestly instead of shipping a non-functional "release"
+    button.
+  - **Technical addresses use real Points List tags where confirmed**
+    (TS-1, DA-1/2/3, V-A16/17, AFMS-1/2/3, CO2-1, CS-3, SPS-AN, THS-3/4)
+    and a synthetic `AV#@AHU46`/`BV#@AHU46` scheme for software-calculated
+    values with no physical BACnet point of their own in the real system
+    (mixedAirTemp, supplyAirTemp, fan/interlock/damper status flags).
+- **New gap found while investigating this, not previously tracked:** the
+  real Alarm Summary screen's Priority column uses a letter+number code
+  (`H 14`, `U 14`, `H 00`) and its Condition column includes categories
+  our fault engines don't model at all — `COMMS` (device lost
+  connectivity) and `HiRange`/`LoRange` (sensor reading outside its valid
+  physical range, distinct from a threshold-crossing rule). Every alarm
+  in `AHU46FaultEngine.js` is exclusively threshold-based. Flagged, not
+  fixed — a real gap in the alarm taxonomy itself, separate from this
+  modal.
+- **Verified:** all 20 hotspots' `stateKey`s confirmed present in both
+  `POINT_METADATA` and the units map (no silent-failure gaps). Syntax and
+  React-parse checked. Server boot-checked — `AHU46PointDetail.jsx`,
+  `AHU46VectorOverlay.jsx`, and `index.html` all confirmed serving
+  correctly. `output.css` rebuilt for the new Tailwind classes used
+  (`fixed`, `z-50`, `divide-y`, `animate-pulse`, etc.). Full suite: 562
+  passed, 36 failed (same pre-existing, unrelated failures throughout
+  this entire tracking log) — this project has no automated test coverage
+  for JSX components, so this is syntax/logic-verified rather than
+  test-suite-verified; **not yet manually verified end-to-end in the
+  running browser app** — recommend clicking through all 20 points,
+  confirming the bar gauge/status dots look right, and checking the
+  History tab after leaving a value changing for a minute or two.
+
+---
+
 ## Cross-checked repo2 (`CTA-BMS-Simulator_v1.2`) — for reference
 
 `AHU-4-6 Simulator.dc.html`'s own inline `step()` function has the **same

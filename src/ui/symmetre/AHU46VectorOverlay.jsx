@@ -165,7 +165,7 @@ const AHU46VectorOverlay = (() => {
 
   // ─── Hotspot component — unchanged from AHU46ImageOverlay.jsx ─────────────
 
-  function Hotspot({ spot }) {
+  function Hotspot({ spot, onOpenDetail }) {
     var ctrl = window.AHU46Controller;
     var initialState = window.AHU46State || (ctrl ? ctrl.getState() : {});
     var [value, setValue] = useState(spot.live === false ? null : initialState[spot.stateKey]);
@@ -246,23 +246,29 @@ const AHU46VectorOverlay = (() => {
     }
 
     var alarmClass = isAlarming ? ' ring-2 ring-red-500 animate-bms-flash' : '';
+    var clickable = typeof onOpenDetail === 'function';
 
     return React.createElement('div', {
       className: 'absolute flex items-center justify-center rounded ' +
         bgClass + alarmClass + ' border ' +
         'text-[9px] sm:text-[10px] font-mono text-white font-bold ' +
-        'shadow-lg pointer-events-none select-none',
+        'shadow-lg select-none' +
+        (clickable ? ' cursor-pointer hover:ring-2 hover:ring-cyan-300 transition-shadow' : ' pointer-events-none'),
       style: {
         left: spot.x + '%', top: spot.y + '%',
         width: spot.w + '%', height: spot.h + '%',
         minWidth: '40px', minHeight: '16px',
       },
+      onClick: clickable ? function() { onOpenDetail(spot.stateKey); } : undefined,
       title: spot.label + ': ' + display + (spot.units ? ' ' + spot.units : '') +
         (isManual ? ' (Manual override)' : '') +
-        (isAlarming ? ' — ALARM ACTIVE' : '') + ' (read-only)',
+        (isAlarming ? ' — ALARM ACTIVE' : '') + (clickable ? ' (click for details)' : ' (read-only)'),
       'aria-label': spot.label + ' ' + display + ' ' + spot.units +
-        (isManual ? ' manual override' : '') + (isAlarming ? ' alarm active' : ''),
-      role: 'status',
+        (isManual ? ' manual override' : '') + (isAlarming ? ' alarm active' : '') +
+        (clickable ? ', activate to open point detail' : ''),
+      role: clickable ? 'button' : 'status',
+      tabIndex: clickable ? 0 : undefined,
+      onKeyDown: clickable ? function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(spot.stateKey); } } : undefined,
     },
       React.createElement('span', null, display + (spot.units ? ' ' + spot.units : '')),
       isManual && React.createElement('span', {
@@ -276,6 +282,7 @@ const AHU46VectorOverlay = (() => {
 
   function AHU46VectorOverlayComponent() {
     const [activeFaultIds, setActiveFaultIds] = useState([]);
+    const [selectedStateKey, setSelectedStateKey] = useState(null);
 
     useEffect(function() {
       var interval = setInterval(function() {
@@ -349,13 +356,21 @@ const AHU46VectorOverlay = (() => {
 
       React.createElement('div', {
         className: 'absolute inset-0',
-        'aria-label': 'AHU-4-6 live values — read-only display driven by Controls Sidebar',
+        'aria-label': 'AHU-4-6 live values — click a value for details',
         role: 'region',
       },
         HOTSPOTS.map(function(spot) {
-          return React.createElement(Hotspot, { key: spot.id, spot: spot });
+          return React.createElement(Hotspot, {
+            key: spot.id,
+            spot: spot,
+            onOpenDetail: (spot.live !== false && window.AHU46PointDetail) ? setSelectedStateKey : undefined,
+          });
         })
-      )
+      ),
+      selectedStateKey && window.AHU46PointDetail && React.createElement(window.AHU46PointDetail, {
+        stateKey: selectedStateKey,
+        onClose: function() { setSelectedStateKey(null); },
+      })
     );
   }
 
