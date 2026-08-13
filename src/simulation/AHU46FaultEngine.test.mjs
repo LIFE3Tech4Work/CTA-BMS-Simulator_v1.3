@@ -37,9 +37,43 @@ function baseState(overrides) {
 }
 
 describe('AHU46FaultEngine', () => {
-  it('has 6 fault rules with IDs M-01..M-06', () => {
+  it('has 7 fault rules with IDs M-01..M-07', () => {
     const ids = window.AHU46FaultEngine.rules.map(r => r.id);
-    expect(ids).toEqual(['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06']);
+    expect(ids).toEqual(['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06', 'M-07']);
+  });
+
+  describe('M-03: economizer active while mechanical cooling still engaged (#15)', () => {
+    it('does not fire under default setpoints, even with the economizer active — by design, mixed air stays below the cooling setpoint', () => {
+      // economizerTempControlSP (58°F default) keeps the economizer's own
+      // enable window entirely below coolingCoilSetpoint (60°F default),
+      // so mixedAirTemp (== OAT with the damper at 100%, no heat call)
+      // can never exceed it here.
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ economizerActive: true, chwValvePosition: 0 }));
+      expect(alarms.find(a => a.condition === 'M-03')).toBeUndefined();
+    });
+
+    it('fires when the economizer is active and mechanical cooling is still engaged', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ economizerActive: true, chwValvePosition: 45 }));
+      const m03 = alarms.find(a => a.condition === 'M-03');
+      expect(m03).toBeDefined();
+      expect(m03.value).toBe(45);
+    });
+
+    it('does not fire when the economizer is active but cooling is fully closed', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ economizerActive: true, chwValvePosition: 0 }));
+      expect(alarms.find(a => a.condition === 'M-03')).toBeUndefined();
+    });
+
+    it('does not fire when cooling is active but the economizer is not (normal mechanical cooling)', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ economizerActive: false, chwValvePosition: 80 }));
+      expect(alarms.find(a => a.condition === 'M-03')).toBeUndefined();
+    });
+
+    it('clears once the CHW valve closes back down', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ economizerActive: true, chwValvePosition: 45 }));
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ economizerActive: true, chwValvePosition: 0 }));
+      expect(alarms.find(a => a.condition === 'M-03')).toBeUndefined();
+    });
   });
 
   describe('M-04: OA damper below the 50% ASHRAE 62.1 minimum (was 60%)', () => {
@@ -113,6 +147,53 @@ describe('AHU46FaultEngine', () => {
       window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDBypass: true }));
       const alarms = window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDBypass: false }));
       expect(alarms.find(a => a.condition === 'M-05')).toBeUndefined();
+    });
+  });
+
+  describe('M-07: any point forced to Manual (Lev Chesnov, BMS training session 07-31-26) (#16)', () => {
+    it('does not fire with no modes argument at all — backward compatible with callers that only pass state', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState());
+      expect(alarms.find(a => a.condition === 'M-07')).toBeUndefined();
+    });
+
+    it('does not fire with an empty modes map', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState(), {});
+      expect(alarms.find(a => a.condition === 'M-07')).toBeUndefined();
+    });
+
+    it('fires when exactly one point is in Manual, independent of its value', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState(), { fanSpeedSetpoint: 'Manual' });
+      const m07 = alarms.find(a => a.condition === 'M-07');
+      expect(m07).toBeDefined();
+      expect(m07.value).toEqual(['fanSpeedSetpoint']);
+    });
+
+    it('lists every manually-overridden key when several are set at once', () => {
+      // Clear first — the alarm's value is frozen at first-fire (same
+      // pattern as every other rule here), so a composition set by an
+      // earlier test in this describe block would otherwise stick.
+      window.AHU46FaultEngine.evaluate(baseState(), {});
+      const alarms = window.AHU46FaultEngine.evaluate(baseState(), {
+        oaDamperPosition: 'Manual',
+        coolingCoilSetpoint: 'Manual',
+      });
+      const m07 = alarms.find(a => a.condition === 'M-07');
+      expect(m07.value.sort()).toEqual(['coolingCoilSetpoint', 'oaDamperPosition']);
+    });
+
+    it('is independent of every other rule — fires alongside M-04 without interfering with it', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(
+        baseState({ oaDamperPosition: 10 }),
+        { oaDamperPosition: 'Manual' }
+      );
+      expect(alarms.find(a => a.condition === 'M-04')).toBeDefined();
+      expect(alarms.find(a => a.condition === 'M-07')).toBeDefined();
+    });
+
+    it('clears once every point is returned to auto', () => {
+      window.AHU46FaultEngine.evaluate(baseState(), { fanSpeedSetpoint: 'Manual' });
+      const alarms = window.AHU46FaultEngine.evaluate(baseState(), {});
+      expect(alarms.find(a => a.condition === 'M-07')).toBeUndefined();
     });
   });
 });

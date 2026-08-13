@@ -420,6 +420,9 @@
   .mt-30 {
     margin-top: calc(var(--spacing) * 30);
   }
+  .mt-36 {
+    margin-top: calc(var(--spacing) * 36);
+  }
   .mr-1 {
     margin-right: var(--spacing);
   }
@@ -1090,6 +1093,9 @@
   }
   .bg-amber-500 {
     background-color: var(--color-amber-500);
+  }
+  .bg-amber-600 {
+    background-color: var(--color-amber-600);
   }
   .bg-amber-600\/90 {
     background-color: color-mix(in srgb, oklch(66.6% 0.179 58.318) 90%, transparent);

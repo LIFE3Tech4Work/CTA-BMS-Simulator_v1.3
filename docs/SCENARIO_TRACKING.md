@@ -489,6 +489,61 @@ to **Fixed** with the commit hash and a short verification summary.
   reset in real time, then reverted the app to its Manual/60°F default
   before finishing.
 
+### 17. M-03 citation audit + M-07 Manual-override alarm (items #15, #16)
+- **Item #15 — M-03's missing citation, verified rather than just noted:**
+  unlike every other fault rule, M-03 (economizer active + mechanical
+  cooling still engaged) had no SOO clause behind it. Investigated whether
+  it should be removed, re-sourced, or left as-is. Traced through why it's
+  actually sound for *this specific controller*: the economizer here is
+  binary (SOO Closed Loop Controller #2 — active means the OA damper snaps
+  to 100%, not a modulating partial-fresh-air position), so when it's
+  active the outdoor air is *by design* supposed to meet the cooling load
+  without mechanical assistance — that's the entire point of switching to
+  100% OA instead of running the chiller. Confirmed the rule is
+  unreachable under the model's own default setpoints (the economizer's
+  own enable window, OAT < 58°F, already keeps mixed air below the 60°F
+  cooling setpoint whenever it's active without a heating call) and only
+  fires under the exact misconfiguration the rule's description already
+  names (`economizerTempControlSP` pushed above `coolingCoilSetpoint`) —
+  a real operator-error scenario, not a theoretical one. No SOO clause
+  exists for this, so rather than inventing one, attributed it to the
+  general ASHRAE 90.1 simultaneous-cooling principle already referenced
+  elsewhere in this curriculum (`docs/BMS_ALIGNED_REQUIREMENTS.md`), with
+  the rule's own description now explicit that this is not
+  SOO-sourced. Also closed a real gap found during the audit: M-03 had
+  *zero* test coverage anywhere in the suite (only appeared in a rule-ID
+  list check).
+- **Item #16 — M-07, new rule:** Lev Chesnov, BMS training session
+  (07-31-26): "forcing any point to Manual should itself be alarm-worthy,
+  independent of value" — a forgotten override can silently mask a real
+  fault. Unlike every other rule, this one has no single `sourceField` —
+  it's driven by the controller's Manual-override map
+  (`AHU46Controller.getModes()`), not the state snapshot, so `evaluate()`
+  gained a second, optional `modes` argument (backward compatible —
+  existing single-argument callers just never see M-07 fire). Fires when
+  *any* key in `modes` is `'Manual'`; the alarm's `value` lists which
+  keys, frozen at first-fire same as every other rule's value (not
+  continuously updated if the set of manually-overridden points changes
+  while the alarm stays active — an existing property of every rule here,
+  not a new inconsistency). Wired both overlay files to pass
+  `ctrl.getModes()` through to `evaluate()`, and added an amber (medium
+  priority, not the red used by every other banner — a Manual override
+  isn't necessarily wrong) M-07 banner to both, plus rebuilt `output.css`
+  for the new banner's spacing/color utilities.
+- **Verified:** 11 new regression tests — 5 for M-03 (silent under
+  default setpoints, fires on the misconfiguration scenario, clears
+  correctly, doesn't fire on cooling-without-economizer or
+  economizer-without-cooling) and 6 for M-07 (no-modes-argument backward
+  compatibility, empty modes, single and multiple manually-overridden
+  keys, independence from other rules firing simultaneously, clearing
+  once every point returns to auto). Confirmed the exact integration path
+  both overlay files use (`getState()` + `getModes()` →
+  `evaluate(state, modes)`) end-to-end via a standalone Node script after
+  the Browser pane became persistently unresponsive mid-batch (repeated
+  "navigation denied" across multiple fresh tabs and a preview-server
+  restart) — noting this here rather than silently claiming a live-app
+  check that didn't actually happen this time.
+
 ---
 
 ## Open — static values audit (found while investigating item #5 above)
@@ -526,12 +581,11 @@ item 16 below.)
 
 ## Open — fault engine gaps (`AHU46FaultEngine.js`)
 
-| # | Scenario | Source | Notes |
-|---|---|---|---|
-| 15 | M-03 has no direct SOO citation | — | Reasonable pattern (economizer + mechanical cooling together) but not sourced from a specific SOO clause |
-| 16 | "Manual override itself creates an alarm" not modeled | Lev Chesnov, BMS training session (07-31-26) | Stated rule: forcing any point to Manual should itself be alarm-worthy, independent of value |
+All items in this table are now fixed — see the notes below.
 
-(Item 14 — M-04's threshold — fixed; see Fixed item 6 above.)
+(Item 14 — M-04's threshold — fixed; see Fixed item 6 above. Items 15 and
+16 — M-03's citation, Manual-override alarm — fixed; see Fixed item 17
+below.)
 
 ## Open — architecture/duplication
 

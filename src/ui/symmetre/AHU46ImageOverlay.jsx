@@ -265,7 +265,10 @@ const AHU46ImageOverlay = (() => {
       var interval = setInterval(function() {
         if (window.AHU46FaultEngine && window.AHU46Controller) {
           var state = window.AHU46Controller.getState();
-          var alarms = window.AHU46FaultEngine.evaluate(state);
+          // M-07 (SCENARIO_TRACKING.md item #16) needs the Manual-override
+          // map, not just the state snapshot.
+          var modes = window.AHU46Controller.getModes ? window.AHU46Controller.getModes() : {};
+          var alarms = window.AHU46FaultEngine.evaluate(state, modes);
           setActiveFaultIds(alarms.map(function(a) { return a.condition; }));
         }
       }, 500);
@@ -298,6 +301,12 @@ const AHU46ImageOverlay = (() => {
       activeFaultIds.includes('M-06') && React.createElement('div', {
         className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-700 bg-opacity-90 text-white text-xs font-bold text-center mt-30'
       }, '⚠ M-06 Return Fan VFD in bypass'),
+      // Medium priority (amber, not red) — a Manual override isn't
+      // necessarily wrong, just worth double-checking. SCENARIO_TRACKING.md
+      // item #16.
+      activeFaultIds.includes('M-07') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-amber-600 bg-opacity-90 text-white text-xs font-bold text-center mt-36'
+      }, '⚠ M-07 Point(s) forced to Manual override'),
 
       // Background image — sized by width (h-auto) so hotspot % positions always
       // match the actual rendered image area; same fix applied to AHU-4-4 in v3.

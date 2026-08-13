@@ -2,18 +2,23 @@
  * AHU46FaultEngine.js — Fault detection rules for AHU-4-6
  *
  * Mirrors AHU44NewFaultEngine.js's rule pattern, adapted for the Meeting
- * Room 2nd Level AHU. Fault rule IDs use the M-series prefix (M-01..M-06)
+ * Room 2nd Level AHU. Fault rule IDs use the M-series prefix (M-01..M-07)
  * to distinguish from AHU-4-4's N-series rules.
  *
  * M-01: Supply air too warm — cooling coil cannot maintain setpoint
  * M-02: CO₂ exceeds 1,100 ppm (ASHRAE 62.1 upper guideline)
- * M-03: Economizer active while mechanical cooling still engaged
+ * M-03: Economizer active while mechanical cooling still engaged (see the
+ *        rule's own comment below — SCENARIO_TRACKING.md item #15)
  * M-04: OA damper below ASHRAE 62.1 minimum (50% for meeting rooms)
  *        Note: the 50% floor makes this fault pedagogically distinct —
  *        a damper stuck at 10% on this unit starves 2.5× more fresh air
  *        than the same fault would on AHU-4-4 (20% floor).
  * M-05: Supply Fan VFD in bypass (SOO General Automatic Control Sequences #16)
  * M-06: Return Fan VFD in bypass (SOO General Automatic Control Sequences #16)
+ * M-07: One or more points forced to Manual — alarm-worthy independent of
+ *        value (Lev Chesnov, BMS training session 07-31-26). Needs the
+ *        controller's Manual-override map, not just its state snapshot —
+ *        see evaluate()'s second `modes` argument below.
  *
  * Attached to window.AHU46FaultEngine (no import/export — Babel standalone).
  */
@@ -57,8 +62,33 @@
       }
     },
     {
+      // SCENARIO_TRACKING.md item #15: unlike every other rule here, this
+      // one has no direct SOO citation — flagged during the audit and
+      // verified rather than left as-is or silently dropped. This
+      // controller's economizer is binary (SOO Closed Loop Controller #2:
+      // active means the OA damper snaps to 100%, not a modulating
+      // partial-fresh-air position — see AHU46Controller.js's economizer
+      // logic), so when it's active the outdoor air alone is *by design*
+      // supposed to be capable of meeting the cooling load without
+      // mechanical assistance (that's the whole point of switching to
+      // 100% OA instead of running the chiller). Under the model's own
+      // default setpoints this never fires: the economizer's own enable
+      // condition (OAT < economizerTempControlSP, 58°F default) already
+      // keeps mixed air below the cooling setpoint (60°F default) whenever
+      // the economizer is active without a heating call. It becomes
+      // reachable only through the exact misconfiguration named in the
+      // description below (economizerTempControlSP pushed above
+      // coolingCoilSetpoint) — a real operator-error scenario, not a
+      // theoretical one. Best available attribution is the general
+      // industry/ASHRAE 90.1 principle against unnecessary simultaneous
+      // mechanical cooling during economizer operation, already referenced
+      // elsewhere in this curriculum (docs/BMS_ALIGNED_REQUIREMENTS.md:
+      // "90.1 mandates economizer operation and limits simultaneous
+      // heating/cooling") — not a specific SOO clause, and this rule's
+      // description is written to be honest about that rather than imply
+      // otherwise.
       id: 'M-03',
-      description: 'Economizer fully open (free cooling) while mechanical cooling (CHW valve) is still active — setpoint and economizer changeover SP may be misconfigured',
+      description: 'Economizer fully open (free cooling) while mechanical cooling (CHW valve) is still active — setpoint and economizer changeover SP may be misconfigured (ASHRAE 90.1 simultaneous-cooling principle; no direct SOO citation — see SCENARIO_TRACKING.md item #15)',
       priority: 'high',
       sourceField: 'chwValvePosition',
       relatedStateKeys: ['chwValvePosition', 'economizerActive'],
@@ -99,14 +129,44 @@
         if (state.returnFanVFDBypass === undefined) return false;
         return state.returnFanVFDBypass === true;
       }
+    },
+    {
+      // SCENARIO_TRACKING.md item #16 — Lev Chesnov, BMS training session
+      // (07-31-26): forcing any point to Manual is itself alarm-worthy,
+      // independent of the value it's been forced to, since a forgotten
+      // override can silently mask a real fault (e.g. a damper stuck at a
+      // reasonable-looking position because an operator manually set it
+      // there weeks ago and never returned it to auto). Unlike every
+      // other rule here, this one has no single sourceField — it's driven
+      // by the controller's Manual-override map (getModes()), passed in
+      // as evaluate()'s second argument, not the state snapshot. value is
+      // the list of keys currently in Manual (frozen at first-fire, same
+      // as every other rule's value — see evaluate()'s comment).
+      id: 'M-07',
+      description: 'One or more points forced to Manual override — program has yielded control authority for that point; verify this is intentional',
+      priority: 'medium',
+      sourceField: null,
+      relatedStateKeys: [],
+      condition: function(state, modes) {
+        if (!modes) return false;
+        return Object.keys(modes).some(function(k) { return modes[k] === 'Manual'; });
+      }
     }
   ];
 
-  function evaluate(state) {
+  function manualKeys(modes) {
+    if (!modes) return [];
+    return Object.keys(modes).filter(function(k) { return modes[k] === 'Manual'; });
+  }
+
+  // state: AHU46Controller.getState() snapshot. modes: AHU46Controller.
+  // getModes() (optional — only M-07 needs it; every other rule ignores
+  // the second argument).
+  function evaluate(state, modes) {
     var newAlarms = [];
     rules.forEach(function(rule) {
       var fires = false;
-      try { fires = rule.condition(state); } catch(e) {}
+      try { fires = rule.condition(state, modes); } catch(e) {}
       if (fires) {
         if (!activeAlarms[rule.id]) {
           activeAlarms[rule.id] = {
@@ -114,7 +174,7 @@
             description: rule.description,
             priority: rule.priority,
             sourceField: rule.sourceField,
-            value: state[rule.sourceField],
+            value: rule.sourceField ? state[rule.sourceField] : manualKeys(modes),
             timestamp: new Date().toISOString(),
           };
         }
