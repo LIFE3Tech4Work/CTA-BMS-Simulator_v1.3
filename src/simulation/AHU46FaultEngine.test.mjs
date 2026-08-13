@@ -33,13 +33,26 @@ function baseState(overrides) {
     minOAAirflowSetpoint: 4500,
     supplyFanVFDBypass: false,
     returnFanVFDBypass: false,
+    filterDirty: false,
+    dps2Tripped: false,
+    dps3Tripped: false,
+    dps4Tripped: false,
+    dps5Tripped: false,
+    freezestatTripped: false,
+    freezestatShutdown: false,
+    supplyFanVFDFault: false,
+    returnFanVFDFault: false,
+    softwareLockout: false,
   }, overrides || {});
 }
 
 describe('AHU46FaultEngine', () => {
-  it('has 7 fault rules with IDs M-01..M-07', () => {
+  it('has 13 fault rules with IDs M-01..M-13', () => {
     const ids = window.AHU46FaultEngine.rules.map(r => r.id);
-    expect(ids).toEqual(['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06', 'M-07']);
+    expect(ids).toEqual([
+      'M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-06', 'M-07',
+      'M-08', 'M-09', 'M-10', 'M-11', 'M-12', 'M-13',
+    ]);
   });
 
   describe('M-03: economizer active while mechanical cooling still engaged (#15)', () => {
@@ -194,6 +207,97 @@ describe('AHU46FaultEngine', () => {
       window.AHU46FaultEngine.evaluate(baseState(), { fanSpeedSetpoint: 'Manual' });
       const alarms = window.AHU46FaultEngine.evaluate(baseState(), {});
       expect(alarms.find(a => a.condition === 'M-07')).toBeUndefined();
+    });
+  });
+
+  describe('M-08: dirty filter (DPS-1) — non-critical', () => {
+    it('fires when filterDirty is true', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true }));
+      const m08 = alarms.find(a => a.condition === 'M-08');
+      expect(m08).toBeDefined();
+      expect(m08.priority).toBe('low');
+    });
+
+    it('does not fire under default state', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState());
+      expect(alarms.find(a => a.condition === 'M-08')).toBeUndefined();
+    });
+  });
+
+  describe('M-09: DPS-2..5 high suction/static pressure trips', () => {
+    it('does not fire under default state', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState());
+      expect(alarms.find(a => a.condition === 'M-09')).toBeUndefined();
+    });
+
+    it('fires when any single DPS trips, listing which one', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ dps3Tripped: true }));
+      const m09 = alarms.find(a => a.condition === 'M-09');
+      expect(m09).toBeDefined();
+      expect(m09.value).toEqual(['DPS-3 (Supply Static)']);
+    });
+
+    it('lists all tripped switches when multiple fire together', () => {
+      window.AHU46FaultEngine.evaluate(baseState()); // clear any stale cached value from a prior test
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ dps2Tripped: true, dps5Tripped: true }));
+      const m09 = alarms.find(a => a.condition === 'M-09');
+      expect(m09.value).toEqual(['DPS-2 (Supply Suction)', 'DPS-5 (Return Static)']);
+    });
+
+    it('clears once every DPS trip is cleared', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ dps4Tripped: true }));
+      const alarms = window.AHU46FaultEngine.evaluate(baseState());
+      expect(alarms.find(a => a.condition === 'M-09')).toBeUndefined();
+    });
+  });
+
+  describe('M-10 / M-11: freezestat warning vs shutdown', () => {
+    it('M-10 fires on an instantaneous trip before shutdown latches', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ freezestatTripped: true, freezestatShutdown: false }));
+      expect(alarms.find(a => a.condition === 'M-10')).toBeDefined();
+      expect(alarms.find(a => a.condition === 'M-11')).toBeUndefined();
+    });
+
+    it('M-11 fires once shutdown has latched, and M-10 no longer fires', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ freezestatTripped: false, freezestatShutdown: true }));
+      const m11 = alarms.find(a => a.condition === 'M-11');
+      expect(m11).toBeDefined();
+      expect(m11.priority).toBe('urgent');
+      expect(alarms.find(a => a.condition === 'M-10')).toBeUndefined();
+    });
+
+    it('neither fires under default state', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState());
+      expect(alarms.find(a => a.condition === 'M-10')).toBeUndefined();
+      expect(alarms.find(a => a.condition === 'M-11')).toBeUndefined();
+    });
+  });
+
+  describe('M-12: Supply/Return Fan VFD fault', () => {
+    it('fires and names the faulted drive', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDFault: true }));
+      const m12 = alarms.find(a => a.condition === 'M-12');
+      expect(m12).toBeDefined();
+      expect(m12.value).toEqual(['Supply Fan VFD']);
+    });
+
+    it('lists both drives when both fault together', () => {
+      window.AHU46FaultEngine.evaluate(baseState()); // clear any stale cached value from a prior test
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ supplyFanVFDFault: true, returnFanVFDFault: true }));
+      expect(alarms.find(a => a.condition === 'M-12').value).toEqual(['Supply Fan VFD', 'Return Fan VFD']);
+    });
+  });
+
+  describe('M-13: software lockout', () => {
+    it('fires when active', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ softwareLockout: true }));
+      expect(alarms.find(a => a.condition === 'M-13')).toBeDefined();
+    });
+
+    it('clears once lockout is released', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ softwareLockout: true }));
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ softwareLockout: false }));
+      expect(alarms.find(a => a.condition === 'M-13')).toBeUndefined();
     });
   });
 });

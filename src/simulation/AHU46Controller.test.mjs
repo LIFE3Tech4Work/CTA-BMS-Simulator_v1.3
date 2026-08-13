@@ -1524,3 +1524,254 @@ describe('AHU46Controller — return air %RH + automatic cooling setpoint reset 
     expect(values[4]).toBe(values[5]); // settled by the last two ticks
   });
 });
+
+// ─── Safety/interlock layer: freezestat (SOO Safeties item 4) ──────────────
+//
+// "A freezestat with its element serpentined across the inlet side of the
+// cooling coil will shut down the supply fan by hardwired time delayed
+// interlock... open the heating coil control valve 100% and activate a
+// critical alarm at the BMS... a hardwired time delayed relay... provide
+// 3 minutes (adjustable) delay prior to supply fan shutdown... a manual
+// reset shall be required." SCENARIO_TRACKING.md item #22.
+
+describe('AHU46Controller — freezestat shutdown sequence', () => {
+  it('trips instantaneously but does not shut down until the delay elapses', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      const S = ctrl.getState.__proto__; // no-op, kept for symmetry with other blocks
+      ctrl.setValue('freezestatDelaySetpoint', 5);
+      ctrl.recalculate();
+      // Force a cold coil-inlet reading directly (mixedAirTemp is normally
+      // computed by cooling logic each tick, but we're testing the trip
+      // detector in isolation, same technique used by loadWithWeather()
+      // elsewhere in this file for injecting a specific condition).
+      const w = {};
+      const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+      new Function('window', code)(w);
+      w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+      let s = w.AHU46Controller.getState();
+      expect(s.freezestatTripped).toBe(true);
+      expect(s.freezestatShutdown).toBe(false);
+
+      vi.advanceTimersByTime(6000);
+      w.AHU46State.mixedAirTemp = 20; // still cold — re-inject since cooling logic recomputed it
+      w.AHU46Controller.recalculate();
+      s = w.AHU46Controller.getState();
+      expect(s.freezestatShutdown).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('forces fan off, heating valve 100% open, and cooling valve closed once latched', () => {
+    vi.useFakeTimers();
+    try {
+      const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+      const w = {};
+      new Function('window', code)(w);
+      w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+      vi.advanceTimersByTime(6000);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+      const s = w.AHU46Controller.getState();
+      expect(s.freezestatShutdown).toBe(true);
+      expect(s.fanRunning).toBe(false);
+      expect(s.phtValvePosition).toBe(100);
+      expect(s.phtValveStatus).toBe('ON');
+      expect(s.chwValvePosition).toBe(0);
+      expect(s.hardSafetyShutdown).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('nuisance-delay timer resets if the trip clears before it elapses (no shutdown)', () => {
+    vi.useFakeTimers();
+    try {
+      const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+      const w = {};
+      new Function('window', code)(w);
+      w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+      vi.advanceTimersByTime(3000); // partway through the delay
+      w.AHU46State.mixedAirTemp = 60; // condition clears
+      w.AHU46Controller.recalculate();
+      vi.advanceTimersByTime(3000); // would have elapsed the ORIGINAL delay if not reset
+      w.AHU46State.mixedAirTemp = 60;
+      w.AHU46Controller.recalculate();
+      expect(w.AHU46Controller.getState().freezestatShutdown).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reset is refused while OAT is still below the trip temperature', () => {
+    vi.useFakeTimers();
+    try {
+      const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+      const w = {};
+      new Function('window', code)(w);
+      w.AHU46State.oaTemperature = 10;
+      w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+      vi.advanceTimersByTime(6000);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+      expect(w.AHU46Controller.getState().freezestatShutdown).toBe(true);
+
+      w.AHU46Controller.setValue('resetPressed', true);
+      expect(w.AHU46Controller.getState().freezestatShutdown).toBe(true); // still latched — OAT still cold
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reset succeeds once OAT has warmed above the trip temperature', () => {
+    vi.useFakeTimers();
+    try {
+      const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
+      const w = {};
+      new Function('window', code)(w);
+      w.AHU46State.oaTemperature = 10;
+      w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+      vi.advanceTimersByTime(6000);
+      w.AHU46State.mixedAirTemp = 20;
+      w.AHU46Controller.recalculate();
+
+      w.AHU46State.oaTemperature = 50;
+      w.AHU46Controller.setValue('resetPressed', true);
+      const s = w.AHU46Controller.getState();
+      expect(s.freezestatShutdown).toBe(false);
+      expect(s.resetPressed).toBe(false); // momentary — self-clears
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('is not evaluated while the fan is already off (no airflow across the element)', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', false);
+    ctrl.recalculate();
+    expect(ctrl.getState().fanRunning).toBe(false);
+    expect(ctrl.getState().freezestatTripped).toBe(false);
+  });
+});
+
+// ─── Safety/interlock layer: DPS pressure switches (SOO Safeties items 1-6) ─
+
+describe('AHU46Controller — DPS pressure-switch safeties', () => {
+  it('DPS-1 (filter dirty) is non-critical — no shutdown', () => {
+    const ctrl = loadController();
+    ctrl.setValue('filterDirty', true);
+    const s = ctrl.getState();
+    expect(s.fanRunning).toBe(true);
+    expect(s.hardSafetyShutdown).toBe(false);
+  });
+
+  it.each(['dps2Tripped', 'dps3Tripped', 'dps4Tripped', 'dps5Tripped'])(
+    '%s shuts down the unit (manual reset type)',
+    (key) => {
+      const ctrl = loadController();
+      ctrl.setValue(key, true);
+      const s = ctrl.getState();
+      expect(s.hardSafetyShutdown).toBe(true);
+      expect(s.fanRunning).toBe(false);
+    }
+  );
+
+  it('reset clears all four DPS trips at once', () => {
+    const ctrl = loadController();
+    ctrl.setValue('dps2Tripped', true);
+    ctrl.setValue('dps4Tripped', true);
+    ctrl.setValue('resetPressed', true);
+    const s = ctrl.getState();
+    expect(s.dps2Tripped).toBe(false);
+    expect(s.dps3Tripped).toBe(false);
+    expect(s.dps4Tripped).toBe(false);
+    expect(s.dps5Tripped).toBe(false);
+  });
+});
+
+// ─── Safety/interlock layer: VFD fault + software lockout (items #23, #24) ──
+
+describe('AHU46Controller — VFD fault and software lockout', () => {
+  it('supplyFanVFDFault shuts down the unit', () => {
+    const ctrl = loadController();
+    ctrl.setValue('supplyFanVFDFault', true);
+    expect(ctrl.getState().hardSafetyShutdown).toBe(true);
+    expect(ctrl.getState().fanRunning).toBe(false);
+  });
+
+  it('returnFanVFDFault shuts down the unit', () => {
+    const ctrl = loadController();
+    ctrl.setValue('returnFanVFDFault', true);
+    expect(ctrl.getState().hardSafetyShutdown).toBe(true);
+  });
+
+  it('softwareLockout holds the unit off regardless of runSchedule', () => {
+    const ctrl = loadController();
+    ctrl.setValue('runSchedule', true);
+    ctrl.setValue('softwareLockout', true);
+    expect(ctrl.getState().fanRunning).toBe(false);
+    expect(ctrl.getState().hardSafetyShutdown).toBe(true);
+  });
+
+  it('clearing softwareLockout allows the staged start sequence to begin', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('softwareLockout', true);
+      ctrl.setValue('softwareLockout', false);
+      const s = ctrl.getState();
+      expect(s.systemStarting).toBe(true);
+      vi.advanceTimersByTime((ctrl.getState().startingTimeSetpoint + 1) * 1000);
+      ctrl.recalculate();
+      expect(ctrl.getState().fanRunning).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ─── VFD damper-request signals (Points List items 34/37) ───────────────────
+
+describe('AHU46Controller — VFD damper-request signals', () => {
+  it('are active throughout a staged start', () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = loadController();
+      ctrl.setValue('runSchedule', false);
+      ctrl.recalculate();
+      ctrl.setValue('runSchedule', true);
+      let s = ctrl.getState();
+      expect(s.systemStarting).toBe(true);
+      expect(s.supplyFanVFDDamperRequest).toBe(true);
+      expect(s.returnFanVFDDamperRequest).toBe(true);
+
+      vi.advanceTimersByTime((ctrl.getState().startingTimeSetpoint + 1) * 1000);
+      ctrl.recalculate();
+      s = ctrl.getState();
+      expect(s.systemStarting).toBe(false);
+      expect(s.supplyFanVFDDamperRequest).toBe(false);
+      expect(s.returnFanVFDDamperRequest).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('are false in steady-state running (default)', () => {
+    const ctrl = loadController();
+    const s = ctrl.getState();
+    expect(s.supplyFanVFDDamperRequest).toBe(false);
+    expect(s.returnFanVFDDamperRequest).toBe(false);
+  });
+});

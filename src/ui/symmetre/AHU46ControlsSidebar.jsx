@@ -293,6 +293,32 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(SectionHeader, { title: 'Fan VFD Status' }),
       React.createElement(NormToggleRow, { label: 'Supply Fan VFD Bypass', stateKey: 'supplyFanVFDBypass' }),
       React.createElement(NormToggleRow, { label: 'Return Fan VFD Bypass', stateKey: 'returnFanVFDBypass' }),
+      React.createElement(NormToggleRow, { label: 'Supply Fan VFD Fault', stateKey: 'supplyFanVFDFault' }),
+      React.createElement(NormToggleRow, { label: 'Return Fan VFD Fault', stateKey: 'returnFanVFDFault' }),
+      React.createElement(ReadOnlyRow, { label: 'Supply VFD Damper Request', stateKey: 'supplyFanVFDDamperRequest', units: '',
+        format: function(v) { return v ? 'YES' : 'NO'; } }),
+      React.createElement(ReadOnlyRow, { label: 'Return VFD Damper Request', stateKey: 'returnFanVFDDamperRequest', units: '',
+        format: function(v) { return v ? 'YES' : 'NO'; } }),
+
+      // PRESSURE SWITCH SAFETIES — SOO Safeties items 1-6, SCENARIO_TRACKING.md item #21
+      React.createElement(SectionHeader, { title: 'Pressure Switch Safeties (DPS)' }),
+      React.createElement(NormToggleRow, { label: 'DPS-1 Filter Dirty (non-critical)', stateKey: 'filterDirty' }),
+      React.createElement(NormToggleRow, { label: 'DPS-2 Supply High Suction', stateKey: 'dps2Tripped' }),
+      React.createElement(NormToggleRow, { label: 'DPS-3 Supply High Static', stateKey: 'dps3Tripped' }),
+      React.createElement(NormToggleRow, { label: 'DPS-4 Return High Suction', stateKey: 'dps4Tripped' }),
+      React.createElement(NormToggleRow, { label: 'DPS-5 Return High Static', stateKey: 'dps5Tripped' }),
+
+      // FREEZESTAT — SOO Safeties item 4, SCENARIO_TRACKING.md item #22
+      React.createElement(SectionHeader, { title: 'Freezestat' }),
+      React.createElement(ReadOnlyRow, { label: 'Freezestat Tripped (instant)', stateKey: 'freezestatTripped', units: '',
+        format: function(v) { return v ? 'YES' : 'NO'; } }),
+      React.createElement(ReadOnlyRow, { label: 'Freezestat Shutdown (latched)', stateKey: 'freezestatShutdown', units: '',
+        format: function(v) { return v ? 'YES — MANUAL RESET REQUIRED' : 'NO'; } }),
+      React.createElement(EditableRow, { label: 'Nuisance Delay SP', stateKey: 'freezestatDelaySetpoint', units: 'sec', min: 0, max: 600 }),
+
+      // SOFTWARE LOCKOUT — Points List item 44, SCENARIO_TRACKING.md item #24
+      React.createElement(SectionHeader, { title: 'Software Lockout' }),
+      React.createElement(NormToggleRow, { label: 'Lockout Active', stateKey: 'softwareLockout' }),
 
       // CALCULATED OUTPUTS — OA Damper Position is Manual-able (same as AHU-4-4)
       React.createElement(SectionHeader, { title: 'Calculated Outputs  ·  Read-Only' }),
@@ -325,12 +351,17 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(NormToggleRow, { label: 'Shutdown', stateKey: 'fireAlarmShutdown' }),
       React.createElement(NormToggleRow, { label: 'Smoke Purge', stateKey: 'fireAlarmSmokePurge' }),
 
-      // ALARM RESET
+      // ALARM RESET — Points List item 31. Was a placeholder that did
+      // nothing; now clears freezestatShutdown (only if OAT has warmed
+      // above the trip point — see the controller's own guard comment)
+      // and every DPS-2..5 trip.
       React.createElement(SectionHeader, { title: 'Alarm Reset' }),
       React.createElement('div', { className: 'px-2 py-1' },
         React.createElement('button', {
           className: 'px-3 py-1 text-[10px] bg-gray-200 border border-gray-400 rounded hover:bg-gray-300 text-gray-800 font-bold',
-          onClick: function() { /* Alarm reset placeholder */ }
+          onClick: function() {
+            if (window.AHU46Controller) window.AHU46Controller.setValue('resetPressed', true);
+          }
         }, 'RESET')
       )
     );

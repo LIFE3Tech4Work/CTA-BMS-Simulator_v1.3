@@ -19,6 +19,16 @@
  *        value (Lev Chesnov, BMS training session 07-31-26). Needs the
  *        controller's Manual-override map, not just its state snapshot —
  *        see evaluate()'s second `modes` argument below.
+ * M-08: Filter dirty (DPS-1) — non-critical, alarm only, no shutdown
+ * M-09: High suction/static pressure trip (DPS-2..5, any fan) — manual
+ *        reset type; unified into one rule the same way M-07 lists which
+ *        points, rather than four nearly-identical rules
+ * M-10: Freezestat warning — instantaneous element trip, before the
+ *        3-minute nuisance delay elapses (advisory, not yet a shutdown)
+ * M-11: Freezestat shutdown — critical, latched, manual-reset-required
+ *        (SOO Safeties item 4)
+ * M-12: Supply/Return Fan VFD fault (unified, same pattern as M-09)
+ * M-13: Software lockout active
  *
  * Attached to window.AHU46FaultEngine (no import/export — Babel standalone).
  */
@@ -151,6 +161,81 @@
         if (!modes) return false;
         return Object.keys(modes).some(function(k) { return modes[k] === 'Manual'; });
       }
+    },
+    {
+      id: 'M-08',
+      description: 'Dirty filter (DPS-1) — differential pressure switch across the filter section exceeds its setpoint. Non-critical: monitoring only, no shutdown (SOO Safeties item 1).',
+      priority: 'low',
+      sourceField: 'filterDirty',
+      relatedStateKeys: ['filterDirty'],
+      condition: function(state) {
+        return state.filterDirty === true;
+      }
+    },
+    {
+      id: 'M-09',
+      description: 'High suction or static pressure trip (DPS-2 through DPS-5) — protects the air handler from blockage; manual reset type (SOO Safeties items 2-6).',
+      priority: 'high',
+      sourceField: null,
+      relatedStateKeys: ['dps2Tripped', 'dps3Tripped', 'dps4Tripped', 'dps5Tripped'],
+      condition: function(state) {
+        return state.dps2Tripped === true || state.dps3Tripped === true ||
+          state.dps4Tripped === true || state.dps5Tripped === true;
+      },
+      getValue: function(state) {
+        var tripped = [];
+        if (state.dps2Tripped) tripped.push('DPS-2 (Supply Suction)');
+        if (state.dps3Tripped) tripped.push('DPS-3 (Supply Static)');
+        if (state.dps4Tripped) tripped.push('DPS-4 (Return Suction)');
+        if (state.dps5Tripped) tripped.push('DPS-5 (Return Static)');
+        return tripped;
+      }
+    },
+    {
+      id: 'M-10',
+      description: 'Freezestat warning — coil-inlet air below the freezestat trip temperature. Advisory: the 3-minute nuisance-delay timer is running but the hardwired shutdown (M-11) has not fired yet.',
+      priority: 'medium',
+      sourceField: 'freezestatTripped',
+      relatedStateKeys: ['freezestatTripped', 'mixedAirTemp'],
+      condition: function(state) {
+        return state.freezestatTripped === true && state.freezestatShutdown !== true;
+      }
+    },
+    {
+      id: 'M-11',
+      description: 'Freezestat shutdown — critical. Supply fan (and interlocked return fan) hardwired off, heating coil valve forced 100% open, manual reset required (SOO Safeties item 4).',
+      priority: 'urgent',
+      sourceField: 'freezestatShutdown',
+      relatedStateKeys: ['freezestatShutdown', 'phtValvePosition'],
+      condition: function(state) {
+        return state.freezestatShutdown === true;
+      }
+    },
+    {
+      id: 'M-12',
+      description: 'Supply or Return Fan VFD fault (Points List items 32/35) — drive has faulted and is unable to run.',
+      priority: 'high',
+      sourceField: null,
+      relatedStateKeys: ['supplyFanVFDFault', 'returnFanVFDFault'],
+      condition: function(state) {
+        return state.supplyFanVFDFault === true || state.returnFanVFDFault === true;
+      },
+      getValue: function(state) {
+        var faulted = [];
+        if (state.supplyFanVFDFault) faulted.push('Supply Fan VFD');
+        if (state.returnFanVFDFault) faulted.push('Return Fan VFD');
+        return faulted;
+      }
+    },
+    {
+      id: 'M-13',
+      description: 'Software lockout active (Points List item 44) — unit held off by BAS-level lockout regardless of run schedule.',
+      priority: 'medium',
+      sourceField: 'softwareLockout',
+      relatedStateKeys: ['softwareLockout'],
+      condition: function(state) {
+        return state.softwareLockout === true;
+      }
     }
   ];
 
@@ -174,7 +259,7 @@
             description: rule.description,
             priority: rule.priority,
             sourceField: rule.sourceField,
-            value: rule.sourceField ? state[rule.sourceField] : manualKeys(modes),
+            value: rule.getValue ? rule.getValue(state, modes) : (rule.sourceField ? state[rule.sourceField] : manualKeys(modes)),
             timestamp: new Date().toISOString(),
           };
         }

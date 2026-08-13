@@ -598,12 +598,116 @@ below.)
 
 ## Open — safety/interlock layer (not modeled at all)
 
-| # | Scenario | Source |
-|---|---|---|
-| 21 | DPS-1 through DPS-5 pressure-switch safeties (dirty filter, 2x high-suction, 2x high-static) | SOO Safeties items 1-6, Points List items 24-28 |
-| 22 | Freezestat shutdown sequence (fan interlock, forced 100% heating valve, critical alarm, 3-min nuisance delay, manual reset) | SOO Safeties item 4 |
-| 23 | Supply/Return Fan VFD fault + bypass + damper-request points | Points List items 32-39 |
-| 24 | Manual reset / software lockout points | Points List items 31, 44 |
+All items in this table are now fixed — see Fixed item 18 below.
+
+---
+
+### 18. Safety/interlock layer: DPS safeties, freezestat, VFD fault, reset/lockout (items #21-24)
+
+- **Source:** SOO Safeties items 1-6 (DPS-1 through DPS-5), Safeties item 4
+  (freezestat), General Automatic Control Sequences #16 (VFD points),
+  Points List items 24-28, 31-39, 44. Confirmed against the original SOO
+  scans (`AHU_4_3_4_6_SOO_Page1.png`, `..._Page6.png`).
+- **Bug:** None of this layer existed on controller state at all — no
+  pressure-switch trips, no freezestat, no VFD fault, no reset/lockout
+  points, and no fault rules for any of it.
+- **Fix — item #21 (DPS-1 through DPS-5):** `filterDirty` (DPS-1,
+  non-critical, alarm-only, no shutdown) plus `dps2Tripped`-`dps5Tripped`
+  (each a plain field-condition boolean, same reasoning as
+  `supplyFanVFDBypass` — a real pressure-switch trip isn't derivable from
+  other simulated state). All four are "the manual reset type" per the
+  SOO — latched, contribute to a new unified `hardSafetyShutdown` flag,
+  cleared only via `resetPressed`.
+- **Fix — item #22 (freezestat):** `freezestatTripped` (instantaneous,
+  only meaningful while `fanRunning` — a real element senses cold air
+  actually crossing it) drives a 3-minute (adjustable via
+  `freezestatDelaySetpoint`) nuisance-delay timer using the same
+  wall-clock pattern as the staged-start sequence (item #8). Once the
+  delay elapses, `freezestatShutdown` latches: forces the fan off, forces
+  the heating coil valve to 100% open (an explicit, SOO-documented
+  exception to the mutual-exclusivity fix in item #1 — the coil is being
+  flooded to thaw it, not fighting a cooling call), and requires manual
+  reset. `FREEZESTAT_TRIP_TEMP` (38°F) is flagged as an assumption — the
+  SOO describes the element's location and behavior in detail but gives
+  no numeric trip setpoint; 38°F is a standard real-world freezestat
+  value, adjustable like every other setpoint in this file.
+  **Bug found and fixed during this batch:** the first implementation
+  gated the manual-reset guard on `freezestatTripped` itself — but that
+  flag always reads `false` once the fan has already shut down (no
+  airflow across the element to sense), meaning reset would have always
+  succeeded unconditionally the instant it was pressed, regardless of
+  actual risk. Fixed by gating the reset guard on outdoor air temperature
+  directly instead (`oaTemperature >= FREEZESTAT_TRIP_TEMP`) — the
+  practical field signal a technician actually checks, and physically
+  correct since a real freezestat element senses coil-area temperature
+  independent of airflow.
+- **Fix — item #23 remainder (VFD fault + damper-request):**
+  `supplyFanVFDFault`/`returnFanVFDFault` (field conditions, contribute to
+  `hardSafetyShutdown`) — distinct from the bypass points already shipped
+  in item #12/Fixed-12, built alongside rather than duplicating.
+  `supplyFanVFDDamperRequest`/`returnFanVFDDamperRequest` tied to
+  `systemStarting` (active throughout a staged start, per the SOO's own
+  damper-travel-then-ramp sequence) rather than left as decorative,
+  always-false fields.
+- **Fix — item #24 (reset/lockout):** `resetPressed` (momentary — clears
+  every latched trip whose underlying condition has cleared, then
+  self-clears within the same tick) wired to the sidebar's existing
+  "RESET" button, which was previously a placeholder that did nothing.
+  `softwareLockout` (sustained) forces `hardSafetyShutdown` regardless of
+  `runSchedule`.
+- **Architecture:** added a single derived `hardSafetyShutdown` field (OR
+  of fire alarm, freezestat shutdown, all four DPS trips, software
+  lockout, and both VFD faults) computed once at the top of
+  `recalculate()`, replacing the old direct `fireAlarmShutdown` checks in
+  both the staged-start rising-edge detector and the fan-logic block —
+  one point of truth instead of repeating the growing condition list in
+  two places.
+- **Fault engine:** added M-08 (filter dirty, low priority, non-critical)
+  through M-13 (software lockout). M-09 and M-12 needed a `getValue()`
+  override on the rule object — `evaluate()`'s existing value logic
+  (`rule.sourceField ? state[rule.sourceField] : manualKeys(modes)`) was
+  written for M-07's Manual-override case and would have silently shown
+  the wrong value (currently-Manual keys, unrelated) for any rule with
+  `sourceField: null` that isn't M-07. Both now list which specific
+  switch/drive is responsible, same pattern as M-07 listing Manual keys.
+- **UI:** new sidebar sections (Pressure Switch Safeties, Freezestat,
+  Software Lockout, plus two new rows in the existing Fan VFD Status
+  section) in `AHU46ControlsSidebar.jsx`; six new fault banners (M-08
+  through M-13) in both `AHU46VectorOverlay.jsx` and
+  `AHU46ImageOverlay.jsx`, following the established priority-color
+  convention (muted gray for M-08's non-critical status, red for
+  high/urgent, amber for medium, and a distinct darker-red "🛑" treatment
+  for M-11 specifically since the SOO calls it a "critical alarm" — the
+  strongest banner on this screen). `output.css` rebuilt via the
+  Tailwind CLI for the six new `mt-42` through `mt-72` spacing utilities
+  the new banners use — same rebuild step item #12 needed.
+- **Verified:** 20 new regression tests in `AHU46Controller.test.mjs`
+  (freezestat: instant-trip-vs-delayed-shutdown, forced-heat/fan-off
+  once latched, nuisance-delay-resets-if-trip-clears-early,
+  reset-refused-while-still-cold, reset-succeeds-once-warm,
+  not-evaluated-while-fan-already-off; DPS: filter-dirty-no-shutdown,
+  each-of-four-DPS-points-individually via `it.each`,
+  reset-clears-all-four-at-once; VFD-fault-supply, VFD-fault-return,
+  software-lockout-holds-off, lockout-clear-allows-staged-restart;
+  damper-request-active-during-staging, damper-request-false-at-rest) —
+  all using `vi.useFakeTimers()` for the wall-clock-dependent freezestat
+  tests, same convention as the staged-start tests in item #8. Plus 13
+  new tests in `AHU46FaultEngine.test.mjs` for M-08 through M-13
+  (including the `getValue()` fix, verified by asserting the exact
+  switch/drive names returned, not just that the rule fired) and an
+  updated "has N fault rules" sanity test (7 → 13). Found and fixed two
+  test-writing mistakes of my own along the way (not code bugs): two
+  `getValue()` assertions initially read a stale cached alarm value from
+  a prior test in the same file, since `evaluate()`'s `activeAlarms`
+  cache is module-level and persists across `it()` blocks — fixed by
+  inserting a clearing `evaluate()` call before each assertion that
+  expects a different value payload than the test before it, matching
+  how the existing M-07 tests already handle this. Full suite: 554
+  passed, 36 failed (same pre-existing, unrelated failures confirmed
+  throughout this entire tracking log — VAVController/AHU44NewFaultEngine).
+  Not yet manually verified end-to-end in the running browser app (unlike
+  most other Fixed items above) — recommend a manual pass over the new
+  sidebar sections and banners before considering this fully closed.
 
 ---
 

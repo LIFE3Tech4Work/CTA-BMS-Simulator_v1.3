@@ -83,6 +83,16 @@
   var FREEZE_PUMP_START_TEMP = 35;
   var FREEZE_PUMP_STOP_TEMP = 40;
 
+  // Freezestat trip temperature — SOO Safeties item 4 describes the element
+  // ("serpentined across the inlet side of the cooling coil") and its
+  // behavior in detail but gives no numeric trip setpoint. 38°F is a
+  // standard, widely-used freezestat setpoint in real HVAC practice
+  // (typically 35-40°F) — flagged here the same way the M-04 60%→50%
+  // correction flagged an unconfirmed constant, since this one has no
+  // document to check it against. Adjustable via the sidebar like every
+  // other setpoint in this file, per General Automatic Control Sequences #9.
+  var FREEZESTAT_TRIP_TEMP = 38;
+
   // Economizer (free-cooling) enable/disable hysteresis — SOO "AHU-4-3 /
   // RF-4-6: Sequence of Operation", Closed Loop Controller #2 item 4d-e
   // (AUTO mode): enable free cooling when OA enthalpy is well below return
@@ -252,12 +262,39 @@
     fireAlarmSmokePurge: false,
     supplyFanVFDBypass: false,        // SOO General Automatic Control Sequences #16
     returnFanVFDBypass: false,        // (VFD-in-bypass alarm) — SCENARIO_TRACKING.md item #7
+    supplyFanVFDFault: false,         // Points List items 32/35 — SCENARIO_TRACKING.md item #23
+    returnFanVFDFault: false,
     interlockOn: true,
     exhaustFanOn: true,
     commonDamperOpen: true,
     freezePumpOn: true,
 
+    // ═══ SAFETY / INTERLOCK LAYER (SCENARIO_TRACKING.md items #21, #22, #24) ═
+    // DPS-1 (filter dirty) is alarm-only, non-critical, no shutdown — SOO
+    // Safeties item 1. DPS-2 through DPS-5 (high suction/static pressure on
+    // each fan) are all "the manual reset type" per the SOO — modeled as
+    // plain field-condition booleans (a real pressure switch trip isn't
+    // something derivable from other simulated state, same reasoning as
+    // supplyFanVFDBypass) that LATCH until resetPressed clears them, same
+    // as freezestatShutdown below. SOO Safeties items 2-6.
+    filterDirty: false,
+    dps2Tripped: false,               // Supply Fan High Suction Pressure
+    dps3Tripped: false,               // Supply Fan High Static Pressure
+    dps4Tripped: false,               // Return Fan High Suction Pressure
+    dps5Tripped: false,               // Return Fan High Static Pressure
+    freezestatDelaySetpoint: 180,     // seconds — SOO Safeties item 4 ("3 minutes (adjustable)")
+    resetPressed: false,              // momentary — Points List item 31
+    softwareLockout: false,           // sustained — Points List item 44
+
     // ═══ OUTPUTS (calculated — READ-ONLY on diagram) ═══════════════════════
+    freezestatTripped: false,         // instantaneous element reading — SOO Safeties item 4
+    freezestatShutdown: false,        // latched, hardwired, manual-reset — SOO Safeties item 4
+    hardSafetyShutdown: false,        // OR of every hard-shutdown condition (fire alarm, freezestat,
+                                       // DPS-2..5, software lockout, VFD fault) — single point fan
+                                       // logic and staged-start check instead of repeating the list
+    supplyFanVFDDamperRequest: false, // Points List item 34 — VFD requesting damper travel before
+    returnFanVFDDamperRequest: false, // it's permitted to ramp; tied to the staged-start damper-
+                                       // travel stage (SCENARIO_TRACKING.md item #8)
     fanRunning: true,
     fanSpeed: 75,
     cfm: 6901,                        // Supply air CFM (75% × 9200 ≈ 6900)
@@ -311,6 +348,7 @@
   // runSchedule being turned back on) kicks off the staged sequence.
   var wasRunCommanded = true;
   var startCommandedAt = null;
+  var freezestatTrippedSince = null;  // wall-clock — mirrors startCommandedAt's pattern
 
   // ─── Engineering Calculations ───────────────────────────────────────────────
 
@@ -379,14 +417,73 @@
 
   function recalculate() {
 
+    // SAFETY / INTERLOCK LAYER (SOO Safeties items 1-6, General #2) —
+    // SCENARIO_TRACKING.md items #21, #22, #24. Computed first because the
+    // staged-start block right below and the fan-logic block further down
+    // both need to know whether ANY hard safety condition is active, not
+    // just fireAlarmShutdown. Freezestat uses the PREVIOUS tick's
+    // mixedAirTemp (still present in state at this point) — same one-tick-
+    // lag convention used elsewhere in this file for values that would
+    // otherwise depend circularly on this tick's own output.
+
+    // Freezestat: "a freezestat with its element serpentined across the
+    // inlet side of the cooling coil will shut down the supply fan by
+    // hardwired time delayed interlock... open the heating coil control
+    // valve 100% and activate a critical alarm... a hardwired time delay
+    // relay... provide 3 minutes (adjustable) delay prior to supply fan
+    // shutdown... a manual reset shall be required." Only meaningful while
+    // air was actually crossing the coil last tick — with the fan off,
+    // dampers are closed (System Off #1) and no cold air stream reaches
+    // the element.
+    state.freezestatTripped = state.fanRunning && state.mixedAirTemp < FREEZESTAT_TRIP_TEMP;
+    if (state.freezestatTripped) {
+      if (freezestatTrippedSince === null) freezestatTrippedSince = Date.now();
+      var trippedSec = (Date.now() - freezestatTrippedSince) / 1000;
+      if (trippedSec >= state.freezestatDelaySetpoint) {
+        state.freezestatShutdown = true; // latches — persists even if the trip clears next tick
+      }
+    } else {
+      freezestatTrippedSince = null; // nuisance-delay timer resets if the trip clears before it elapses
+    }
+
+    // Manual reset (Points List item 31) — momentary. Clears every latched
+    // trip whose underlying field condition has cleared; a still-active
+    // condition immediately re-trips in the real world, so resetting it
+    // here would be meaningless (and for the DPS points, actively
+    // misleading — see this same field's other use as the live condition).
+    if (state.resetPressed) {
+      // NOTE: freezestatTripped requires fanRunning (see above — it's only
+      // meaningful while air is actually crossing the coil), but the fan
+      // is ALWAYS off by the time a freezestatShutdown trip has latched —
+      // that's the trip's own effect. Gating the reset on freezestatTripped
+      // would therefore always read false post-shutdown regardless of
+      // actual risk, letting a reset succeed unconditionally the instant
+      // it's pressed. Checking oaTemperature directly instead — a real
+      // freezestat element senses coil-area temperature independent of
+      // airflow, and OAT is the practical field signal a technician
+      // actually checks before resetting: "is it still cold enough outside
+      // that restarting the fan would immediately re-trip this."
+      if (state.oaTemperature >= FREEZESTAT_TRIP_TEMP) state.freezestatShutdown = false;
+      state.dps2Tripped = false;
+      state.dps3Tripped = false;
+      state.dps4Tripped = false;
+      state.dps5Tripped = false;
+      state.resetPressed = false; // momentary contact — consumed within the same tick
+    }
+
+    state.hardSafetyShutdown = state.fireAlarmShutdown || state.freezestatShutdown ||
+      state.dps2Tripped || state.dps3Tripped || state.dps4Tripped || state.dps5Tripped ||
+      state.softwareLockout || state.supplyFanVFDFault || state.returnFanVFDFault;
+
     // STAGED FAN-START SEQUENCING (SOO System Start #1-2) — detects a
-    // start command (runSchedule on AND no fire-alarm shutdown) and, on
+    // start command (runSchedule on AND no hard safety shutdown) and, on
     // the rising edge, begins the staged sequence rather than snapping
     // straight to running. See applyStagedStart() above for the stage
-    // breakdown. A fire alarm or runSchedule=false at any point aborts the
-    // sequence immediately (life-safety overrides win — General Automatic
-    // Control Sequences #4) and the next start command begins fresh.
-    var runCommanded = state.runSchedule && !state.fireAlarmShutdown;
+    // breakdown. Any hard safety shutdown or runSchedule=false at any
+    // point aborts the sequence immediately (life-safety overrides win —
+    // General Automatic Control Sequences #4) and the next start command
+    // begins fresh.
+    var runCommanded = state.runSchedule && !state.hardSafetyShutdown;
     if (runCommanded && !wasRunCommanded) {
       startCommandedAt = Date.now();
       state.systemStarting = true;
@@ -454,7 +551,7 @@
     // this tick (see the sequencing block above).
     if (state.systemStarting) {
       // handled above
-    } else if (state.fireAlarmShutdown || !state.runSchedule) {
+    } else if (state.hardSafetyShutdown || !state.runSchedule) {
       state.fanRunning = false;
       state.fanSpeed = 0;
       state.cfm = 0;
@@ -498,6 +595,15 @@
       state.supplyFanStatus = 'ON';
       state.returnFanStatus = 'ON';
     }
+
+    // VFD DAMPER REQUEST (Points List items 34/37) — the drive's signal
+    // requesting permission to open its associated dampers before it's
+    // allowed to ramp. Active throughout a staged start (SOO System Start
+    // #1-2's damper-travel-then-ramp sequence, SCENARIO_TRACKING.md item
+    // #8) — a plain instantaneous "running" state doesn't request travel,
+    // since the dampers are already wherever they need to be by then.
+    state.supplyFanVFDDamperRequest = state.systemStarting;
+    state.returnFanVFDDamperRequest = state.systemStarting;
 
     // 1.5 FAN INTERLOCK CHAIN (SOO System Start #1-2, General #2)
     // "Safety devices shall be hardwired interlocked with 'hand' and
@@ -647,6 +753,20 @@
       state.phtValvePosition = 0;
       state.phtValveStatus = 'OFF';
       state.preheatTemp = state.oaTemperature;
+    }
+
+    // Freezestat shutdown forces the heating coil valve 100% open per SOO
+    // Safeties item 4 — an explicit, documented exception to the mutual-
+    // exclusivity rule (item #10/#1 above), not a violation of it: the
+    // coil is being flooded with hot water to thaw it, unrelated to
+    // whatever the normal heating-call logic above just computed. Applies
+    // even though the fan itself is off (freezestatShutdown always implies
+    // hardSafetyShutdown implies fanRunning=false) — the valve is a
+    // life-safety response to the water side, not the air side.
+    if (state.freezestatShutdown) {
+      state.phtValvePosition = 100;
+      state.phtValveStatus = 'ON';
+      state.preheatTemp = state.oaTemperature + 20; // coil fully flooded — same rise-per-100% used elsewhere in this block
     }
 
     // 3.5 AUTOMATIC COOLING SETPOINT RESET (SOO Closed Loop Controller #3

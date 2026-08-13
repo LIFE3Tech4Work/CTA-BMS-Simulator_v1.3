@@ -423,6 +423,24 @@
   .mt-36 {
     margin-top: calc(var(--spacing) * 36);
   }
+  .mt-42 {
+    margin-top: calc(var(--spacing) * 42);
+  }
+  .mt-48 {
+    margin-top: calc(var(--spacing) * 48);
+  }
+  .mt-54 {
+    margin-top: calc(var(--spacing) * 54);
+  }
+  .mt-60 {
+    margin-top: calc(var(--spacing) * 60);
+  }
+  .mt-66 {
+    margin-top: calc(var(--spacing) * 66);
+  }
+  .mt-72 {
+    margin-top: calc(var(--spacing) * 72);
+  }
   .mr-1 {
     margin-right: var(--spacing);
   }

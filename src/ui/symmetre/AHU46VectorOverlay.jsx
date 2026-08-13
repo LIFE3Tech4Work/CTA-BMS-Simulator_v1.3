@@ -321,6 +321,28 @@ const AHU46VectorOverlay = (() => {
       activeFaultIds.includes('M-07') && React.createElement('div', {
         className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-amber-600 bg-opacity-90 text-white text-xs font-bold text-center mt-36'
       }, '⚠ M-07 Point(s) forced to Manual override'),
+      // M-08 (DPS-1, non-critical) — muted, no red/amber urgency coloring,
+      // matching its 'low' priority; alarm-only, never a shutdown.
+      activeFaultIds.includes('M-08') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-gray-500 bg-opacity-90 text-white text-xs font-bold text-center mt-42'
+      }, 'ⓘ M-08 Filter dirty (DPS-1) — non-critical'),
+      activeFaultIds.includes('M-09') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-700 bg-opacity-90 text-white text-xs font-bold text-center mt-48'
+      }, '⚠ M-09 High suction/static pressure trip (DPS-2..5) — manual reset required'),
+      activeFaultIds.includes('M-10') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-amber-600 bg-opacity-90 text-white text-xs font-bold text-center mt-54'
+      }, '⚠ M-10 Freezestat warning — nuisance delay running'),
+      // M-11 (freezestat shutdown, 'urgent') — the SOO explicitly calls
+      // this a "critical alarm," the strongest banner on this screen.
+      activeFaultIds.includes('M-11') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-900 bg-opacity-95 text-white text-xs font-bold text-center mt-60'
+      }, '🛑 M-11 FREEZESTAT SHUTDOWN — heating valve forced open, manual reset required'),
+      activeFaultIds.includes('M-12') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-red-700 bg-opacity-90 text-white text-xs font-bold text-center mt-66'
+      }, '⚠ M-12 Supply/Return Fan VFD fault'),
+      activeFaultIds.includes('M-13') && React.createElement('div', {
+        className: 'absolute top-0 left-0 right-0 z-20 px-3 py-1 bg-amber-600 bg-opacity-90 text-white text-xs font-bold text-center mt-72'
+      }, '⚠ M-13 Software lockout active'),
 
       // Vector background — replaces the old <img src={IMAGE_SRC}> PNG
       React.createElement(VectorBoard, null),
