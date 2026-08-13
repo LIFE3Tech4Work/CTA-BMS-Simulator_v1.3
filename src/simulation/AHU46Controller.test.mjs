@@ -20,18 +20,19 @@ function loadController() {
   return w.AHU46Controller;
 }
 
-function mockTMY3(w, dryBulb, enthalpy) {
+function mockTMY3(w, dryBulb, enthalpy, relHumidity) {
+  if (relHumidity === undefined) relHumidity = 60;
   w.TMY3Projector = {
     interpolateWeather: function() {
-      return { dryBulb, enthalpy, relHumidity: 60, dewPoint: 55, wetBulb: 62 };
+      return { dryBulb, enthalpy, relHumidity, dewPoint: 55, wetBulb: 62 };
     }
   };
 }
 
-function loadWithWeather(dryBulb, enthalpy) {
+function loadWithWeather(dryBulb, enthalpy, relHumidity) {
   const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
   const w = {};
-  mockTMY3(w, dryBulb, enthalpy);
+  mockTMY3(w, dryBulb, enthalpy, relHumidity);
   new Function('window', code)(w);
   return w.AHU46Controller;
 }
@@ -1379,8 +1380,12 @@ describe('AHU46Controller — return air / spill dampers (#11)', () => {
 // (THS-4). Now modeled as supplyAirTemp + a fixed space-heat-gain rise,
 // read from the PREVIOUS tick (same lag pattern as item #9 — this tick's
 // supplyAirTemp depends on mixedAirTemp, which depends on returnAirTemp).
-// returnAirRH is explicitly held at 50% per the SOO's own citation that
-// it's actively maintained there by a separate, unmodeled reset loop.
+// returnAirRH — REVISED from its original batch: initially modeled as a
+// flat 50%, per the SOO's citation that it's "maintained at 50%." That
+// citation actually describes the RESULT of item #13's automatic reset
+// loop continuously correcting it back toward 50%, not a trivially
+// constant value — see the "return air %RH + automatic cooling setpoint
+// reset (#13)" describe block below for the full revised model and why.
 // returnFanCFM (item #10) already doubles as the AFMS-2 return-flow
 // reading the SOO describes, so no separate field was added for that.
 
@@ -1389,16 +1394,6 @@ describe('AHU46Controller — return air conditions (#12)', () => {
     const s = loadController().getState();
     expect(s.returnAirTemp).toBeCloseTo(72.1, 0);
     expect(s.supplyAirTemp).toBe(60); // cooling coil saturated at setpoint by default
-  });
-
-  it('returnAirRH is held at the SOO-cited 50% design value, unaffected by other conditions', () => {
-    const hot = loadWithWeather(100.0, 40.0);
-    hot.updateFromTMY3(1, 0);
-    expect(hot.getState().returnAirRH).toBe(50.0);
-
-    const cold = loadWithWeather(-10.0, 2.0);
-    cold.updateFromTMY3(1, 0);
-    expect(cold.getState().returnAirRH).toBe(50.0);
   });
 
   it('returnAirTemp responds to a milder heating-call day, settling below the default', () => {
@@ -1428,5 +1423,104 @@ describe('AHU46Controller — return air conditions (#12)', () => {
     const s = ctrl.getState();
     // At the floor (50/50 OA/RA split): mixedAirTemp = preheatTemp*0.5 + returnAirTemp*0.5
     expect(s.mixedAirTemp).toBeCloseTo((s.preheatTemp * 0.5 + s.returnAirTemp * 0.5), 1);
+  });
+});
+
+// ─── Return air %RH + automatic cooling setpoint reset (SCENARIO_TRACKING.md #13) ──
+//
+// returnAirRH REVISED from item #12's original batch (was a flat 50%) —
+// per SOO Closed Loop Controller #4, that 50% is the RESULT of this
+// item's automatic reset loop continuously correcting it, not a
+// trivially-constant value. Now a disturbance-driven reading: outdoor
+// humidity (scaled by ventilation fraction) pulls it away from 50%, the
+// cooling coil's own dehumidification pulls it back down.
+//
+// coolingSetpointMode ('Manual'/'Automatic', SOO Closed Loop Controller
+// #3) defaults to 'Manual' — the model previously only had this mode —
+// so every prior batch's calibration that assumes coolingCoilSetpoint=60
+// (the duct pressure loop's #9 75%-speed target, returnAirTemp's #12
+// 72.2°F default) is unaffected unless an operator actively switches
+// modes. In 'Automatic', coolingCoilSetpoint resets linearly between the
+// SOO's cited 50°F (humid)/60°F (dry) bounds based on returnAirRH.
+
+describe('AHU46Controller — return air %RH + automatic cooling setpoint reset (#13)', () => {
+  it('coolingSetpointMode defaults to Manual — zero ripple to prior calibrations', () => {
+    const s = loadController().getState();
+    expect(s.coolingSetpointMode).toBe('Manual');
+    expect(s.coolingCoilSetpoint).toBe(60);
+    expect(s.fanSpeed).toBe(75);              // item #9's calibration
+    expect(s.returnAirTemp).toBeCloseTo(72.1, 0); // item #12's calibration
+  });
+
+  it('returnAirRH rises with outdoor humidity and falls with dryness, scaled by ventilation', () => {
+    const humid = loadWithWeather(85.0, 30.0, 90);
+    humid.updateFromTMY3(1, 0);
+    const dry = loadWithWeather(85.0, 30.0, 15);
+    dry.updateFromTMY3(1, 0);
+    expect(humid.getState().returnAirRH).toBeGreaterThan(dry.getState().returnAirRH);
+  });
+
+  it('returnAirRH is unaffected by coolingSetpointMode — it is a sensor reading, not a setpoint', () => {
+    const manual = loadWithWeather(85.0, 30.0, 90);
+    manual.updateFromTMY3(1, 0);
+
+    const auto = loadWithWeather(85.0, 30.0, 90);
+    auto.setValue('coolingSetpointMode', 'Automatic');
+    auto.updateFromTMY3(1, 0);
+    auto.updateFromTMY3(1, 0);
+
+    expect(manual.getState().returnAirRH).toBe(auto.getState().returnAirRH);
+  });
+
+  it('Manual mode: coolingCoilSetpoint stays exactly at the operator value regardless of RH swings', () => {
+    const humid = loadWithWeather(85.0, 30.0, 90);
+    humid.updateFromTMY3(1, 0);
+    expect(humid.getState().coolingCoilSetpoint).toBe(60);
+
+    const dry = loadWithWeather(85.0, 30.0, 15);
+    dry.updateFromTMY3(1, 0);
+    expect(dry.getState().coolingCoilSetpoint).toBe(60);
+  });
+
+  it('Automatic mode: resets colder on a humid day, warmer on a dry day', () => {
+    const humid = loadWithWeather(85.0, 30.0, 90);
+    humid.setValue('coolingSetpointMode', 'Automatic');
+    humid.updateFromTMY3(1, 0);
+    humid.updateFromTMY3(1, 0);
+
+    const dry = loadWithWeather(85.0, 30.0, 15);
+    dry.setValue('coolingSetpointMode', 'Automatic');
+    dry.updateFromTMY3(1, 0);
+    dry.updateFromTMY3(1, 0);
+
+    expect(humid.getState().coolingCoilSetpoint).toBeLessThan(dry.getState().coolingCoilSetpoint);
+    expect(humid.getState().coolingCoilSetpoint).toBeGreaterThanOrEqual(50);
+    expect(dry.getState().coolingCoilSetpoint).toBeLessThanOrEqual(60);
+  });
+
+  it('returnAirRH clamps to the 30-70% bounds at the extremes (full ventilation, no dehumidification)', () => {
+    const wet = loadWithWeather(45.0, 10.0, 100);
+    wet.setValue('enthalpyOKForEconomizer', true); // -> economizer active, damper 100%
+    wet.updateFromTMY3(1, 0);
+    const s1 = wet.getState();
+    expect(s1.oaDamperPosition).toBe(100);
+    expect(s1.chwValvePosition).toBe(0); // heating active, cooling deferred (SOO #10 mutual exclusivity)
+    expect(s1.returnAirRH).toBe(70);
+
+    const dryAir = loadWithWeather(45.0, 10.0, 0);
+    dryAir.setValue('enthalpyOKForEconomizer', true);
+    dryAir.updateFromTMY3(1, 0);
+    expect(dryAir.getState().returnAirRH).toBe(30);
+  });
+
+  it('Automatic mode reset is stable across ticks — no oscillation', () => {
+    const ctrl = loadWithWeather(85.0, 30.0, 70);
+    ctrl.setValue('coolingSetpointMode', 'Automatic');
+    const values = [];
+    for (let i = 0; i < 6; i++) {
+      ctrl.updateFromTMY3(1, 0);
+      values.push(ctrl.getState().coolingCoilSetpoint);
+    }
+    expect(values[4]).toBe(values[5]); // settled by the last two ticks
   });
 });

@@ -186,6 +186,34 @@
   // side.
   var RETURN_FAN_TRACKING_DEFAULT = 90; // % of supply CFM
 
+  // Return air %RH disturbance model (SCENARIO_TRACKING.md items #12/#13)
+  // — outdoor humidity pulls returnAirRH away from the 50% design target
+  // in proportion to how much OA is being brought in; the cooling coil's
+  // own dehumidification pulls it back down. Not a full moisture-balance
+  // model — a simple, bounded proxy, same spirit as the CO2/supply-RH
+  // formulas elsewhere in this file.
+  var OA_RH_WEIGHT = 0.4;         // fraction of the OAT-RH gap that reaches return air at full ventilation
+  var DEHUMID_RH_WEIGHT = 8;      // %RH pulled down at fully-open chwValvePosition
+  var RETURN_AIR_RH_MIN = 30;     // %
+  var RETURN_AIR_RH_MAX = 70;     // %
+
+  // Automatic cooling-setpoint reset (SOO Closed Loop Controller #3
+  // "Automatic" mode + Closed Loop Controller #4) — SCENARIO_TRACKING.md
+  // item #13. Opt-in via coolingSetpointMode (default 'Manual', so the
+  // existing default state — and every calibration elsewhere in this file
+  // that assumes coolingCoilSetpoint=60°F, e.g. the duct pressure loop's
+  // #9 and returnAirTemp's #12 default calibrations — is unaffected
+  // unless an operator actively switches modes). When 'Automatic', resets
+  // linearly between the SOO's two cited bounds: "the minimum value...
+  // under humid conditions shall be 50°F" and "the maximum value... under
+  // dry conditions shall be 60°F." The SOO doesn't give the RH range
+  // those bounds correspond to, so a symmetric ±20% band around the 50%
+  // target (30%-70%) is assumed.
+  var COOLING_RESET_RH_HUMID = 70;  // % — pins to COOLING_RESET_SP_MIN above this
+  var COOLING_RESET_RH_DRY = 30;    // % — pins to COOLING_RESET_SP_MAX below this
+  var COOLING_RESET_SP_MIN = 50;    // °F
+  var COOLING_RESET_SP_MAX = 60;    // °F
+
   // ─── Shared State Object ────────────────────────────────────────────────────
 
   var state = {
@@ -194,12 +222,20 @@
     systemStarting: false,
     startingTimeSetpoint: 480,         // seconds — SOO System Start #1-2 stage sum (90+120+30+120+120)
     startingTimeLeft: 0,
-    coolingCoilSetpoint: 60.0,        // °F
+    coolingCoilSetpoint: 60.0,        // °F — Manual value while coolingSetpointMode is 'Manual'
+                                       // (the default); auto-reset from returnAirRH in 'Automatic'
+    coolingSetpointMode: 'Manual',    // 'Manual' | 'Automatic' — SOO Closed Loop Controller #3's
+                                       // two named modes. SCENARIO_TRACKING.md item #13.
     heatingCoilSetpoint: 55.0,        // °F
     plenumMinSetpoint: 40.0,          // °F — freeze protection
     oaTemperature: 81.6,              // °F — TMY3-driven; see WEATHER_DRIVEN_KEYS
     lowOATLockout: false,
     oaEnthalpy: 35.1,                 // BTU/lb — TMY3-driven; see WEATHER_DRIVEN_KEYS
+    oaRelHumidity: 60,                 // % — TMY3-driven; see WEATHER_DRIVEN_KEYS.
+                                        // Previously not pulled from weather at all
+                                        // (only oaTemperature/oaEnthalpy were) — now
+                                        // the disturbance signal behind returnAirRH.
+                                        // SCENARIO_TRACKING.md item #13.
     enthalpyOKForEconomizer: false,
     economizerMinPosition: 50,        // % — OA damper floor (meeting room requirement, 50% per SOO min/max CFM table)
     minPositionFanSpeedLock: 5,       // %
@@ -613,6 +649,26 @@
       state.preheatTemp = state.oaTemperature;
     }
 
+    // 3.5 AUTOMATIC COOLING SETPOINT RESET (SOO Closed Loop Controller #3
+    // "Automatic" mode, reset per Closed Loop Controller #4) — was
+    // entirely absent; the model only ever had the "Manual" mode
+    // (SCENARIO_TRACKING.md item #13). Opt-in via coolingSetpointMode —
+    // while 'Manual' (the default), coolingCoilSetpoint behaves exactly
+    // as before (a plain operator setpoint). While 'Automatic', it's
+    // reset linearly between the SOO's cited 50°F (humid) / 60°F (dry)
+    // bounds based on returnAirRH — read from the PREVIOUS tick, same
+    // one-tick-lag pattern as items #9/#12 (returnAirRH itself isn't
+    // finalized for THIS tick until after COOLING LOGIC runs, since it
+    // depends on this tick's chwValvePosition).
+    if (state.coolingSetpointMode === 'Automatic') {
+      var coolingResetRaw = COOLING_RESET_SP_MAX -
+        (state.returnAirRH - COOLING_RESET_RH_DRY) / (COOLING_RESET_RH_HUMID - COOLING_RESET_RH_DRY) *
+        (COOLING_RESET_SP_MAX - COOLING_RESET_SP_MIN);
+      state.coolingCoilSetpoint = Math.round(
+        Math.max(COOLING_RESET_SP_MIN, Math.min(COOLING_RESET_SP_MAX, coolingResetRaw)) * 10
+      ) / 10;
+    }
+
     // 4. COOLING LOGIC (Closed Loop Controller #3 — Supply Temperature
     //    Control of Cooling Coil)
     if (state.fanRunning) {
@@ -678,15 +734,26 @@
       );
     }
 
-    // 5.5 RETURN AIR %RH (SCENARIO_TRACKING.md item #12) — per SOO Closed
-    // Loop Controller #4 item 1, this is actively maintained at 50% by a
-    // separate reset loop (on the supply temp setpoint) that isn't
-    // otherwise modeled here. Explicitly held at that design value each
-    // tick rather than left untouched — the same "no field frozen without
-    // a reason" standard as every other sensor field in this file — so a
-    // future audit doesn't mistake this for the same class of bug as
-    // co2Sensor/chwSupplyTemp/cwSupplyTemp (#25a/#25c/#25d) were.
-    state.returnAirRH = 50.0;
+    // 5.5 RETURN AIR %RH (SCENARIO_TRACKING.md items #12/#13 — revised
+    // from #12's original batch: initially modeled as a flat 50%, per the
+    // SOO's citation that it's "maintained at 50%." But that citation
+    // describes the RESULT of Closed Loop Controller #4's automatic reset
+    // loop (item #13) constantly correcting it back toward 50%, not a
+    // trivially-constant value — a flat RH would give #13's reset formula
+    // nothing to ever react to. Now a genuine disturbance-driven reading:
+    // outdoor humidity (brought in through the OA damper, scaled by
+    // ventilation fraction) pulls it away from 50%, and the cooling coil's
+    // own dehumidification (condensing moisture off a wet coil, same
+    // mechanism as supplyAirRH's rise toward saturation below) pulls it
+    // back down. No time-integration — instantaneous per tick, same as
+    // every other reading in this file.
+    var oaFractionForRH = state.oaDamperPosition / 100;
+    var returnAirRHRaw = 50
+      + OA_RH_WEIGHT * (state.oaRelHumidity - 50) * oaFractionForRH
+      - DEHUMID_RH_WEIGHT * (state.chwValvePosition / 100);
+    state.returnAirRH = Math.round(
+      Math.max(RETURN_AIR_RH_MIN, Math.min(RETURN_AIR_RH_MAX, returnAirRHRaw)) * 10
+    ) / 10;
 
     // 6. SUPPLY AIR %RH (SCENARIO_TRACKING.md #25b, renamed from
     // supplyStaticPressure — see item #9) — ties to whichever coil is
@@ -730,7 +797,7 @@
     return Object.assign({}, state);
   }
 
-  var WEATHER_DRIVEN_KEYS = { oaTemperature: true, oaEnthalpy: true };
+  var WEATHER_DRIVEN_KEYS = { oaTemperature: true, oaEnthalpy: true, oaRelHumidity: true };
 
   function setValue(key, value) {
     if (WEATHER_DRIVEN_KEYS[key]) {
@@ -754,6 +821,7 @@
     if (!weather) return;
     state.oaTemperature = weather.dryBulb;
     state.oaEnthalpy = weather.enthalpy;
+    state.oaRelHumidity = weather.relHumidity;
     recalculate();
   }
 

@@ -429,6 +429,65 @@ to **Fixed** with the commit hash and a short verification summary.
   end-to-end in the running app against live TMY3 weather (not just
   synthetic test conditions): read state via the browser console and
   visually confirmed the new sidebar rows and hotspots.
+  **⚠ Revised by item #13 below** — `returnAirRH`'s "stays flat" test was
+  removed and replaced; it's no longer a flat 50%.
+
+### 16. Automatic RH-driven cooling-setpoint reset (item #13) — also revises item #12's returnAirRH
+- **Source:** SOO page 4, Closed Loop Controller #3: the cooling supply
+  temp setpoint has "two modes of operation... Automatic — Dehumidification
+  shall be optimized by resetting the setpoint for the chilled water coil
+  control loop automatically based upon Relative Humidity@THS-4 (Return
+  Air)." SOO page 5, Closed Loop Controller #4 items 1-3: "Relative
+  Humidity@THS-4 (Return Air) shall be maintained at 50% by reset of...the
+  air handler supply temperature[;]" reset bounds are 60°F (dry) / 50°F
+  (humid). Confirmed against the original SOO scans
+  (`AHU_4_3_4_6_SOO_Page4.png`, `..._Page5.png`).
+- **Bug:** The model only ever had the "Manual" mode — `coolingCoilSetpoint`
+  was always a plain operator number.
+- **Design revision flagged and confirmed with the user before building:**
+  item #12's original batch modeled `returnAirRH` as a flat, unmoving 50%,
+  reasoning it's "maintained at 50%" per the SOO citation above. But that
+  citation describes the *result* of this item's automatic reset loop
+  continuously correcting it back toward 50% — a flat value would give the
+  reset formula nothing to ever react to, making item #13 technically
+  present but permanently inert. Revised `returnAirRH` to a genuine
+  disturbance-driven reading: outdoor humidity (newly pulled from TMY3
+  weather via a new `oaRelHumidity` field — previously only
+  `oaTemperature`/`oaEnthalpy` were extracted from weather, `relHumidity`
+  was available all along and unused) pulls it away from 50% in proportion
+  to ventilation fraction; the cooling coil's own dehumidification pulls it
+  back down. Bounded 30-70% (the SOO gives no RH range for its bounds, so a
+  symmetric band around the 50% target was assumed).
+- **Fix:** Added `coolingSetpointMode` ('Manual'/'Automatic', SOO's own two
+  named modes — modeled as an explicit switch rather than the
+  auto-unless-overridden pattern used elsewhere in this file, specifically
+  *because* an implicit default would have silently changed
+  `coolingCoilSetpoint`'s default value away from 60°F, rippling into every
+  other batch's calibration that assumes it — items #9's 75%-fan-speed and
+  #12's 72.2°F `returnAirTemp` defaults among them). Defaults to `'Manual'`,
+  so nothing changes unless an operator actively switches modes. In
+  `'Automatic'`, resets linearly between the SOO's cited 50°F/60°F bounds
+  based on `returnAirRH`, read from the PREVIOUS tick (same one-tick-lag
+  pattern as items #9/#12 — `mixedAirTemp`/`chwValvePosition` depend on
+  `coolingCoilSetpoint`, which would otherwise depend circularly on
+  `returnAirRH`, which itself depends on this tick's `chwValvePosition`).
+  New "Cooling SP Mode" sidebar toggle and an "OA %RH (Live)" readout.
+- **Verified:** 7 new regression tests — default-Manual sanity check
+  against every prior batch's calibration, `returnAirRH` responding to
+  outdoor humidity independent of cooling-setpoint mode, Manual mode
+  staying exactly at the operator value regardless of RH swings, Automatic
+  mode resetting colder on humid days / warmer on dry days, both `returnAirRH`
+  clamp boundaries (30%/70%, reached with full ventilation and zero
+  dehumidification), and Automatic-mode stability across ticks (no
+  oscillation — confirmed empirically via a standalone Node script across
+  several weather scenarios before writing the tests, given the loop's
+  negative-feedback structure isn't formally proven, just observed
+  convergent). Removed and replaced item #12's now-invalid "returnAirRH
+  stays flat" test. Also manually verified end-to-end in the running app:
+  read live state via the browser console, switched Cooling SP Mode to
+  Automatic against real TMY3 weather and watched `coolingCoilSetpoint`
+  reset in real time, then reverted the app to its Manual/60°F default
+  before finishing.
 
 ---
 
@@ -453,9 +512,7 @@ Fixed item 13 below.)
 
 ## Open — control logic gaps (`AHU46Controller.js`)
 
-| # | Scenario | Source | Notes |
-|---|---|---|---|
-| 13 | No RH-driven automatic cooling-setpoint reset | SOO Item 6 ("Automatic" mode) | Model only has the manual mode |
+All items in this table are now fixed — see the notes below.
 
 (Item 8 — no staged fan-start sequence — fixed; see Fixed item 13 below.)
 
@@ -463,7 +520,9 @@ Fixed item 13 below.)
 items 10-11 above. Item 7 — VFD-in-bypass alarm — fixed; see Fixed item 12
 below. Items 9 and 10 — duct static pressure loop, return fan flow
 tracking — fixed; see Fixed item 14 below. Items 11 and 12 — return
-air/spill dampers, return air conditions — fixed; see Fixed item 15 below.)
+air/spill dampers, return air conditions — fixed; see Fixed item 15 below.
+Item 13 — RH-driven automatic cooling-setpoint reset — fixed; see Fixed
+item 16 below.)
 
 ## Open — fault engine gaps (`AHU46FaultEngine.js`)
 

@@ -158,6 +158,37 @@ const AHU46ControlsSidebar = (() => {
     );
   }
 
+  // Two-value string mode selector (e.g. 'Manual' / 'Automatic') — click to
+  // cycle. Used for coolingSetpointMode (SCENARIO_TRACKING.md item #13).
+  function ModeToggleRow({ label, stateKey, options }) {
+    var ctrl = window.AHU46Controller;
+    var currentState = ctrl ? ctrl.getState() : {};
+    var [value, setValue] = useState(currentState[stateKey] || options[0]);
+
+    useEffect(function() {
+      if (!ctrl) return;
+      var unsub = ctrl.subscribe(function(s) { setValue(s[stateKey]); });
+      return unsub;
+    }, [stateKey]);
+
+    function cycle() {
+      if (!ctrl) return;
+      var next = options[(options.indexOf(value) + 1) % options.length];
+      ctrl.setValue(stateKey, next);
+    }
+
+    return React.createElement('div', {
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] text-gray-800 cursor-pointer hover:bg-blue-100',
+      onClick: cycle,
+    },
+      React.createElement('span', { className: 'flex-1' }, label),
+      React.createElement('span', {
+        className: 'px-2 py-0 text-[10px] font-bold rounded ' +
+          (value === options[0] ? 'bg-gray-300 text-gray-700' : 'bg-blue-500 text-white')
+      }, value)
+    );
+  }
+
   // ─── LL97 Panel (import from shared component, same as AHU-4-4) ─────────
 
   // ─── Main Component ─────────────────────────────────────────────────────────
@@ -204,8 +235,13 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(EditableRow, { label: 'Starting Time Setpoint', stateKey: 'startingTimeSetpoint', units: 'SEC', min: 0, max: 900 }),
       React.createElement(ReadOnlyRow, { label: 'Starting Time Left', stateKey: 'startingTimeLeft', units: 'SEC' }),
 
-      // SUPPLY AIR TEMPERATURE CONTROL
+      // SUPPLY AIR TEMPERATURE CONTROL — Cooling Coil SP has two modes
+      // (SOO Closed Loop Controller #3): Manual (operator sets the value
+      // below directly, the default) or Automatic (BAS resets it from
+      // Return Air %RH — see the Duct Static/Return Air readouts further
+      // down). SCENARIO_TRACKING.md item #13.
       React.createElement(SectionHeader, { title: 'Supply Air Temp Control' }),
+      React.createElement(ModeToggleRow, { label: 'Cooling SP Mode', stateKey: 'coolingSetpointMode', options: ['Manual', 'Automatic'] }),
       React.createElement(EditableRow, { label: 'Cooling Coil Active SP', stateKey: 'coolingCoilSetpoint', units: '°F', min: 45, max: 75, step: 0.5 }),
       React.createElement(EditableRow, { label: 'Heating Coil Active SP', stateKey: 'heatingCoilSetpoint', units: '°F', min: 40, max: 70, step: 0.5 }),
 
@@ -219,6 +255,7 @@ const AHU46ControlsSidebar = (() => {
         format: function(v) { return (typeof v === 'number' ? v.toFixed(1) : '--') + ' (live)'; } }),
       React.createElement(ToggleRow, { label: 'Low OA Temp Lockout', stateKey: 'lowOATLockout' }),
       React.createElement(ReadOnlyRow, { label: 'OA Enthalpy (Live)', stateKey: 'oaEnthalpy', units: 'BTU' }),
+      React.createElement(ReadOnlyRow, { label: 'OA %RH (Live)', stateKey: 'oaRelHumidity', units: '%RH' }),
       React.createElement(ToggleRow, { label: 'Enthalpy OK — Economizer', stateKey: 'enthalpyOKForEconomizer' }),
       React.createElement(EditableRow, { label: 'OA Min Position (Damper)', stateKey: 'economizerMinPosition', units: '%', min: 0, max: 100 }),
       React.createElement(EditableRow, { label: 'Min Fan Speed Lockout', stateKey: 'minPositionFanSpeedLock', units: '%', min: 0, max: 50 }),
