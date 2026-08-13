@@ -893,6 +893,70 @@ All items in this table are now fixed — see Fixed item 18 below.
 
 ---
 
+---
+
+### 22. Real historical data seeded into the History tab (from Lev's BMS Exports)
+
+- **Source:** `BMS_Exports.zip` (Lev's real 3-month xlsx exports for AHU-4-4/4-6
+  and building-wide points), QA/QC'd against what's already in the repo —
+  confirmed byte-for-byte match (spot-checked on `AHU04_06CHWCoilValve`)
+  between the uploaded xlsx and the already-converted
+  `src/data/points/*.js` files. 24 of 34 uploaded files were already
+  converted and loaded into `window.PointRegistry` at boot; this item
+  wires that already-present real data into item #21's new modal, which
+  previously started with an empty in-memory buffer every session.
+- **No new loading mechanism needed:** `PointRegistry.getMetadata()`
+  deliberately strips the raw `data` array, but `getAll()`/`query()`
+  return the full point object including it — the real hourly data was
+  already sitting in memory, just not read from the right method.
+- **Fix:** `AHU46PointDetail.jsx`'s History tab now seeds from
+  `window.PointRegistry.getAll()` on first open, for the 9 of AHU-4-6's
+  10 exported points that map cleanly onto an existing hotspot/stateKey.
+  `AHU04_06SAFanSpeed` (`AO101@DEV4006`, a % VFD speed command)
+  deliberately left unseeded — this modal's closest point, `cfm`, is
+  `AFMS-1`, a physically different flow-meter reading with different
+  units; forcing that mapping would have silently misrepresented one real
+  point as another.
+- **A real bug found and fixed while building this:** the live-recording
+  cap (`buf.shift()` once `buf.length > 120`) would have started deleting
+  the real seeded data the moment even one live value changed, since
+  seeding alone pushes buffer length past 120 immediately. Fixed by
+  capping only the live-recorded portion (`real: false` entries) and
+  never trimming real entries.
+- **Honesty about reconstructed timestamps:** the converted `.js` files
+  don't retain the original xlsx's actual date/time columns (dropped
+  during conversion) — only a raw sequential value array. Rather than
+  fabricate specific calendar dates the data doesn't contain, seeded
+  timestamps are reconstructed as "N hours before this session started"
+  and labeled as such everywhere they're shown (History tab's
+  real-vs-live legend, Recent Events' "Nh before session start (real
+  export)" labels) — never presented as if they were the real recorded
+  time.
+- **QA/QC findings on the broader upload, flagged but not yet acted on:**
+  `CoolingTower.xlsx` has a real data-quality bug in the source file
+  itself (all rows saved into one cell as literal tab/newline-separated
+  text instead of proper columns); `OA_5122026_5202026AHU.xlsx`'s header
+  (`OAT_AHU_9_1_CV`) suggests it's from a different AHU/building entirely,
+  not AHU-4-4 or AHU-4-6. Both worth confirming with Lev before using.
+- **Verified:** seeding/timestamp-ordering logic and the live-cap
+  real-data-preservation fix both verified in isolation with constructed
+  test data (5 seeded + 5 live pushes against a cap of 3 — confirms real
+  entries: 5/5 preserved, live entries: correctly capped to the 3 most
+  recent). Syntax/parse checked. Server boot-checked — confirmed
+  `AHU46PointDetail.jsx`, `data/points/AHU04_06CHWCoilValve.js`, and
+  `data/points/index.js` all serving correctly, and confirmed no race
+  condition against `PointRegistry.initialize()` (which runs
+  synchronously as the first line of the same `bootstrap()` function that
+  gates React mounting entirely — no component can render, let alone be
+  clicked, before it's run). 1 file changed. Full suite: 562 passed, 36
+  failed (same pre-existing, unrelated failures throughout this entire
+  tracking log). Not yet manually verified end-to-end in the running
+  browser app — recommend opening a seeded point's History tab and
+  confirming the chart actually shows a real 3-month-shaped trend, not
+  just a flat line or an error.
+
+---
+
 ## Cross-checked repo2 (`CTA-BMS-Simulator_v1.2`) — for reference
 
 `AHU-4-6 Simulator.dc.html`'s own inline `step()` function has the **same

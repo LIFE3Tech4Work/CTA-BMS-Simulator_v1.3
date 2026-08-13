@@ -79,13 +79,69 @@ const AHU46PointDetail = (function() {
   // buffer per stateKey, recorded from whatever tick rate AHU46Controller
   // subscribers already get. Starts empty each page load; this is a
   // simulator, not a historian with disk-backed storage.
-  const HISTORY_MAX_POINTS = 120; // ~ a few minutes at typical tick rate, plenty for a live demo
-  const historyBuffers = {}; // stateKey -> [{t, v}, ...]
+  //
+  // Seeded on load with REAL historical data where available — Lev's BMS
+  // exports (BMS_Exports.zip), already converted into src/data/points/*.js
+  // and loaded into window.PointRegistry at boot via POINT_CATALOG (see
+  // index.html). PointRegistry.getMetadata() deliberately strips the raw
+  // `data` array, but getAll()/query() return the full point object
+  // including it — no new loading mechanism needed, this data was already
+  // sitting in memory. 9 of AHU-4-6's 10 exported points map cleanly onto
+  // an existing hotspot/stateKey; AHU04_06SAFanSpeed (AO101@DEV4006, a %
+  // VFD speed command) has no home here — this modal's closest point,
+  // `cfm`, is AFMS-1, a physically different flow-meter reading with
+  // different units. Forcing that mapping would silently misrepresent one
+  // real point as another, so it's left unseeded rather than guessed at.
+  const HISTORY_MAX_LIVE_POINTS = 120;   // live, on-change recording cap (unchanged from before)
+  const HISTORY_MAX_REAL_POINTS = 1017;  // full real dataset — this IS the point of seeding it
+  const historyBuffers = {}; // stateKey -> [{t, v, real}, ...], oldest first
   var historyRecorderStarted = false;
+  var historySeeded = false;
+
+  const STATE_KEY_TO_BACNET_ADDRESS = {
+    ductStaticPressure:      'AI501@DEV4006', // AHU04_06BranchStaticPress
+    chwValvePosition:        'AO102@DEV4006', // AHU04_06CHWCoilValve
+    oaDamperPosition:        'AO104@DEV4006', // AHU04_06OADamper
+    phtValvePosition:        'AO103@DEV4006', // AHU04_06PHTCoil01Valve
+    co2Sensor:                'AI401@DEV4006', // AHU04_06RACO2
+    returnAirRH:              'AI402@DEV4006', // AHU04_06RAHumid
+    returnAirTemp:            'AI201@DEV4006', // AHU04_06RATemp
+    fanRunning:                'BI601@DEV4006', // AHU04_06RunSchedule
+    supplyAirTemp:            'AI301@DEV4006', // AHU04_06SATemp
+  };
+
+  function seedHistoryFromRealData() {
+    if (historySeeded) return;
+    historySeeded = true;
+    var registry = window.PointRegistry;
+    if (!registry || !registry.getAll) return;
+    var allPoints = registry.getAll();
+    var sessionStart = Date.now();
+
+    Object.keys(STATE_KEY_TO_BACNET_ADDRESS).forEach(function(stateKey) {
+      var address = STATE_KEY_TO_BACNET_ADDRESS[stateKey];
+      var point = allPoints.find(function(p) { return p.address === address; });
+      if (!point || !point.data || point.data.length === 0) return;
+
+      // point.data is a raw 1017-hourly-value array with no stored
+      // timestamps (dropped during the xlsx->js conversion — see
+      // scripts/convert-bms-data.js). Rather than fabricate specific
+      // calendar dates the converted file doesn't actually contain,
+      // timestamps here are reconstructed as "N hours before this
+      // session started" — an honest approximation, not a claim to know
+      // the real dates, clearly labeled as such in the History tab.
+      var n = point.data.length;
+      var seeded = point.data.map(function(v, i) {
+        return { t: sessionStart - (n - i) * 3600 * 1000, v: v, real: true };
+      });
+      historyBuffers[stateKey] = seeded;
+    });
+  }
 
   function startHistoryRecorder() {
     if (historyRecorderStarted) return;
     historyRecorderStarted = true;
+    seedHistoryFromRealData();
     var ctrl = window.AHU46Controller;
     if (!ctrl || !ctrl.subscribe) return;
     ctrl.subscribe(function(s) {
@@ -100,8 +156,18 @@ const AHU46PointDetail = (function() {
         // Only record on actual change, not every tick — keeps Recent
         // Events meaningful (a log of transitions) rather than noise.
         if (!last || last.v !== numeric) {
-          buf.push({ t: now, v: numeric });
-          if (buf.length > HISTORY_MAX_POINTS) buf.shift();
+          buf.push({ t: now, v: numeric, real: false });
+          // Cap only the LIVE portion of the buffer — never trim real
+          // seeded data. Without this distinction, buf.length would
+          // already exceed a flat 120-point cap right after seeding
+          // ~1000 real points, and the very first few live changes would
+          // silently start deleting real historical data instead of
+          // capping themselves.
+          var liveCount = buf.reduce(function(n, p) { return p.real ? n : n + 1; }, 0);
+          if (liveCount > HISTORY_MAX_LIVE_POINTS) {
+            var idx = buf.findIndex(function(p) { return !p.real; });
+            if (idx !== -1) buf.splice(idx, 1);
+          }
         }
       });
     });
@@ -250,22 +316,48 @@ const AHU46PointDetail = (function() {
           'Real BMS point history is a paid, per-point subscription — a blank trend here mirrors that "not everything is trended" reality, per the BMS training material.'));
     }
 
+    var realCount = points.filter(function(p) { return p.real; }).length;
+    var liveCount = points.length - realCount;
+
     var vals = points.map(function(p) { return p.v; });
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
     var range = (max - min) || 1;
     var w = 560, h = 160, pad = 8;
 
-    var pathD = points.map(function(p, i) {
-      var x = pad + (i / Math.max(1, points.length - 1)) * (w - 2 * pad);
-      var y = h - pad - ((p.v - min) / range) * (h - 2 * pad);
-      return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
-    }).join(' ');
+    function xOf(i) { return pad + (i / Math.max(1, points.length - 1)) * (w - 2 * pad); }
+    function yOf(v) { return h - pad - ((v - min) / range) * (h - 2 * pad); }
+
+    function pathFor(slice, offset) {
+      return slice.map(function(p, i) {
+        var x = xOf(i + offset);
+        var y = yOf(p.v);
+        return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+    }
+
+    var realPoints = points.slice(0, realCount);
+    var livePoints = points.slice(realCount);
+    // Draw one extra shared point at the boundary so the two segments connect visually
+    var realPath = pathFor(realCount > 0 ? realPoints : [], 0);
+    var livePath = livePoints.length > 0
+      ? pathFor(realCount > 0 ? [realPoints[realPoints.length - 1]].concat(livePoints) : livePoints, realCount > 0 ? realCount - 1 : 0)
+      : '';
 
     return React.createElement('div', { className: 'p-4' },
       React.createElement('div', { className: 'text-xs text-gray-500 mb-2' },
-        points.length + ' recorded change' + (points.length === 1 ? '' : 's') + ' this session — range ' + min.toFixed(1) + ' to ' + max.toFixed(1) + (units ? ' ' + units : '')),
+        realCount > 0
+          ? realCount + ' real hourly readings (Lev\'s BMS export, ending when this session started) + ' + liveCount + ' recorded this session'
+          : points.length + ' recorded change' + (points.length === 1 ? '' : 's') + ' this session',
+        ' — range ' + min.toFixed(1) + ' to ' + max.toFixed(1) + (units ? ' ' + units : '')),
       React.createElement('svg', { width: w, height: h, className: 'bg-gray-950 border border-gray-700 rounded' },
-        React.createElement('path', { d: pathD, fill: 'none', stroke: BAR_FILL_COLOR, strokeWidth: 2 })
+        realCount > 0 && React.createElement('path', { d: realPath, fill: 'none', stroke: BAR_FILL_COLOR, strokeWidth: 1.5, opacity: 0.75 }),
+        livePath && React.createElement('path', { d: livePath, fill: 'none', stroke: '#FBBF24', strokeWidth: 2 }),
+      ),
+      realCount > 0 && React.createElement('div', { className: 'flex items-center gap-4 mt-2 text-xs text-gray-500' },
+        React.createElement('span', { className: 'flex items-center gap-1' },
+          React.createElement('span', { className: 'inline-block w-3 h-0.5', style: { backgroundColor: BAR_FILL_COLOR, opacity: 0.75 } }), 'Real export'),
+        liveCount > 0 && React.createElement('span', { className: 'flex items-center gap-1' },
+          React.createElement('span', { className: 'inline-block w-3 h-0.5', style: { backgroundColor: '#FBBF24' } }), 'This session')
       )
     );
   }
@@ -285,8 +377,14 @@ const AHU46PointDetail = (function() {
     }
     return React.createElement('div', { className: 'divide-y divide-gray-800' },
       points.slice(0, 30).map(function(p, i) {
+        // Real entries use a reconstructed timestamp (see seedHistoryFromRealData)
+        // that isn't the actual recorded time — showing it as a clock time would
+        // misrepresent an approximation as fact. Live entries have a real Date.now().
+        var whenLabel = p.real
+          ? Math.round((Date.now() - p.t) / 3600000) + 'h before session start (real export)'
+          : new Date(p.t).toLocaleTimeString();
         return React.createElement('div', { key: i, className: 'flex justify-between px-4 py-2 text-sm' },
-          React.createElement('span', { className: 'text-gray-500 text-xs' }, new Date(p.t).toLocaleTimeString()),
+          React.createElement('span', { className: 'text-gray-500 text-xs' }, whenLabel),
           React.createElement('span', { className: 'text-white font-mono' }, p.v + (units ? ' ' + units : ''))
         );
       })
