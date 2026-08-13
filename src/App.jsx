@@ -470,6 +470,20 @@ function App() {
         window.AHU46Controller.updateFromTMY3(event.rowIndex, event.interpolationFraction || 0);
       }
 
+      // AHU-4-6 fault evaluation — was previously ONLY evaluated inside
+      // AHU46VectorOverlay.jsx / AHU46ImageOverlay.jsx's own polling
+      // interval, meaning activeAlarms never populated (and the Alarm
+      // Summary screen's aggregation had nothing to show) unless a user
+      // happened to currently be on the AHU-4-6 screen. Evaluating here,
+      // on every tick regardless of which screen is mounted, matches how
+      // AHU-4-4 and VAV already work above. SCENARIO_TRACKING.md item #19
+      // follow-up (found while retiring the legacy FaultEngine.js
+      // duplicates).
+      if (window.AHU46FaultEngine && window.AHU46Controller &&
+          typeof window.AHU46FaultEngine.evaluate === 'function') {
+        window.AHU46FaultEngine.evaluate(window.AHU46Controller.getState(), window.AHU46Controller.getModes());
+      }
+
       // LL97 energy/GHG accumulation — was never wired to the clock before
       // (pre-existing gap, not introduced here): LL97Accumulator.tick()
       // existed and was fully tested but nothing ever called it, so the

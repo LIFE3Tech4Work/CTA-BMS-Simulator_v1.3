@@ -639,9 +639,8 @@ All items in this table are now fixed — see Fixed item 19 below.
   M-01 through M-13 alarms at all — only the legacy engine (now filtered),
   AHU-4-4, and VAV are concatenated in. AHU-4-6's alarms are currently
   only visible via the on-screen banners in `AHU46VectorOverlay.jsx` /
-  `AHU46ImageOverlay.jsx`, not the global Alarm Summary screen. Flagged
-  here rather than fixed, since it's outside this item's original scope —
-  worth its own tracked item if it should be addressed next.
+  `AHU46ImageOverlay.jsx`, not the global Alarm Summary screen. **Fixed
+  immediately after — see item #20 below**, rather than left open.
 - **Verified:** filter logic checked in isolation (four mock alarms —
   two legacy superseded IDs, two live IDs — confirms only the live ones
   survive). Full suite: 554 passed, 36 failed (same pre-existing,
@@ -650,6 +649,57 @@ All items in this table are now fixed — see Fixed item 19 below.
   checking the Alarm Summary screen with a legacy scenario active (e.g.
   scenario id 3 or 4 from `scenarios.js`) to confirm no F-0X entries
   appear, before considering this fully closed.
+
+---
+
+### 20. AHU-4-6 alarms wired into the global Alarm Summary (follow-up to item #19)
+
+- **Source:** Found while investigating item #19 above — `AlarmSummary.jsx`
+  never included AHU-4-6's own live alarms in its aggregation at all.
+- **Root cause was two layers deep, not one:** simply concatenating
+  `AHU46FaultEngine.getAllAlarms()` into `AlarmSummary.jsx` wouldn't have
+  been enough on its own, for two independent reasons, both fixed:
+  1. **API mismatch.** `AHU46FaultEngine.js` only ever exposed `rules`,
+     `evaluate`, and `getActiveAlarms` — missing `getAllAlarms`,
+     `acknowledge`, `acknowledgeAll`, and `reset`, all of which
+     `AlarmSummary.jsx` expects from every engine it aggregates (compare
+     against `AHU44NewFaultEngine.js`'s API). Added all four, plus
+     `subsystem: 'AHU-4-6'`, `acknowledged: false`, and `operator: ''`
+     fields on every generated alarm object, matching AHU-4-4's alarm
+     shape exactly. This engine has a simpler lifecycle than AHU-4-4's
+     (an alarm is deleted the instant its condition clears, rather than
+     retained inactive-but-unacknowledged) — `getAllAlarms()` and
+     `getActiveAlarms()` are therefore equivalent here, which is
+     documented in a comment rather than left as an unexplained
+     coincidence.
+  2. **Never evaluated outside its own screen.** `AHU46FaultEngine.evaluate()`
+     was only ever called from inside `AHU46VectorOverlay.jsx` /
+     `AHU46ImageOverlay.jsx`'s own polling interval — meaning
+     `activeAlarms` never populated, and had nothing for
+     `AlarmSummary.jsx` to aggregate, unless a user happened to currently
+     be viewing the AHU-4-6 screen. Added `AHU46FaultEngine.evaluate()` to
+     `App.jsx`'s master tick loop, run on every tick regardless of which
+     screen is mounted — the same pattern AHU-4-4 and VAV already used.
+- **Fix:** `AlarmSummary.jsx` now concatenates `AHU46FaultEngine.getAllAlarms()`
+  the same way it already does for AHU-4-4, and the acknowledge-dispatch
+  chain gained an `alarm.subsystem === 'AHU-4-6'` branch calling
+  `AHU46FaultEngine.acknowledge()`, matching the AHU-4-4 branch exactly.
+- **Verified:** direct-script check of every new method (`getAllAlarms`
+  matches `getActiveAlarms`; alarms carry the correct `subsystem` and
+  start unacknowledged; `acknowledge()` sets the right fields;
+  `acknowledge()` on a non-existent ID is a safe no-op; `acknowledgeAll()`
+  marks everything; `reset()` clears everything and a subsequent
+  `evaluate()` correctly regenerates). 8 new regression tests in
+  `AHU46FaultEngine.test.mjs` (45/45 in the file). Server boot-checked —
+  all three edited files (`App.jsx`, `AlarmSummary.jsx`,
+  `AHU46FaultEngine.js`) confirmed serving correctly. Full suite: 562
+  passed, 36 failed (same pre-existing, unrelated failures throughout
+  this entire tracking log) — +8 from the new tests, zero regressions.
+  Not yet manually verified end-to-end in the running browser app —
+  recommend confirming an AHU-4-6 fault (e.g. toggle Filter Dirty in the
+  sidebar) shows up on the Alarm Summary screen even after navigating
+  away from the AHU-4-6 tab, and that acknowledging it there actually
+  clears the on-screen banner too.
 
 ---
 

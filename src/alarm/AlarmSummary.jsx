@@ -495,6 +495,16 @@
             engineAlarms = engineAlarms.concat(window.AHU44NewFaultEngine.getAllAlarms());
           }
 
+          // AHU-4-6 (Meeting Room) alarms — same reasoning as AHU-4-4
+          // above. Previously missing entirely from this screen (see
+          // SCENARIO_TRACKING.md item #19's follow-up note) — the App.jsx
+          // tick loop now evaluates this engine on every tick regardless
+          // of which screen is mounted, so activeAlarms stays current
+          // even when nobody's viewing the AHU-4-6 screen itself.
+          if (window.AHU46FaultEngine && typeof window.AHU46FaultEngine.getAllAlarms === 'function') {
+            engineAlarms = engineAlarms.concat(window.AHU46FaultEngine.getAllAlarms());
+          }
+
           // VAV-4-4-02 alarms come from a third engine, one zone at a
           // time (VAVFaultEngine is multi-instance, keyed by zoneId — see
           // VAVController.js for why two zones share one module). Each
@@ -640,11 +650,15 @@
       });
 
       // Also acknowledge in the originating engine, if applicable.
-      // AHU-4-4 and the two VAV zones each live in their own engine,
-      // separate from everything else.
+      // AHU-4-4, AHU-4-6, and the two VAV zones each live in their own
+      // engine, separate from everything else.
       if (alarm.subsystem === 'AHU-4-4') {
         if (window.AHU44NewFaultEngine && typeof window.AHU44NewFaultEngine.acknowledge === 'function') {
           window.AHU44NewFaultEngine.acknowledge(alarm.condition, auth.operator || 'operator');
+        }
+      } else if (alarm.subsystem === 'AHU-4-6') {
+        if (window.AHU46FaultEngine && typeof window.AHU46FaultEngine.acknowledge === 'function') {
+          window.AHU46FaultEngine.acknowledge(alarm.condition, auth.operator || 'operator');
         }
       } else if (alarm.subsystem === 'VAV-4-4-02') {
         if (window.VAVFaultEngine && typeof window.VAVFaultEngine.acknowledge === 'function') {

@@ -300,4 +300,72 @@ describe('AHU46FaultEngine', () => {
       expect(alarms.find(a => a.condition === 'M-13')).toBeUndefined();
     });
   });
+
+  // ─── API parity with AHU44NewFaultEngine (needed for AlarmSummary.jsx) ────
+  //
+  // Previously this engine only exposed rules/evaluate/getActiveAlarms —
+  // missing getAllAlarms/acknowledge/acknowledgeAll/reset that
+  // AlarmSummary.jsx expects from every engine it aggregates. Found and
+  // fixed while wiring AHU-4-6 into the global Alarm Summary
+  // (SCENARIO_TRACKING.md item #19 follow-up).
+
+  describe('AHU46FaultEngine — API parity (getAllAlarms, acknowledge, reset)', () => {
+    it('every alarm carries subsystem AHU-4-6', () => {
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true }));
+      alarms.forEach(a => expect(a.subsystem).toBe('AHU-4-6'));
+    });
+
+    it('every alarm starts unacknowledged', () => {
+      window.AHU46FaultEngine.evaluate(baseState()); // clear any stale state
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true }));
+      const m08 = alarms.find(a => a.condition === 'M-08');
+      expect(m08.acknowledged).toBe(false);
+      expect(m08.operator).toBe('');
+    });
+
+    it('getAllAlarms matches getActiveAlarms (this engine has no inactive-alarm history)', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true, dps2Tripped: true }));
+      const all = window.AHU46FaultEngine.getAllAlarms().map(a => a.condition).sort();
+      const active = window.AHU46FaultEngine.getActiveAlarms().map(a => a.condition).sort();
+      expect(all).toEqual(active);
+    });
+
+    it('acknowledge() marks a specific alarm acknowledged with the operator name', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true }));
+      window.AHU46FaultEngine.acknowledge('M-08', 'jsmith');
+      const m08 = window.AHU46FaultEngine.getAllAlarms().find(a => a.condition === 'M-08');
+      expect(m08.acknowledged).toBe(true);
+      expect(m08.operator).toBe('jsmith');
+    });
+
+    it('acknowledge() on a non-existent alarm ID does nothing and does not throw', () => {
+      expect(() => window.AHU46FaultEngine.acknowledge('M-99', 'jsmith')).not.toThrow();
+    });
+
+    it('acknowledgeAll() marks every currently active alarm acknowledged', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true, softwareLockout: true }));
+      window.AHU46FaultEngine.acknowledgeAll('bulk-op');
+      const all = window.AHU46FaultEngine.getAllAlarms();
+      expect(all.length).toBeGreaterThan(0);
+      all.forEach(a => {
+        expect(a.acknowledged).toBe(true);
+        expect(a.operator).toBe('bulk-op');
+      });
+    });
+
+    it('reset() clears every alarm', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true }));
+      expect(window.AHU46FaultEngine.getAllAlarms().length).toBeGreaterThan(0);
+      window.AHU46FaultEngine.reset();
+      expect(window.AHU46FaultEngine.getAllAlarms()).toEqual([]);
+      expect(window.AHU46FaultEngine.getActiveAlarms()).toEqual([]);
+    });
+
+    it('a fresh evaluate() after reset() correctly regenerates alarms', () => {
+      window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true }));
+      window.AHU46FaultEngine.reset();
+      const alarms = window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true }));
+      expect(alarms.find(a => a.condition === 'M-08')).toBeDefined();
+    });
+  });
 });

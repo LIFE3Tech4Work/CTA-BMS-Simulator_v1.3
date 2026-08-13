@@ -261,6 +261,9 @@
             sourceField: rule.sourceField,
             value: rule.getValue ? rule.getValue(state, modes) : (rule.sourceField ? state[rule.sourceField] : manualKeys(modes)),
             timestamp: new Date().toISOString(),
+            subsystem: 'AHU-4-6',
+            acknowledged: false,
+            operator: '',
           };
         }
         newAlarms.push(activeAlarms[rule.id]);
@@ -275,10 +278,45 @@
     return Object.values(activeAlarms);
   }
 
+  // This engine has a simpler lifecycle than AHU44NewFaultEngine's: an
+  // alarm is deleted from activeAlarms the instant its condition clears
+  // (see evaluate() above), rather than retained in an 'inactive' state
+  // for later review. That means there's no distinction between "all
+  // alarms" and "active alarms" here — getAllAlarms() is provided purely
+  // so AlarmSummary.jsx (which expects this method on every engine it
+  // aggregates from — see AHU44NewFaultEngine, VAVFaultEngine) can treat
+  // AHU-4-6 the same way as every other unit.
+  function getAllAlarms() {
+    return Object.values(activeAlarms);
+  }
+
+  function acknowledge(ruleId, operator) {
+    var alarm = activeAlarms[ruleId];
+    if (alarm) {
+      alarm.acknowledged = true;
+      alarm.operator = operator || '';
+    }
+  }
+
+  function acknowledgeAll(operator) {
+    Object.values(activeAlarms).forEach(function(alarm) {
+      alarm.acknowledged = true;
+      alarm.operator = operator || '';
+    });
+  }
+
+  function reset() {
+    Object.keys(activeAlarms).forEach(function(k) { delete activeAlarms[k]; });
+  }
+
   window.AHU46FaultEngine = {
     rules: rules,
     evaluate: evaluate,
     getActiveAlarms: getActiveAlarms,
+    getAllAlarms: getAllAlarms,
+    acknowledge: acknowledge,
+    acknowledgeAll: acknowledgeAll,
+    reset: reset,
   };
 
 })();
