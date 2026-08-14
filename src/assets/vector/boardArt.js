@@ -218,7 +218,7 @@
   </g>
   </svg>`;
 
-  var U23 = `<svg id="ahu-board" viewBox="0 0 1613 878" width="1613" height="878" style="position:absolute;left:0;top:0;pointer-events:none;" xmlns="http://www.w3.org/2000/svg" font-family="'Barlow','Segoe UI',system-ui,sans-serif">
+  var U23 = `<svg id="ahu-board" viewBox="285 120 1367 744" width="1613" height="878" style="position:absolute;left:0;top:0;pointer-events:none;" xmlns="http://www.w3.org/2000/svg" font-family="'Barlow','Segoe UI',system-ui,sans-serif">
 
   <defs>
     {{bgGrad}}
@@ -385,57 +385,57 @@
     <g id="pump23"><path d="M3.4,-9.4 C2.6,-14.8 -1,-17.8 -7,-17.6 C-10.5,-17.5 -13,-17.2 -16.2,-17.2" fill="none" stroke="#16260f" stroke-width="11" stroke-linecap="round"/><path d="M3.4,-9.4 C2.6,-14.8 -1,-17.8 -7,-17.6 C-10.5,-17.5 -13,-17.2 -16.2,-17.2" fill="none" stroke="#86ae64" stroke-width="8.2" stroke-linecap="round"/><path d="M4.7,-10 C3.9,-15.4 0,-19 -7,-18.8 C-10.5,-18.7 -13,-18.4 -16,-18.4" fill="none" stroke="#b9d996" stroke-width="4.4" opacity="0.85" stroke-linecap="round"/><path d="M5.4,-10.4 C4.6,-15.8 0,-19.9 -7,-19.7 C-10.5,-19.6 -13,-19.3 -15.8,-19.3" fill="none" stroke="#e9f6d6" stroke-width="1.7" opacity="0.85" stroke-linecap="round"/><path d="M1.6,-8.7 C1,-13.6 -2.4,-15.8 -7.4,-15.7 C-10.6,-15.6 -13,-15.3 -16,-15.3" fill="none" stroke="#3c5e2c" stroke-width="1.5" opacity="0.55" stroke-linecap="round"/><rect x="-20.8" y="-22.3" width="4.8" height="10.2" rx="1" fill="url(#collarG)" stroke="#0e0e11" stroke-width="1"/><rect x="-20.2" y="-21.4" width="3.6" height="1.6" rx="0.6" fill="#b9b9c0" opacity="0.8"/><circle cx="0" cy="0" r="13" fill="url(#volG)" stroke="#16260f" stroke-width="2"/><path d="M8.5,-2.28 A8.8,8.8 0 0 0 2.28,-8.5" fill="none" stroke="#f0f9e0" stroke-width="3.6" opacity="0.55" stroke-linecap="round"/><path d="M-10.83,1.91 A11,11 0 0 0 1.91,10.83" fill="none" stroke="#3a5a2b" stroke-width="3.2" opacity="0.45" stroke-linecap="round"/><rect x="-2.7" y="-4.9" width="5.4" height="9.8" fill="url(#redPL)" stroke="#1c0c09" stroke-width="0.8"/><rect x="-1.4" y="-4.6" width="1.5" height="9.2" fill="#e88f7c" opacity="0.7"/><circle cx="0" cy="0" r="4.7" fill="none" stroke="#233a1b" stroke-width="2.2"/><circle cx="0" cy="0" r="5.7" fill="none" stroke="#37552a" stroke-width="1.8" opacity="0.55"/><circle cx="0" cy="0" r="4.7" fill="none" stroke="#14220f" stroke-width="1.9" opacity="0.6"/></g>
   </defs>
 
-  <rect x="0" y="0" width="1613" height="878" fill="url(#bgGrad)"/>
+  <rect x="-200" y="-200" width="2200" height="1400" fill="url(#bgGrad)"/>
 
-  <g id="header">
+  <g id="header" transform="translate(285,120) scale(0.8474576)">
     <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">AHU-23-1</text>
     <text x="1606" y="72" font-size="14" font-weight="800" fill="#22406e" text-anchor="end">Service: Floor 23 Boiler Room Ventilation</text>
     <text x="1606" y="90" font-size="14" font-weight="800" fill="#22406e" text-anchor="end">Location: Floor 23 MER</text>
   </g>
 
-  <g id="panels" fill="#cfe0f5" fill-opacity="0.42" stroke="#ffffff" stroke-opacity="0.85" stroke-width="1.6">
+  <g id="panels" fill="#bcd6fb" fill-opacity="0.4" stroke="#eaf2fd" stroke-opacity="0.7" stroke-width="2">
     <rect x="385" y="340" width="81" height="235" rx="20"/>
-    <rect x="487" y="336" width="145" height="250" rx="20"/>
-    <rect x="632" y="336" width="142" height="250" rx="20"/>
-    <rect x="797" y="266" width="230" height="338" rx="20"/>
+    <rect x="487" y="336" width="160" height="250" rx="20"/>
+    <rect x="702" y="336" width="150" height="250" rx="20"/>
+    <rect x="867" y="266" width="230" height="338" rx="20"/>
     <rect x="511" y="566" width="74" height="152" rx="18"/>
-    <rect x="608" y="566" width="74" height="152" rx="18"/>
+    <rect x="678" y="566" width="74" height="152" rx="18"/>
     <rect x="1446" y="390" width="135" height="180" rx="18"/>
   </g>
 
   <g id="ducts" shape-rendering="geometricPrecision">
     <g id="duct-hump">
       <polygon points="503,460 514,448 541,402 530,414" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
-      <polygon points="736,414 747,402 774,448 763,460" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
-      <polygon points="503,460 530,414 736,414 763,460" fill="url(#ductFront)" stroke="#6c7280" stroke-width="1.4"/>
-      <polygon points="530,414 541,402 747,402 736,414" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
-      <path d="M506.5,457 L532,416.5 H733.5" fill="none" stroke="#ffffff" stroke-width="2.2" opacity="0.9"/>
+      <polygon points="806,414 817,402 844,448 833,460" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
+      <polygon points="503,460 530,414 806,414 833,460" fill="url(#ductFront)" stroke="#6c7280" stroke-width="1.4"/>
+      <polygon points="530,414 541,402 817,402 806,414" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
+      <path d="M506.5,457 L532,416.5 H803.5" fill="none" stroke="#ffffff" stroke-width="2.2" opacity="0.9"/>
     </g>
-    <polygon points="355,460 366,448 1058,448 1047,460" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
+    <polygon points="355,460 366,448 1311,448 1300,460" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
     
     
     
-    <rect x="355" y="460" width="692" height="24" fill="url(#ductFront)" stroke="#6c7280" stroke-width="1.4"/>
-    <rect x="355" y="461.4" width="692" height="2.2" fill="#ffffff" opacity="0.95"/>
-    <rect x="355" y="478.6" width="692" height="2" fill="#9ba1ac" opacity="0.75"/>
+    <rect x="355" y="460" width="945" height="24" fill="url(#ductFront)" stroke="#6c7280" stroke-width="1.4"/>
+    <rect x="355" y="461.4" width="945" height="2.2" fill="#ffffff" opacity="0.95"/>
+    <rect x="355" y="478.6" width="945" height="2" fill="#9ba1ac" opacity="0.75"/>
     <polygon points="355,460 366,448 366,472 355,484" fill="url(#ductCap)" stroke="#6c7280" stroke-width="1.4"/>
-    <g><polygon points="1047,460 1058,448 1058,484 1047,484" fill="#c3c8d0"/><polygon points="1049.3,459.7 1055.8,452.6 1055.8,481.8 1049.3,481.8" fill="url(#mouthG)"/><polygon points="1047,460 1058,448 1058,484 1047,484" fill="none" stroke="#6c7280" stroke-width="1.4"/></g>
+    <g><polygon points="1300,460 1311,448 1311,484 1300,484" fill="#c3c8d0"/><polygon points="1302.3,459.7 1308.8,452.6 1308.8,481.8 1302.3,481.8" fill="url(#mouthG)"/><polygon points="1300,460 1311,448 1311,484 1300,484" fill="none" stroke="#6c7280" stroke-width="1.4"/></g>
     <g id="coil-1">
       <rect x="539" y="470" width="8" height="101" fill="url(#redPD)" stroke="#1c0c09" stroke-width="0.8"/>
       <rect x="549" y="470" width="8" height="196" fill="url(#redPL)" stroke="#1c0c09" stroke-width="0.8"/>
       <use href="#coilCube46" transform="translate(541,438) scale(1.35)"/>
     </g>
-    <g id="coil-2">
+    <g id="coil-2" transform="translate(70,0)">
       <rect x="631" y="430" width="8" height="141" fill="url(#redPL)" stroke="#1c0c09" stroke-width="0.8"/>
       <rect x="651" y="430" width="8" height="236" fill="url(#redPD)" stroke="#1c0c09" stroke-width="0.8"/>
       <use href="#coilCube46" transform="translate(642,394) scale(1.35)"></use>
     </g>
   </g>
 
-  <rect x="521.8" y="600" width="8" height="66" fill="url(#redPD)" stroke="#1c0c09" stroke-width="0.8"/><rect x="613.8" y="600" width="8" height="66" fill="url(#redPL)" stroke="#1c0c09" stroke-width="0.8"/><g id="preheat-pumps"><use href="#pumpL" transform="translate(525.8,600) rotate(90)"/><use href="#pumpL" transform="translate(617.8,600) rotate(90)"/></g>
+  <rect x="521.8" y="600" width="8" height="66" fill="url(#redPD)" stroke="#1c0c09" stroke-width="0.8"/><rect x="683.8" y="600" width="8" height="66" fill="url(#redPL)" stroke="#1c0c09" stroke-width="0.8"/><g id="preheat-pumps"><use href="#pumpL" transform="translate(525.8,600) rotate(90)"/><use href="#pumpL" transform="translate(687.8,600) rotate(90)"/></g>
 
   <g id="airflow23">
-    <path style="{{airStyle}}" d="M370 470 H394 M456 470 H524 M580 470 H613 M685 470 H876 M1004 470 H1044" fill="none" stroke="#5a86c8" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="2 18" opacity="0.72">
+    <path style="{{airStyle}}" d="M370 470 H394 M456 470 H524 M580 470 H683 M755 470 H946 M1074 470 H1297" fill="none" stroke="#5a86c8" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="2 18" opacity="0.72">
       <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1s" repeatCount="indefinite"></animate>
     </path>
   </g>
@@ -443,8 +443,8 @@
   <g id="airLabels" font-weight="800" fill="#5a6b84" font-size="14" letter-spacing="0.4">
     <text x="340" y="454" text-anchor="end">OUTDOOR AIR</text>
     <use href="#arrow" transform="translate(272,474)"/>
-    <text x="1075" y="454">SUPPLY AIR</text>
-    <use href="#arrow" transform="translate(1082,476)"/>
+    <text x="1317" y="454">SUPPLY AIR</text>
+    <use href="#arrow" transform="translate(1324,476)"/>
   </g>
 
   <g id="equipment">
@@ -455,7 +455,7 @@
       <use href="#cubeGoldL" transform="translate(609,427)"/>
       <use href="#sqigN" transform="translate(611,450) scale(0.85,1.15)"/>
     </g>
-    <g id="freeze-2">
+    <g id="freeze-2" transform="translate(70,0)">
       <use href="#cubeSlateS" transform="translate(679,444)"/>
       <use href="#sqigN" transform="translate(681,449) scale(0.85,0.8)"/>
       <use href="#cubeGoldS" transform="translate(709,444)"/>
@@ -465,17 +465,17 @@
       
       <use href="#valveAct46" transform="translate(525.8,640)"/>
     </g>
-    <g id="pump-2">
+    <g id="pump-2" transform="translate(70,0)">
       
       <use href="#valveAct46" transform="translate(617.8,640)"/>
     </g>
     
-    <use href="#dpPair" transform="translate(893,466)"/><use href="#fanGearR" transform="translate(920,466)"/>
+    <use href="#dpPair" transform="translate(963,466)"/><use href="#fanGearR" transform="translate(990,466)"/>
     
     <use href="#sensorCube" transform="translate(1497,468)"/>
-    <use href="#plusIco" transform="translate(762,350)"/>
-    <use href="#plusIco" transform="translate(678,503)"/>
-    <use href="#plusIco" transform="translate(678,549)"/>
+    <use href="#plusIco" transform="translate(832,350)"/>
+    <use href="#plusIco" transform="translate(748,503)"/>
+    <use href="#plusIco" transform="translate(748,549)"/>
     <use href="#plusIco" transform="translate(496,584)"/>
   </g>
 
@@ -487,16 +487,16 @@
     <text x="425" y="356" font-size="13">FILTER</text>
     <text x="425" y="376" font-size="11">DPS-3</text>
     <text x="560" y="352" font-size="13">PREHEAT</text>
-    <text x="700" y="352" font-size="13">COIL 2</text>
+    <text x="770" y="352" font-size="13">COIL 2</text>
     <text x="582" y="397" font-size="10">FZ-1</text><text x="614" y="397" font-size="10">TS-1</text>
-    <text x="682" y="397" font-size="10">FZ-2</text><text x="714" y="397" font-size="10">TS-2</text>
-    <text x="719" y="527" font-size="10">PLIN MIN</text>
-    <text x="719" y="573" font-size="10">DAT SEIPOINT</text>
-    <text x="985" y="400" font-size="10.5">AHU-23-1</text>
+    <text x="752" y="397" font-size="10">FZ-2</text><text x="784" y="397" font-size="10">TS-2</text>
+    <text x="789" y="527" font-size="10">PLIN MIN</text>
+    <text x="789" y="573" font-size="10">DAT SEIPOINT</text>
+    <text x="1055" y="400" font-size="10.5">AHU-23-1</text>
     <text x="516" y="570" font-size="11">P-1</text>
-    <text x="608" y="570" font-size="11">P-2</text>
+    <text x="678" y="570" font-size="11">P-2</text>
     <text x="525.8" y="700" font-size="11">V-1</text>
-    <text x="617.8" y="700" font-size="11">V-2</text>
+    <text x="687.8" y="700" font-size="11">V-2</text>
     <text x="1513" y="562" font-size="10">SETPOINT</text>
     
     <text x="1513" y="482" font-size="11" font-weight="800" fill="#16181d">TS</text>

@@ -179,21 +179,32 @@
       ahu: 'AHU-23-1', board: 'U23', controller: 'AHU23Controller', faultEngine: null,
       dev: 'DEV2301', bacPrefix: 'AHU23_01',
       art: {},
+      // This unit's drawing is a single small air-handler, so it only occupied
+      // x 250–1581, y 266–718 of the 1613×878 stage and read much smaller than
+      // AHU-4-6 / 4-4. Scaling the whole overlay — artwork, chips, fan block and
+      // pills together — keeps every coordinate in sync while enlarging the unit
+      // and widening the gaps between device groups. The origin sits on the
+      // header block's top-right corner so the unit title stays put and the
+      // drawing grows down and to the left, into the empty space.
+      // The artwork zooms via its viewBox (285 120 1367 744); the overlay rides the
+      // same mapping so chips, the fan block and pill stacks stay registered to
+      // the drawing and grow with it. screen = (art - v) * s.
+      artView: { vx: 285, vy: 120, s: 1.18 },
       chips: [
         ['preheatTemp',   'pill', 528,  380, null, 'left', 13],
-        ['supplyAirTemp', 'pill', 668,  380, null, 'left', 13],
-        ['cfm',           'pill', 812,  388, null, 'left', 15],
-        ['fanSpeed',      'pill', 1025, 487, null, 'left', 13],
+        ['supplyAirTemp', 'pill', 738,  380, null, 'left', 13],
+        ['cfm',           'pill', 882,  388, null, 'left', 15],
+        ['fanSpeed',      'pill', 1095, 487, null, 'left', 13],
         ['phtValveStatus','pill', 526,  634, null, 'left', 12],
-        ['chwValveStatus','pill', 623,  634, null, 'left', 12],
+        ['chwValveStatus','pill', 693,  634, null, 'left', 12],
         ['phtValvePosition', 'box', 540, 494, 34],
-        ['chwValvePosition', 'box', 630, 494, 34],
-        ['plenumMinSetpoint', 'box', 696, 494, 46],
-        ['coolingCoilSetpoint', 'box', 696, 540, 46],
-        ['fanSpeedSetpoint', 'box', 985, 487, 34],
+        ['chwValvePosition', 'box', 700, 494, 34],
+        ['plenumMinSetpoint', 'box', 766, 494, 46],
+        ['coolingCoilSetpoint', 'box', 766, 540, 46],
+        ['fanSpeedSetpoint', 'box', 1055, 487, 34],
       ],
       fans: [
-        { key: 'fanRunning', cmdKey: 'runSchedule', interlockKey: null, x: 808, y: 528, pills: 'u23', pillY: 282 },
+        { key: 'fanRunning', cmdKey: 'runSchedule', interlockKey: null, x: 878, y: 528, pills: 'u23', pillY: 282 },
       ],
       freeze: null,
     },

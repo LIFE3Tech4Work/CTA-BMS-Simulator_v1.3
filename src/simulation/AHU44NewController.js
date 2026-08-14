@@ -62,9 +62,9 @@
     coolingCoilSetpoint: 60.0,     // °F
     heatingCoilSetpoint: 55.0,     // °F
     plenumMinSetpoint: 40.0,       // °F — freeze protection
-    oaTemperature: 83.4,           // °F — TMY3-driven (live weather), not operator-editable; see WEATHER_DRIVEN_KEYS
+    oaTemperature: 83.4,           // °F — TMY3-driven; operator-overridable
     lowOATLockout: false,          // Low OAT lockout — OFF per Honeywell screenshot reference (Hotel_AHU4_4Edit.png)
-    oaEnthalpy: 32.0,             // BTU/lb — TMY3-driven (live weather), not operator-editable; see WEATHER_DRIVEN_KEYS
+    oaEnthalpy: 32.0,             // BTU/lb — TMY3-driven; operator-overridable
     enthalpyOKForEconomizer: false, // Enthalpy permits economizer
     economizerMinPosition: 20,     // % — OA damper floor
     minPositionFanSpeedLock: 5,    // %
@@ -125,9 +125,66 @@
   // header for why recalculate() honors that flag instead of overwriting it.
   var modes = {};
 
+  // Operator-commanded values for every key currently in Manual. A real BMS
+  // point override sits at priority 8 and OUTRANKS the control program: the
+  // sequence still computes its own answer each pass, but the override is what
+  // the point reports until it is released. recalculate() re-applies these
+  // after every pass, which is what makes a commanded value actually hold —
+  // previously only a handful of keys were spared by their own
+  // "modes.X !== 'Manual'" guards and everything else was recomputed straight
+  // back over the operator's value.
+  var manualValues = {};
+
+  // The value each overridden key held before the operator took it. Releasing
+  // to Auto restores it, so a key the sequence does not recompute (a mode, a
+  // config flag, a field-condition boolean) comes back to what it was instead
+  // of being stuck at the commanded value forever.
+  var autoValues = {};
+
   // ─── Engineering Calculations ───────────────────────────────────────────────
 
+  /**
+   * Run the control sequences, then re-assert every Manual override on top of
+   * the result. Callers keep calling recalculate() exactly as before.
+   */
+  // Outputs a safety sequence drives directly. v1.3 lets the program win over an
+  // operator hold in these cases — with the fan off the dampers close (SOO System
+  // Off #1) whatever the operator commanded — so the override yields while the
+  // condition is active and resumes when it clears. The Manual flag is kept
+  // throughout, so the point still reads as overridden.
+  var SAFETY_DRIVEN_KEYS = {
+    oaDamperPosition: true, oaCFM: true, cfm: true, fanSpeed: true,
+    returnFanCFM: true, returnCFM: true, economizerActive: true,
+    exhaustDamperPct: true, returnAirDamperPosition: true, spillDamperPosition: true,
+  };
+
+  function safetyOverridesOperator() {
+    return state.fanRunning === false ||
+           state.hardSafetyShutdown === true ||
+           state.freezestatShutdown === true ||
+           state.fireAlarmShutdown === true;
+  }
+
   function recalculate() {
+    computeSequences();
+    if (!manualValues) return;
+    // computeSequences() notifies subscribers from inside the pass, i.e. BEFORE
+    // the overrides go back on — so the UI would render the sequence's value
+    // and a commanded point looked like it never took. Re-notify when an
+    // override actually changed something so what is displayed is what the
+    // point reports.
+    var safety = safetyOverridesOperator();
+    var overrode = false;
+    for (var mk in manualValues) {
+      if (!Object.prototype.hasOwnProperty.call(manualValues, mk)) continue;
+      if (!state.hasOwnProperty(mk)) continue;
+      if (safety && SAFETY_DRIVEN_KEYS[mk]) continue;
+      if (state[mk] !== manualValues[mk]) { state[mk] = manualValues[mk]; overrode = true; }
+    }
+    if (overrode && typeof notifySubscribers === 'function') notifySubscribers();
+  }
+
+  function computeSequences() {
 
     // 1. FAN LOGIC: Run Schedule → Fan ON/OFF + CFM
     if (state.fireAlarmShutdown || !state.runSchedule) {
@@ -324,21 +381,15 @@
     return Object.assign({}, state);
   }
 
-  // Keys that are purely TMY3-driven and may never be set via the sidebar.
-  // Outdoor air temperature is real weather, not an operator setpoint — a
-  // building engineer cannot type in what it is outside, so this point has
-  // no Manual mode. (Distinct from points like coolingCoilSetpoint, which
-  // ARE legitimately operator-editable.)
-  var WEATHER_DRIVEN_KEYS = { oaTemperature: true, oaEnthalpy: true };
+  // Outdoor conditions used to be write-blocked here. They are now settable so
+  // an instructor can hold a season; updateFromTMY3() yields to the override.
 
   function setValue(key, value) {
-    if (WEATHER_DRIVEN_KEYS[key]) {
-      console.warn('[AHU44NewController] "' + key + '" is TMY3-driven and cannot be set manually. Ignored.');
-      return;
-    }
     if (state.hasOwnProperty(key)) {
+      if (!Object.prototype.hasOwnProperty.call(manualValues, key)) autoValues[key] = state[key];
       state[key] = value;
       modes[key] = 'Manual';
+      manualValues[key] = value;
       recalculate();
     }
   }
@@ -353,8 +404,13 @@
    * existing caller behave exactly as before.
    */
   function clearMode(key) {
-    if (modes[key]) {
+    if (modes[key] || Object.prototype.hasOwnProperty.call(manualValues, key)) {
       delete modes[key];
+      delete manualValues[key];
+      if (Object.prototype.hasOwnProperty.call(autoValues, key)) {
+        state[key] = autoValues[key];
+        delete autoValues[key];
+      }
       recalculate();
     }
   }
@@ -365,8 +421,7 @@
 
   /**
    * Push live TMY3 weather into the controller for the current simulation tick.
-   * Always applies — outdoor air temperature has no manual override in this
-   * controller (see WEATHER_DRIVEN_KEYS / setValue above).
+   * Yields to a manual override so a hand-set outdoor condition holds.
    *
    * @param {number} row - current simulation row (1-indexed)
    * @param {number} fraction - interpolation fraction between row and row+1 (0-1)
@@ -377,8 +432,10 @@
     var weather = window.TMY3Projector.interpolateWeather(row, fraction);
     if (!weather) return;
 
-    state.oaTemperature = weather.dryBulb;
-    state.oaEnthalpy = weather.enthalpy;
+    // A hand-set outdoor condition outranks the TMY3 file, so an instructor can
+    // hold "winter" or "humid summer" steady while the rest of the model runs.
+    if (modes.oaTemperature !== 'Manual') state.oaTemperature = weather.dryBulb;
+    if (modes.oaEnthalpy !== 'Manual') state.oaEnthalpy = weather.enthalpy;
     recalculate();
   }
 
@@ -403,7 +460,15 @@
     recalculate: recalculate,
     updateFromTMY3: updateFromTMY3,
     getModes: getModes,
-    clearModes: function() { modes = {}; },
+    clearModes: function() {
+      for (var ak in autoValues) {
+        if (Object.prototype.hasOwnProperty.call(autoValues, ak) && state.hasOwnProperty(ak)) {
+          state[ak] = autoValues[ak];
+        }
+      }
+      modes = {}; manualValues = {}; autoValues = {};
+      recalculate();
+    },
   };
 
 })();

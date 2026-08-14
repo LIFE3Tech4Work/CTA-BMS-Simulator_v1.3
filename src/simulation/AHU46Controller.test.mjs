@@ -267,6 +267,16 @@ describe('AHU46Controller — Manual oaDamperPosition (M-04 fault)', () => {
     expect(ctrl.getState().oaDamperPosition).toBe(10);
   });
 
+  it('a manual hold resumes once the fan is running again', () => {
+    const ctrl = loadController();
+    ctrl.setValue('oaDamperPosition', 10);
+    ctrl.setValue('runSchedule', false);
+    ctrl.recalculate();
+    expect(ctrl.getState().oaDamperPosition).toBe(0);
+    // the override was never released, so it takes effect again on restart
+    expect(ctrl.getModes().oaDamperPosition).toBe('Manual');
+  });
+
   it('fan-off still forces damper to 0 even with a manual hold', () => {
     const ctrl = loadController();
     ctrl.setValue('oaDamperPosition', 10);
@@ -469,18 +479,33 @@ describe('AHU46Controller — TMY3 weather integration', () => {
     expect(ctrl.getState().oaEnthalpy).toBeCloseTo(22.0, 1);
   });
 
-  it('oaTemperature is rejected by setValue (TMY3-driven, not operator-editable)', () => {
+  // Outdoor conditions were write-blocked until the 14 Aug lecture review, where
+  // the instructor asked to hand-set a season (winter / humid summer) and watch
+  // the unit respond. They are now operator-overridable, and the TMY3 push
+  // yields to the override instead of stamping over it every tick.
+  it('oaTemperature is settable and holds against the TMY3 push', () => {
+    const ctrl = loadController();
+    ctrl.setValue('oaTemperature', 22);
+    expect(ctrl.getModes().oaTemperature).toBe('Manual');
+    expect(ctrl.getState().oaTemperature).toBe(22);
+    ctrl.updateFromTMY3(1, 0);
+    expect(ctrl.getState().oaTemperature).toBe(22);
+  });
+
+  it('releasing oaTemperature lets the weather drive it again', () => {
     const ctrl = loadController();
     const original = ctrl.getState().oaTemperature;
-    ctrl.setValue('oaTemperature', 999);
+    ctrl.setValue('oaTemperature', 22);
+    ctrl.clearMode('oaTemperature');
     expect(ctrl.getModes().oaTemperature).toBeUndefined();
     expect(ctrl.getState().oaTemperature).toBe(original);
   });
 
-  it('oaEnthalpy is rejected by setValue', () => {
+  it('oaEnthalpy is settable', () => {
     const ctrl = loadController();
     ctrl.setValue('oaEnthalpy', 999);
-    expect(ctrl.getModes().oaEnthalpy).toBeUndefined();
+    expect(ctrl.getModes().oaEnthalpy).toBe('Manual');
+    expect(ctrl.getState().oaEnthalpy).toBe(999);
   });
 });
 
