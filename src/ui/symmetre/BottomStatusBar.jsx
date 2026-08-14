@@ -70,7 +70,7 @@ const BottomStatusBar = (function() {
       // Right: Product branding
       React.createElement('div', {
         className: 'text-gray-500 italic'
-      }, 'Honeywell SymmetrE R410.2')
+      }, 'LIFE3 SymmetrE R410.2')
     );
   }
 

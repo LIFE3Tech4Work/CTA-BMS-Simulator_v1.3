@@ -94,7 +94,7 @@ const AHU23Graphic = (() => {
           'AHU-23-1 — Air Handling Unit Schematic'
         ),
         React.createElement('div', { className: 'text-[11px] text-cyan-400 mt-0.5' },
-          'Reference: Honeywell SymmetrE R410.2 (Test/Demo)'
+          'Reference: LIFE3 SymmetrE R410.2 (Test/Demo)'
         )
       ),
 

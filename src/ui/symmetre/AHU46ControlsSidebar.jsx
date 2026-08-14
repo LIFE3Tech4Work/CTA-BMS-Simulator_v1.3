@@ -22,7 +22,8 @@ const AHU46ControlsSidebar = (() => {
 
   function SectionHeader({ title }) {
     return React.createElement('div', {
-      className: 'bg-blue-600 px-2 py-1 text-[10px] font-bold text-white uppercase tracking-wide'
+      className: 'px-2.5 py-1 text-[10px]',
+      style: (window.CTAPanel || {}).sectionStyle
     }, title);
   }
 
@@ -60,31 +61,31 @@ const AHU46ControlsSidebar = (() => {
     }
 
     if (editing) {
-      return React.createElement('div', { className: 'flex items-center justify-between px-2 py-0.5 text-[10px] text-gray-800' },
+      return React.createElement('div', { className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row' },
         React.createElement('span', { className: 'flex-1' }, label),
         React.createElement('input', {
           type: 'number', step: step || 1, min: min, max: max,
-          className: 'w-14 px-1 py-0 text-[10px] border border-blue-500 rounded bg-white text-black',
+          className: 'w-14 px-1 py-0 text-[10px] font-mono cta-box cta-box--edit',
           value: editVal,
           onChange: function(e) { setEditVal(e.target.value); },
           onKeyDown: handleKeyDown,
           onBlur: handleSubmit,
           autoFocus: true,
         }),
-        React.createElement('span', { className: 'text-[9px] text-gray-600 ml-1' }, units)
+        React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units)
       );
     }
 
     return React.createElement('div', {
-      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] text-gray-800 cursor-pointer hover:bg-blue-100',
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row cta-row--click',
       onClick: handleClick,
       title: 'Click to edit'
     },
       React.createElement('span', { className: 'flex-1' }, label),
       React.createElement('span', {
-        className: 'px-1.5 py-0 text-[10px] font-mono rounded border bg-white text-black border-gray-400'
+        className: 'px-1.5 py-0 text-[10px] font-mono cta-box'
       }, typeof value === 'number' ? value.toFixed(1) : String(value)),
-      React.createElement('span', { className: 'text-[9px] text-gray-600 ml-1' }, units)
+      React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units)
     );
   }
 
@@ -101,10 +102,10 @@ const AHU46ControlsSidebar = (() => {
 
     var display = format ? format(value) : (typeof value === 'number' ? value.toFixed(1) : String(value));
 
-    return React.createElement('div', { className: 'flex items-center justify-between px-2 py-0.5 text-[10px] text-gray-800' },
+    return React.createElement('div', { className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row' },
       React.createElement('span', { className: 'flex-1' }, label),
-      React.createElement('span', { className: 'font-mono font-bold' }, display),
-      React.createElement('span', { className: 'text-[9px] text-gray-600 ml-1' }, units)
+      React.createElement('span', { className: 'font-mono font-bold cta-val' }, display),
+      React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units)
     );
   }
 
@@ -122,13 +123,13 @@ const AHU46ControlsSidebar = (() => {
     function toggle() { if (ctrl) ctrl.setValue(stateKey, !value); }
 
     return React.createElement('div', {
-      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] text-gray-800 cursor-pointer hover:bg-blue-100',
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row cta-row--click',
       onClick: toggle,
     },
       React.createElement('span', { className: 'flex-1' }, label),
       React.createElement('span', {
         className: 'px-2 py-0 text-[10px] font-bold rounded ' +
-          (value ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700')
+          (value ? 'cta-pill cta-pill--on' : 'cta-pill cta-pill--off')
       }, value ? 'On' : 'Off')
     );
   }
@@ -147,13 +148,13 @@ const AHU46ControlsSidebar = (() => {
     function toggle() { if (ctrl) ctrl.setValue(stateKey, !value); }
 
     return React.createElement('div', {
-      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] text-gray-800 cursor-pointer hover:bg-blue-100',
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row cta-row--click',
       onClick: toggle,
     },
       React.createElement('span', { className: 'flex-1' }, label),
       React.createElement('span', {
         className: 'px-2 py-0 text-[10px] font-bold rounded ' +
-          (value ? 'bg-red-500 text-white' : 'bg-green-600 text-white')
+          (value ? 'cta-pill cta-pill--alarm' : 'cta-pill cta-pill--on')
       }, value ? 'ACTIVE' : 'NORM')
     );
   }
@@ -178,7 +179,7 @@ const AHU46ControlsSidebar = (() => {
     }
 
     return React.createElement('div', {
-      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] text-gray-800 cursor-pointer hover:bg-blue-100',
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row cta-row--click',
       onClick: cycle,
     },
       React.createElement('span', { className: 'flex-1' }, label),
@@ -199,7 +200,7 @@ const AHU46ControlsSidebar = (() => {
     if (collapsed) {
       return React.createElement('aside', {
         className: 'w-8 flex flex-col items-center pt-2 border-r border-gray-400',
-        style: { backgroundColor: '#7fb3d4' }
+        style: { background: (window.CTAPanel || {}).head || '#243247' }
       },
         React.createElement('button', {
           className: 'text-xs text-gray-700 hover:text-black', onClick: function() { setCollapsed(false); }
@@ -209,14 +210,14 @@ const AHU46ControlsSidebar = (() => {
 
     return React.createElement('aside', {
       className: 'w-full border-r border-gray-400 overflow-y-auto',
-      style: { backgroundColor: '#a8d0e6' },
+      style: { background: (window.CTAPanel || {}).panel || '#e8edf5' },
     },
       // Header
       React.createElement('div', {
         className: 'flex items-center justify-between px-2 py-1 border-b border-gray-400',
-        style: { backgroundColor: '#7fb3d4' }
+        style: { background: (window.CTAPanel || {}).head || '#243247' }
       },
-        React.createElement('span', { className: 'text-[11px] font-bold text-gray-800' }, 'Controls — AHU-4-6'),
+        React.createElement('span', { className: 'text-[11px] font-bold cta-head-title' }, 'Controls — AHU-4-6'),
         React.createElement('button', {
           className: 'text-xs text-gray-600 hover:text-black', onClick: function() { setCollapsed(true); }
         }, '◀')

@@ -1,193 +1,193 @@
-<svg id="ahu-board" viewBox="0 0 1613 878" width="100%" style="display:block;height:auto;" xmlns="http://www.w3.org/2000/svg" font-family="'Century Gothic','CenturyGothic','Jost',Futura,'Trebuchet MS',sans-serif">
+<svg id="ahu-board" viewBox="0 0 1613 878" width="100%" style="display:block;height:auto;" xmlns="http://www.w3.org/2000/svg" font-family="&#39;Century Gothic&#39;,&#39;CenturyGothic&#39;,&#39;Jost&#39;,Futura,&#39;Trebuchet MS&#39;,sans-serif">
 
   <defs>
     <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#84b6ff"/><stop offset="0.42" stop-color="#86b7fe"/><stop offset="0.57" stop-color="#a3bfee"/><stop offset="0.72" stop-color="#c2c7e4"/><stop offset="0.87" stop-color="#ccd4ea"/><stop offset="1" stop-color="#d5e2f4"/>
+      <stop offset="0" stop-color="#84b6ff"></stop><stop offset="0.42" stop-color="#86b7fe"></stop><stop offset="0.57" stop-color="#a3bfee"></stop><stop offset="0.72" stop-color="#c2c7e4"></stop><stop offset="0.87" stop-color="#ccd4ea"></stop><stop offset="1" stop-color="#d5e2f4"></stop>
     </linearGradient>
-    <linearGradient id="btn1G" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6c9cef"/><stop offset="1" stop-color="#2d67c2"/></linearGradient>
-    <linearGradient id="ductUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2e2e5"/><stop offset="1" stop-color="#c9c9cd"/></linearGradient>
-    <linearGradient id="ductLo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ededf0"/></linearGradient>
-    <linearGradient id="ductCap" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b3b3b7"/><stop offset="1" stop-color="#8e8e93"/></linearGradient>
-    <linearGradient id="riserSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a8a8ad"/><stop offset="1" stop-color="#cbcbcf"/></linearGradient>
-    <linearGradient id="riserUp" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f0f0f2"/></linearGradient>
-    <linearGradient id="riserLo" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d6d6da"/><stop offset="1" stop-color="#c0c0c5"/></linearGradient>
-    <linearGradient id="boxG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#e8e8e8"/><stop offset="1" stop-color="#c7c7c8"/></linearGradient>
-    <linearGradient id="greenG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#63e09a"/><stop offset="0.5" stop-color="#38cd7c"/><stop offset="1" stop-color="#27b166"/></linearGradient>
-    <linearGradient id="vfdG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5f9bf0"/><stop offset="1" stop-color="#1f55c0"/></linearGradient>
-    <linearGradient id="amsG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d3d556"/><stop offset="0.55" stop-color="#b0b23a"/><stop offset="1" stop-color="#94962c"/></linearGradient>
-    <linearGradient id="stemG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8f8f94"/><stop offset="0.5" stop-color="#d6d6da"/><stop offset="1" stop-color="#7e7e84"/></linearGradient>
-    <linearGradient id="goldF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f9b525"/><stop offset="1" stop-color="#e08c05"/></linearGradient>
-    <linearGradient id="oliveF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2c636"/><stop offset="1" stop-color="#96981f"/></linearGradient>
-    <linearGradient id="slateF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ea2d8"/><stop offset="1" stop-color="#6d82bd"/></linearGradient>
-    <linearGradient id="actG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#71757c"/><stop offset="1" stop-color="#393c42"/></linearGradient>
-    <linearGradient id="silverH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3f3f5"/><stop offset="0.55" stop-color="#b9b9be"/><stop offset="1" stop-color="#94949a"/></linearGradient>
-    <linearGradient id="redPL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d9645a"/><stop offset="0.5" stop-color="#b23028"/><stop offset="1" stop-color="#8c211a"/></linearGradient>
-    <linearGradient id="redPD" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a3493f"/><stop offset="0.5" stop-color="#7c231a"/><stop offset="1" stop-color="#5c130d"/></linearGradient>
-    <linearGradient id="bluePD" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a629f"/><stop offset="0.5" stop-color="#243d80"/><stop offset="1" stop-color="#16295e"/></linearGradient>
-    <linearGradient id="bluePL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8ba3e2"/><stop offset="0.5" stop-color="#4a68c0"/><stop offset="1" stop-color="#32499a"/></linearGradient>
-    <linearGradient id="bladeG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fbfbfd"/><stop offset="1" stop-color="#c6c6cb"/></linearGradient>
-    <radialGradient id="pumpG" cx="0.42" cy="0.38" r="0.75"><stop offset="0" stop-color="#d2e9bc"/><stop offset="0.55" stop-color="#95bd7c"/><stop offset="1" stop-color="#5f8c4a"/></radialGradient>
-    <radialGradient id="brassG" cx="0.4" cy="0.35" r="0.7"><stop offset="0" stop-color="#f0d97a"/><stop offset="1" stop-color="#a9851c"/></radialGradient>
-    <linearGradient id="filterG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74bb64"/><stop offset="1" stop-color="#3c7d34"/></linearGradient>
+    <linearGradient id="btn1G" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6c9cef"></stop><stop offset="1" stop-color="#2d67c2"></stop></linearGradient>
+    <linearGradient id="ductUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2e2e5"></stop><stop offset="1" stop-color="#c9c9cd"></stop></linearGradient>
+    <linearGradient id="ductLo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"></stop><stop offset="1" stop-color="#ededf0"></stop></linearGradient>
+    <linearGradient id="ductCap" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b3b3b7"></stop><stop offset="1" stop-color="#8e8e93"></stop></linearGradient>
+    <linearGradient id="riserSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a8a8ad"></stop><stop offset="1" stop-color="#cbcbcf"></stop></linearGradient>
+    <linearGradient id="riserUp" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"></stop><stop offset="1" stop-color="#f0f0f2"></stop></linearGradient>
+    <linearGradient id="riserLo" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d6d6da"></stop><stop offset="1" stop-color="#c0c0c5"></stop></linearGradient>
+    <linearGradient id="boxG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"></stop><stop offset="0.45" stop-color="#e8e8e8"></stop><stop offset="1" stop-color="#c7c7c8"></stop></linearGradient>
+    <linearGradient id="greenG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#63e09a"></stop><stop offset="0.5" stop-color="#38cd7c"></stop><stop offset="1" stop-color="#27b166"></stop></linearGradient>
+    <linearGradient id="vfdG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5f9bf0"></stop><stop offset="1" stop-color="#1f55c0"></stop></linearGradient>
+    <linearGradient id="amsG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d3d556"></stop><stop offset="0.55" stop-color="#b0b23a"></stop><stop offset="1" stop-color="#94962c"></stop></linearGradient>
+    <linearGradient id="stemG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8f8f94"></stop><stop offset="0.5" stop-color="#d6d6da"></stop><stop offset="1" stop-color="#7e7e84"></stop></linearGradient>
+    <linearGradient id="goldF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f9b525"></stop><stop offset="1" stop-color="#e08c05"></stop></linearGradient>
+    <linearGradient id="oliveF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2c636"></stop><stop offset="1" stop-color="#96981f"></stop></linearGradient>
+    <linearGradient id="slateF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ea2d8"></stop><stop offset="1" stop-color="#6d82bd"></stop></linearGradient>
+    <linearGradient id="actG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#71757c"></stop><stop offset="1" stop-color="#393c42"></stop></linearGradient>
+    <linearGradient id="silverH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3f3f5"></stop><stop offset="0.55" stop-color="#b9b9be"></stop><stop offset="1" stop-color="#94949a"></stop></linearGradient>
+    <linearGradient id="redPL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d9645a"></stop><stop offset="0.5" stop-color="#b23028"></stop><stop offset="1" stop-color="#8c211a"></stop></linearGradient>
+    <linearGradient id="redPD" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a3493f"></stop><stop offset="0.5" stop-color="#7c231a"></stop><stop offset="1" stop-color="#5c130d"></stop></linearGradient>
+    <linearGradient id="bluePD" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a629f"></stop><stop offset="0.5" stop-color="#243d80"></stop><stop offset="1" stop-color="#16295e"></stop></linearGradient>
+    <linearGradient id="bluePL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8ba3e2"></stop><stop offset="0.5" stop-color="#4a68c0"></stop><stop offset="1" stop-color="#32499a"></stop></linearGradient>
+    <linearGradient id="bladeG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fbfbfd"></stop><stop offset="1" stop-color="#c6c6cb"></stop></linearGradient>
+    <radialGradient id="pumpG" cx="0.42" cy="0.38" r="0.75"><stop offset="0" stop-color="#d2e9bc"></stop><stop offset="0.55" stop-color="#95bd7c"></stop><stop offset="1" stop-color="#5f8c4a"></stop></radialGradient>
+    <radialGradient id="brassG" cx="0.4" cy="0.35" r="0.7"><stop offset="0" stop-color="#f0d97a"></stop><stop offset="1" stop-color="#a9851c"></stop></radialGradient>
+    <linearGradient id="filterG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74bb64"></stop><stop offset="1" stop-color="#3c7d34"></stop></linearGradient>
 
-    <pattern id="pTopHatch" width="4.5" height="4.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4.5" stroke="#d4d4d8" stroke-width="1.1"/></pattern>
-    <pattern id="pMotor" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(40)"><rect width="6" height="6" fill="#26262a"/><line x1="0" y1="0" x2="0" y2="6" stroke="#3d3d44" stroke-width="1.8"/></pattern>
-    <pattern id="pOliveStr" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="1" y1="0" x2="1" y2="7" stroke="#6f7024" stroke-width="1.6"/></pattern>
-    <pattern id="pXgreen" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0 L8 8 M8 0 L0 8" stroke="#1e5219" stroke-width="1.1" opacity="0.7"/></pattern>
-    <pattern id="pCoilRed" width="9" height="7" patternUnits="userSpaceOnUse"><circle cx="6.4" cy="4.2" r="2.9" fill="none" stroke="#e0a89f" stroke-width="1.6"/><circle cx="4.2" cy="3.5" r="3" fill="none" stroke="#b23028" stroke-width="1.7"/></pattern>
-    <pattern id="pCoilBlue" width="9" height="7" patternUnits="userSpaceOnUse"><circle cx="6.4" cy="4.2" r="2.9" fill="none" stroke="#a4b6e2" stroke-width="1.6"/><circle cx="4.2" cy="3.5" r="3" fill="none" stroke="#33509e" stroke-width="1.7"/></pattern>
-    <pattern id="pSideRed" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#8c2119"/><line x1="0" y1="0" x2="0" y2="6" stroke="#a84139" stroke-width="1.6"/></pattern>
-    <pattern id="pSideBlue" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#22397c"/><line x1="0" y1="0" x2="0" y2="6" stroke="#3d569e" stroke-width="1.6"/></pattern>
+    <pattern id="pTopHatch" width="4.5" height="4.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4.5" stroke="#d4d4d8" stroke-width="1.1"></line></pattern>
+    <pattern id="pMotor" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(40)"><rect width="6" height="6" fill="#26262a"></rect><line x1="0" y1="0" x2="0" y2="6" stroke="#3d3d44" stroke-width="1.8"></line></pattern>
+    <pattern id="pOliveStr" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="1" y1="0" x2="1" y2="7" stroke="#6f7024" stroke-width="1.6"></line></pattern>
+    <pattern id="pXgreen" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0 L8 8 M8 0 L0 8" stroke="#1e5219" stroke-width="1.1" opacity="0.7"></path></pattern>
+    <pattern id="pCoilRed" width="9" height="7" patternUnits="userSpaceOnUse"><circle cx="6.4" cy="4.2" r="2.9" fill="none" stroke="#e0a89f" stroke-width="1.6"></circle><circle cx="4.2" cy="3.5" r="3" fill="none" stroke="#b23028" stroke-width="1.7"></circle></pattern>
+    <pattern id="pCoilBlue" width="9" height="7" patternUnits="userSpaceOnUse"><circle cx="6.4" cy="4.2" r="2.9" fill="none" stroke="#a4b6e2" stroke-width="1.6"></circle><circle cx="4.2" cy="3.5" r="3" fill="none" stroke="#33509e" stroke-width="1.7"></circle></pattern>
+    <pattern id="pSideRed" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#8c2119"></rect><line x1="0" y1="0" x2="0" y2="6" stroke="#a84139" stroke-width="1.6"></line></pattern>
+    <pattern id="pSideBlue" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#22397c"></rect><line x1="0" y1="0" x2="0" y2="6" stroke="#3d569e" stroke-width="1.6"></line></pattern>
 
     <g id="damperH">
-      <polygon points="2,24 2,6 9,-6 9,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
-      <polygon points="10,24 10,6 17,-6 17,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
-      <polygon points="18,24 18,6 25,-6 25,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
-      <polygon points="26,24 26,6 33,-6 33,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
+      <polygon points="2,24 2,6 9,-6 9,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
+      <polygon points="10,24 10,6 17,-6 17,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
+      <polygon points="18,24 18,6 25,-6 25,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
+      <polygon points="26,24 26,6 33,-6 33,12" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
     </g>
     <g id="damperV">
-      <polygon points="2,40 2,12 11,0 11,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
-      <polygon points="11,40 11,12 20,0 20,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
-      <polygon points="20,40 20,12 29,0 29,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
-      <polygon points="29,40 29,12 38,0 38,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"/>
+      <polygon points="2,40 2,12 11,0 11,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
+      <polygon points="11,40 11,12 20,0 20,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
+      <polygon points="20,40 20,12 29,0 29,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
+      <polygon points="29,40 29,12 38,0 38,28" fill="url(#bladeG)" stroke="#1c1c1f" stroke-width="1.2"></polygon>
     </g>
 
     <g id="cubeGold">
-      <rect x="-2.5" y="-12" width="5" height="44" fill="url(#stemG)" stroke="#2a2a2e" stroke-width="0.9"/>
-      <ellipse cx="0" cy="32" rx="2.5" ry="1.5" fill="#5f5f64"/>
-      <polygon points="-9,-26 -3,-33 15,-33 9,-26" fill="#ffd34d" stroke="#26262a" stroke-width="1.1"/>
-      <polygon points="9,-26 15,-33 15,-19 9,-12" fill="#b97a06" stroke="#26262a" stroke-width="1.1"/>
-      <rect x="-9" y="-26" width="18" height="14" fill="url(#goldF)" stroke="#26262a" stroke-width="1.1"/>
+      <rect x="-2.5" y="-12" width="5" height="44" fill="url(#stemG)" stroke="#2a2a2e" stroke-width="0.9"></rect>
+      <ellipse cx="0" cy="32" rx="2.5" ry="1.5" fill="#5f5f64"></ellipse>
+      <polygon points="-9,-26 -3,-33 15,-33 9,-26" fill="#ffd34d" stroke="#26262a" stroke-width="1.1"></polygon>
+      <polygon points="9,-26 15,-33 15,-19 9,-12" fill="#b97a06" stroke="#26262a" stroke-width="1.1"></polygon>
+      <rect x="-9" y="-26" width="18" height="14" fill="url(#goldF)" stroke="#26262a" stroke-width="1.1"></rect>
     </g>
     <g id="cubeOlive">
-      <rect x="-2.5" y="-12" width="5" height="44" fill="url(#stemG)" stroke="#2a2a2e" stroke-width="0.9"/>
-      <ellipse cx="0" cy="32" rx="2.5" ry="1.5" fill="#5f5f64"/>
-      <polygon points="-9,-26 -3,-33 15,-33 9,-26" fill="#e0e34f" stroke="#26262a" stroke-width="1.1"/>
-      <polygon points="9,-26 15,-33 15,-19 9,-12" fill="#7f8119" stroke="#26262a" stroke-width="1.1"/>
-      <rect x="-9" y="-26" width="18" height="14" fill="url(#oliveF)" stroke="#26262a" stroke-width="1.1"/>
+      <rect x="-2.5" y="-12" width="5" height="44" fill="url(#stemG)" stroke="#2a2a2e" stroke-width="0.9"></rect>
+      <ellipse cx="0" cy="32" rx="2.5" ry="1.5" fill="#5f5f64"></ellipse>
+      <polygon points="-9,-26 -3,-33 15,-33 9,-26" fill="#e0e34f" stroke="#26262a" stroke-width="1.1"></polygon>
+      <polygon points="9,-26 15,-33 15,-19 9,-12" fill="#7f8119" stroke="#26262a" stroke-width="1.1"></polygon>
+      <rect x="-9" y="-26" width="18" height="14" fill="url(#oliveF)" stroke="#26262a" stroke-width="1.1"></rect>
     </g>
     <g id="cubeSlate">
-      <rect x="-2.5" y="-12" width="5" height="44" fill="url(#stemG)" stroke="#2a2a2e" stroke-width="0.9"/>
-      <ellipse cx="0" cy="32" rx="2.5" ry="1.5" fill="#5f5f64"/>
-      <polygon points="-9,-26 -3,-33 15,-33 9,-26" fill="#c6d2ec" stroke="#26262a" stroke-width="1.1"/>
-      <polygon points="9,-26 15,-33 15,-19 9,-12" fill="#5566a8" stroke="#26262a" stroke-width="1.1"/>
-      <rect x="-9" y="-26" width="18" height="14" fill="url(#slateF)" stroke="#26262a" stroke-width="1.1"/>
+      <rect x="-2.5" y="-12" width="5" height="44" fill="url(#stemG)" stroke="#2a2a2e" stroke-width="0.9"></rect>
+      <ellipse cx="0" cy="32" rx="2.5" ry="1.5" fill="#5f5f64"></ellipse>
+      <polygon points="-9,-26 -3,-33 15,-33 9,-26" fill="#c6d2ec" stroke="#26262a" stroke-width="1.1"></polygon>
+      <polygon points="9,-26 15,-33 15,-19 9,-12" fill="#5566a8" stroke="#26262a" stroke-width="1.1"></polygon>
+      <rect x="-9" y="-26" width="18" height="14" fill="url(#slateF)" stroke="#26262a" stroke-width="1.1"></rect>
     </g>
 
     <g id="oliveAF">
-      <polygon points="-10,-14 -4,-21 16,-21 10,-14" fill="#d9dc55" stroke="#4c4c16" stroke-width="1.1"/>
-      <polygon points="10,-14 16,-21 16,19 10,26" fill="#7f8119" stroke="#4c4c16" stroke-width="1.1"/>
-      <rect x="-10" y="-14" width="20" height="40" fill="url(#amsG)" stroke="#4c4c16" stroke-width="1.1"/>
-      <rect x="-10" y="-14" width="20" height="40" fill="url(#pOliveStr)"/>
+      <polygon points="-10,-14 -4,-21 16,-21 10,-14" fill="#d9dc55" stroke="#4c4c16" stroke-width="1.1"></polygon>
+      <polygon points="10,-14 16,-21 16,19 10,26" fill="#7f8119" stroke="#4c4c16" stroke-width="1.1"></polygon>
+      <rect x="-10" y="-14" width="20" height="40" fill="url(#amsG)" stroke="#4c4c16" stroke-width="1.1"></rect>
+      <rect x="-10" y="-14" width="20" height="40" fill="url(#pOliveStr)"></rect>
       <g font-size="7" font-weight="700" fill="#fdfde8" text-anchor="middle">
         <text x="-5" y="-4">A</text><text x="-5" y="4">M</text><text x="-5" y="12">S</text>
       </g>
     </g>
 
     <g id="jbox">
-      <rect x="11" y="-13" width="6" height="7" fill="#8a8a8e" stroke="#4a4a4e" stroke-width="0.8"/>
-      <ellipse cx="14" cy="-13" rx="3.4" ry="1.7" fill="#c9c9cc" stroke="#4a4a4e" stroke-width="0.7"/>
-      <polygon points="0,0 7,-7 29,-7 22,0" fill="#d9dc55" stroke="#3c3c12" stroke-width="1.2"/>
-      <polygon points="22,0 29,-7 29,15 22,22" fill="#7f8119" stroke="#3c3c12" stroke-width="1.2"/>
-      <rect x="0" y="0" width="22" height="22" fill="url(#amsG)" stroke="#3c3c12" stroke-width="1.2"/>
-      <rect x="5" y="5" width="12" height="12" fill="#2e2e12" stroke="#1e1e0c" stroke-width="0.8"/>
-      <rect x="7.5" y="7.5" width="7" height="7" fill="#8a8a8e" stroke="#3a3a3e" stroke-width="0.8"/>
+      <rect x="11" y="-13" width="6" height="7" fill="#8a8a8e" stroke="#4a4a4e" stroke-width="0.8"></rect>
+      <ellipse cx="14" cy="-13" rx="3.4" ry="1.7" fill="#c9c9cc" stroke="#4a4a4e" stroke-width="0.7"></ellipse>
+      <polygon points="0,0 7,-7 29,-7 22,0" fill="#d9dc55" stroke="#3c3c12" stroke-width="1.2"></polygon>
+      <polygon points="22,0 29,-7 29,15 22,22" fill="#7f8119" stroke="#3c3c12" stroke-width="1.2"></polygon>
+      <rect x="0" y="0" width="22" height="22" fill="url(#amsG)" stroke="#3c3c12" stroke-width="1.2"></rect>
+      <rect x="5" y="5" width="12" height="12" fill="#2e2e12" stroke="#1e1e0c" stroke-width="0.8"></rect>
+      <rect x="7.5" y="7.5" width="7" height="7" fill="#8a8a8e" stroke="#3a3a3e" stroke-width="0.8"></rect>
     </g>
 
     <g id="valveAct">
-      <polygon points="-26,-9 -21,-14 -5,-14 -10,-9" fill="#9a9ea6" stroke="#17181c" stroke-width="1"/>
-      <polygon points="-10,-9 -5,-14 -5,2 -10,7" fill="#2e3136" stroke="#17181c" stroke-width="1"/>
-      <rect x="-26" y="-9" width="16" height="16" fill="url(#actG)" stroke="#17181c" stroke-width="1"/>
-      <rect x="-23" y="-6" width="10" height="4" fill="#8f939b"/>
-      <rect x="-10" y="-2.5" width="7" height="5" fill="#d8c11f" stroke="#6b5c07" stroke-width="0.8"/>
-      <rect x="-2" y="-8" width="4" height="16" fill="#8a6d10"/>
-      <ellipse cx="0" cy="-5" rx="8" ry="3.4" fill="url(#brassG)" stroke="#6b5407" stroke-width="1"/>
-      <ellipse cx="0" cy="0" rx="8" ry="3.4" fill="url(#brassG)" stroke="#6b5407" stroke-width="1"/>
-      <ellipse cx="0" cy="5" rx="8" ry="3.4" fill="url(#brassG)" stroke="#6b5407" stroke-width="1"/>
+      <polygon points="-26,-9 -21,-14 -5,-14 -10,-9" fill="#9a9ea6" stroke="#17181c" stroke-width="1"></polygon>
+      <polygon points="-10,-9 -5,-14 -5,2 -10,7" fill="#2e3136" stroke="#17181c" stroke-width="1"></polygon>
+      <rect x="-26" y="-9" width="16" height="16" fill="url(#actG)" stroke="#17181c" stroke-width="1"></rect>
+      <rect x="-23" y="-6" width="10" height="4" fill="#8f939b"></rect>
+      <rect x="-10" y="-2.5" width="7" height="5" fill="#d8c11f" stroke="#6b5c07" stroke-width="0.8"></rect>
+      <rect x="-2" y="-8" width="4" height="16" fill="#8a6d10"></rect>
+      <ellipse cx="0" cy="-5" rx="8" ry="3.4" fill="url(#brassG)" stroke="#6b5407" stroke-width="1"></ellipse>
+      <ellipse cx="0" cy="0" rx="8" ry="3.4" fill="url(#brassG)" stroke="#6b5407" stroke-width="1"></ellipse>
+      <ellipse cx="0" cy="5" rx="8" ry="3.4" fill="url(#brassG)" stroke="#6b5407" stroke-width="1"></ellipse>
     </g>
 
     <g id="filterUnit">
-      <path d="M-17 -12 V-27 Q-17 -32 -12 -32 H12 Q17 -32 17 -27 V-12" fill="none" stroke="#202024" stroke-width="4.5" stroke-linecap="round"/>
-      <use href="#jbox" transform="translate(-9,-50) scale(0.82)"/>
-      <polygon points="-9,-8 -3,-15 15,-15 9,-8" fill="#8cc97e" stroke="#1d4a19" stroke-width="1.2"/>
-      <polygon points="9,-8 15,-15 15,35 9,42" fill="#2f6829" stroke="#1d4a19" stroke-width="1.2"/>
-      <rect x="-9" y="-8" width="18" height="50" fill="url(#filterG)" stroke="#1d4a19" stroke-width="1.2"/>
-      <rect x="-9" y="-8" width="18" height="50" fill="url(#pXgreen)"/>
+      <path d="M-17 -12 V-27 Q-17 -32 -12 -32 H12 Q17 -32 17 -27 V-12" fill="none" stroke="#202024" stroke-width="4.5" stroke-linecap="round"></path>
+      <use href="#jbox" transform="translate(-9,-50) scale(0.82)"></use>
+      <polygon points="-9,-8 -3,-15 15,-15 9,-8" fill="#8cc97e" stroke="#1d4a19" stroke-width="1.2"></polygon>
+      <polygon points="9,-8 15,-15 15,35 9,42" fill="#2f6829" stroke="#1d4a19" stroke-width="1.2"></polygon>
+      <rect x="-9" y="-8" width="18" height="50" fill="url(#filterG)" stroke="#1d4a19" stroke-width="1.2"></rect>
+      <rect x="-9" y="-8" width="18" height="50" fill="url(#pXgreen)"></rect>
     </g>
 
     <g id="coilR">
-      <polygon points="-20,-26 -12,-34 28,-34 20,-26" fill="#fbfbfd" stroke="#26262b" stroke-width="1.4"/>
-      <polygon points="20,-26 28,-34 28,36 20,44" fill="url(#pSideRed)" stroke="#26262b" stroke-width="1.4"/>
-      <rect x="-20" y="-26" width="40" height="70" fill="#fdfdfe" stroke="#26262b" stroke-width="1.4"/>
-      <rect x="-19" y="-25" width="38" height="68" fill="url(#pCoilRed)"/>
-      <rect x="-14" y="44" width="8" height="40" fill="url(#redPL)" stroke="#1c0c09" stroke-width="1"/>
-      <rect x="6" y="44" width="8" height="40" fill="url(#redPD)" stroke="#1c0c09" stroke-width="1"/>
+      <polygon points="-20,-26 -12,-34 28,-34 20,-26" fill="#fbfbfd" stroke="#26262b" stroke-width="1.4"></polygon>
+      <polygon points="20,-26 28,-34 28,36 20,44" fill="url(#pSideRed)" stroke="#26262b" stroke-width="1.4"></polygon>
+      <rect x="-20" y="-26" width="40" height="70" fill="#fdfdfe" stroke="#26262b" stroke-width="1.4"></rect>
+      <rect x="-19" y="-25" width="38" height="68" fill="url(#pCoilRed)"></rect>
+      <rect x="-14" y="44" width="8" height="40" fill="url(#redPL)" stroke="#1c0c09" stroke-width="1"></rect>
+      <rect x="6" y="44" width="8" height="40" fill="url(#redPD)" stroke="#1c0c09" stroke-width="1"></rect>
     </g>
     <g id="coilB">
-      <polygon points="-20,-26 -12,-34 28,-34 20,-26" fill="#fbfbfd" stroke="#26262b" stroke-width="1.4"/>
-      <polygon points="20,-26 28,-34 28,36 20,44" fill="url(#pSideBlue)" stroke="#26262b" stroke-width="1.4"/>
-      <rect x="-20" y="-26" width="40" height="70" fill="#fdfdfe" stroke="#26262b" stroke-width="1.4"/>
-      <rect x="-19" y="-25" width="38" height="68" fill="url(#pCoilBlue)"/>
-      <rect x="-14" y="44" width="8" height="40" fill="url(#bluePD)" stroke="#0c1229" stroke-width="1"/>
-      <rect x="6" y="44" width="8" height="40" fill="url(#bluePL)" stroke="#0c1229" stroke-width="1"/>
+      <polygon points="-20,-26 -12,-34 28,-34 20,-26" fill="#fbfbfd" stroke="#26262b" stroke-width="1.4"></polygon>
+      <polygon points="20,-26 28,-34 28,36 20,44" fill="url(#pSideBlue)" stroke="#26262b" stroke-width="1.4"></polygon>
+      <rect x="-20" y="-26" width="40" height="70" fill="#fdfdfe" stroke="#26262b" stroke-width="1.4"></rect>
+      <rect x="-19" y="-25" width="38" height="68" fill="url(#pCoilBlue)"></rect>
+      <rect x="-14" y="44" width="8" height="40" fill="url(#bluePD)" stroke="#0c1229" stroke-width="1"></rect>
+      <rect x="6" y="44" width="8" height="40" fill="url(#bluePL)" stroke="#0c1229" stroke-width="1"></rect>
     </g>
 
     <g id="sqig">
-      <path d="M2,1 C-6,11 8,16 1,27 C-6,38 6,43 -1,52" fill="none" stroke="#8f8f94" stroke-width="3.2" stroke-linecap="round"/>
-      <path d="M0,0 C-8,10 6,15 -1,26 C-8,37 4,42 -3,51" fill="none" stroke="#1a1a1e" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M2,1 C-6,11 8,16 1,27 C-6,38 6,43 -1,52" fill="none" stroke="#8f8f94" stroke-width="3.2" stroke-linecap="round"></path>
+      <path d="M0,0 C-8,10 6,15 -1,26 C-8,37 4,42 -3,51" fill="none" stroke="#1a1a1e" stroke-width="3.2" stroke-linecap="round"></path>
     </g>
 
     <g id="pump">
-      <rect x="-36" y="-11" width="22" height="7" fill="#7a2417" stroke="#160604" stroke-width="1.1"/>
-      <path d="M-33,-15 L-25,0 M-25,-15 L-33,0" stroke="#101012" stroke-width="3" stroke-linecap="round"/>
-      <rect x="10" y="-3" width="24" height="7" fill="#7a2417" stroke="#160604" stroke-width="1.1"/>
-      <path d="M27,-8 L34,7 M34,-8 L27,7" stroke="#101012" stroke-width="3" stroke-linecap="round"/>
-      <path d="M-17,-4 C-17,-16 1,-19 4,-9" fill="none" stroke="#253d1c" stroke-width="8" stroke-linecap="round"/>
-      <path d="M-17,-4 C-17,-15 0,-18 3,-9" fill="none" stroke="#8fb478" stroke-width="5" stroke-linecap="round"/>
-      <circle cx="0" cy="0" r="13" fill="url(#pumpG)" stroke="#253d1c" stroke-width="1.4"/>
-      <circle cx="-0.5" cy="0.5" r="8.5" fill="none" stroke="#3c5e2f" stroke-width="2" opacity="0.75"/>
-      <circle cx="-1" cy="1" r="4" fill="#42632f" stroke="#253d1c" stroke-width="1.2"/>
+      <rect x="-36" y="-11" width="22" height="7" fill="#7a2417" stroke="#160604" stroke-width="1.1"></rect>
+      <path d="M-33,-15 L-25,0 M-25,-15 L-33,0" stroke="#101012" stroke-width="3" stroke-linecap="round"></path>
+      <rect x="10" y="-3" width="24" height="7" fill="#7a2417" stroke="#160604" stroke-width="1.1"></rect>
+      <path d="M27,-8 L34,7 M34,-8 L27,7" stroke="#101012" stroke-width="3" stroke-linecap="round"></path>
+      <path d="M-17,-4 C-17,-16 1,-19 4,-9" fill="none" stroke="#253d1c" stroke-width="8" stroke-linecap="round"></path>
+      <path d="M-17,-4 C-17,-15 0,-18 3,-9" fill="none" stroke="#8fb478" stroke-width="5" stroke-linecap="round"></path>
+      <circle cx="0" cy="0" r="13" fill="url(#pumpG)" stroke="#253d1c" stroke-width="1.4"></circle>
+      <circle cx="-0.5" cy="0.5" r="8.5" fill="none" stroke="#3c5e2f" stroke-width="2" opacity="0.75"></circle>
+      <circle cx="-1" cy="1" r="4" fill="#42632f" stroke="#253d1c" stroke-width="1.2"></circle>
     </g>
 
     <g id="dpSensor">
-      <rect x="-1.5" y="-12" width="3" height="42" fill="#1a1a1c"/>
-      <ellipse cx="0" cy="30" rx="2.2" ry="1.5" fill="#1a1a1c"/>
-      <path d="M0 -12 V-22 Q0 -27 5 -27 H10" fill="none" stroke="#202024" stroke-width="4.2" stroke-linecap="round"/>
-      <path d="M26,-30 V-40 Q26,-45 31,-45 H34 Q39,-45 39,-40 V-30" fill="none" stroke="#202024" stroke-width="4.2" stroke-linecap="round"/>
-      <use href="#jbox" transform="translate(10,-36) scale(0.72)"/>
+      <rect x="-1.5" y="-12" width="3" height="42" fill="#1a1a1c"></rect>
+      <ellipse cx="0" cy="30" rx="2.2" ry="1.5" fill="#1a1a1c"></ellipse>
+      <path d="M0 -12 V-22 Q0 -27 5 -27 H10" fill="none" stroke="#202024" stroke-width="4.2" stroke-linecap="round"></path>
+      <path d="M26,-30 V-40 Q26,-45 31,-45 H34 Q39,-45 39,-40 V-30" fill="none" stroke="#202024" stroke-width="4.2" stroke-linecap="round"></path>
+      <use href="#jbox" transform="translate(10,-36) scale(0.72)"></use>
     </g>
 
     <g id="fanGear">
-      <path d="M-64,-5 A12,12 0 0,0 -64,19" fill="none" stroke="#3a7bd5" stroke-width="3.2" stroke-linecap="round"/>
-      <path d="M-39,4 V-25 Q-39,-30 -34,-30 H-14" fill="none" stroke="#1f1f24" stroke-width="4.5"/>
-      <path d="M-6,-55 H-12 Q-17,-55 -17,-49 V-44" fill="none" stroke="#1f1f24" stroke-width="4.5"/>
-      <path d="M12,-55 H40 Q45,-55 45,-50 V-6" fill="none" stroke="#1f1f24" stroke-width="4.5"/>
-      <use href="#jbox" transform="translate(-14,-40) scale(0.8)"/>
-      <use href="#jbox" transform="translate(-6,-64) scale(0.8)"/>
-      <polygon points="-34,-3 -26,-11 22,-11 14,-3" fill="#4d4d54" stroke="#0c0c0e" stroke-width="1.2"/>
-      <rect x="-34" y="-3" width="48" height="29" fill="url(#pMotor)" stroke="#0c0c0e" stroke-width="1.2"/>
-      <polygon points="-34,-3 -26,-11 -26,18 -34,26" fill="url(#amsG)" stroke="#3c3c12" stroke-width="1"/>
+      <path d="M-64,-5 A12,12 0 0,0 -64,19" fill="none" stroke="#3a7bd5" stroke-width="3.2" stroke-linecap="round"></path>
+      <path d="M-39,4 V-25 Q-39,-30 -34,-30 H-14" fill="none" stroke="#1f1f24" stroke-width="4.5"></path>
+      <path d="M-6,-55 H-12 Q-17,-55 -17,-49 V-44" fill="none" stroke="#1f1f24" stroke-width="4.5"></path>
+      <path d="M12,-55 H40 Q45,-55 45,-50 V-6" fill="none" stroke="#1f1f24" stroke-width="4.5"></path>
+      <use href="#jbox" transform="translate(-14,-40) scale(0.8)"></use>
+      <use href="#jbox" transform="translate(-6,-64) scale(0.8)"></use>
+      <polygon points="-34,-3 -26,-11 22,-11 14,-3" fill="#4d4d54" stroke="#0c0c0e" stroke-width="1.2"></polygon>
+      <rect x="-34" y="-3" width="48" height="29" fill="url(#pMotor)" stroke="#0c0c0e" stroke-width="1.2"></rect>
+      <polygon points="-34,-3 -26,-11 -26,18 -34,26" fill="url(#amsG)" stroke="#3c3c12" stroke-width="1"></polygon>
       <g font-size="6.5" font-weight="700" fill="#fdfde8" text-anchor="middle"><text x="-30" y="3">A</text><text x="-30" y="10">M</text><text x="-30" y="17">S</text></g>
-      <rect x="3" y="0.5" width="28" height="25" fill="url(#silverH)" stroke="#5a5a60" stroke-width="1"/>
-      <ellipse cx="31" cy="13" rx="5" ry="12.5" fill="url(#silverH)" stroke="#5a5a60" stroke-width="1"/>
-      <circle cx="3" cy="13" r="12.7" fill="#c9c9cd" stroke="#3f3f45" stroke-width="1.3"/>
-      <circle cx="3" cy="13" r="9.6" fill="#f2f2f4" stroke="#8e8e94" stroke-width="0.8"/>
-      <circle cx="3" cy="6.7" r="1.7" fill="#9a9aa0"/><circle cx="7.5" cy="8.4" r="1.7" fill="#9a9aa0"/><circle cx="9.3" cy="13" r="1.7" fill="#9a9aa0"/><circle cx="7.5" cy="17.6" r="1.7" fill="#9a9aa0"/><circle cx="3" cy="19.3" r="1.7" fill="#9a9aa0"/><circle cx="-1.5" cy="17.6" r="1.7" fill="#9a9aa0"/><circle cx="-3.3" cy="13" r="1.7" fill="#9a9aa0"/><circle cx="-1.5" cy="8.4" r="1.7" fill="#9a9aa0"/>
-      <circle cx="3" cy="13" r="2.6" fill="#8e8e94"/>
-      <path d="M6,1.5 H28" stroke="#ffffff" stroke-width="1.6" opacity="0.8"/>
-      <polygon points="17,24 9,28 17,31" fill="#1f55c0"/>
-      <rect x="16" y="21" width="38" height="15" rx="7.5" fill="url(#vfdG)" stroke="#0d2f6e" stroke-width="1.2"/>
+      <rect x="3" y="0.5" width="28" height="25" fill="url(#silverH)" stroke="#5a5a60" stroke-width="1"></rect>
+      <ellipse cx="31" cy="13" rx="5" ry="12.5" fill="url(#silverH)" stroke="#5a5a60" stroke-width="1"></ellipse>
+      <circle cx="3" cy="13" r="12.7" fill="#c9c9cd" stroke="#3f3f45" stroke-width="1.3"></circle>
+      <circle cx="3" cy="13" r="9.6" fill="#f2f2f4" stroke="#8e8e94" stroke-width="0.8"></circle>
+      <circle cx="3" cy="6.7" r="1.7" fill="#9a9aa0"></circle><circle cx="7.5" cy="8.4" r="1.7" fill="#9a9aa0"></circle><circle cx="9.3" cy="13" r="1.7" fill="#9a9aa0"></circle><circle cx="7.5" cy="17.6" r="1.7" fill="#9a9aa0"></circle><circle cx="3" cy="19.3" r="1.7" fill="#9a9aa0"></circle><circle cx="-1.5" cy="17.6" r="1.7" fill="#9a9aa0"></circle><circle cx="-3.3" cy="13" r="1.7" fill="#9a9aa0"></circle><circle cx="-1.5" cy="8.4" r="1.7" fill="#9a9aa0"></circle>
+      <circle cx="3" cy="13" r="2.6" fill="#8e8e94"></circle>
+      <path d="M6,1.5 H28" stroke="#ffffff" stroke-width="1.6" opacity="0.8"></path>
+      <polygon points="17,24 9,28 17,31" fill="#1f55c0"></polygon>
+      <rect x="16" y="21" width="38" height="15" rx="7.5" fill="url(#vfdG)" stroke="#0d2f6e" stroke-width="1.2"></rect>
       <text x="35" y="32.5" font-size="11.5" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">VFD</text>
     </g>
 
     <g id="alarmCards" font-size="14" font-weight="700" text-anchor="middle" fill="#94a6bf">
-      <rect x="22" y="0" width="182" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
-      <rect x="12" y="14" width="202" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
-      <rect x="4" y="28" width="218" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
-      <rect x="0" y="42" width="110" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
-      <rect x="114" y="42" width="112" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
-      <rect x="0" y="56" width="110" height="34" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
-      <rect x="114" y="56" width="112" height="34" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
+      <rect x="22" y="0" width="182" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
+      <rect x="12" y="14" width="202" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
+      <rect x="4" y="28" width="218" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
+      <rect x="0" y="42" width="110" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
+      <rect x="114" y="42" width="112" height="30" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
+      <rect x="0" y="56" width="110" height="34" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
+      <rect x="114" y="56" width="112" height="34" rx="12" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
       <text x="113" y="20">INTERLOCK TAMPER</text>
       <text x="113" y="34">INTERLOCK FAIL</text>
       <text x="113" y="48">FAIL</text>
@@ -196,51 +196,51 @@
     </g>
 
     <g id="greenBlk" text-anchor="middle" fill="#ffffff" font-weight="800">
-      <rect x="0" y="0" width="222" height="78" rx="14" fill="url(#greenG)" stroke="#8fe6b6" stroke-width="1.4"/>
-      <rect x="52" y="-10" width="118" height="24" rx="10" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
+      <rect x="0" y="0" width="222" height="78" rx="14" fill="url(#greenG)" stroke="#8fe6b6" stroke-width="1.4"></rect>
+      <rect x="52" y="-10" width="118" height="24" rx="10" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
       <text x="111" y="7" font-size="15.5">SHUTDOWN</text>
-      <rect x="62" y="12" width="98" height="22" rx="9" fill="none" stroke="#cfe4fa" stroke-width="1.5" opacity="0.85"/>
+      <rect x="62" y="12" width="98" height="22" rx="9" fill="none" stroke="#cfe4fa" stroke-width="1.5" opacity="0.85"></rect>
       <text x="111" y="29" font-size="15">START</text>
       <text x="111" y="58" font-size="33">ON</text>
       <text x="111" y="73.5" font-size="14.5">INTERLOCK ON</text>
     </g>
 
-    <g id="arrow"><rect x="0" y="-2.6" width="34" height="5.2" fill="#4d4f52"/><polygon points="34,-8 50,0 34,8" fill="#4d4f52"/></g>
+    <g id="arrow"><rect x="0" y="-2.6" width="34" height="5.2" fill="#4d4f52"></rect><polygon points="34,-8 50,0 34,8" fill="#4d4f52"></polygon></g>
   </defs>
 
-  <rect x="0" y="0" width="1613" height="878" fill="url(#bgGrad)"/>
+  <rect x="0" y="0" width="1613" height="878" fill="url(#bgGrad)"></rect>
 
   <g id="toolbar">
-    <rect x="0" y="0" width="769" height="60" fill="#58718c"/>
-    <rect x="0" y="59" width="769" height="2.5" fill="#a8ccfa"/>
-    <rect x="30" y="2" width="103" height="55" fill="url(#btn1G)" stroke="#1d4a94" stroke-width="1.4"/>
-    <path d="M81.5,14 C88,24 92,29 92,33.5 a10.5,10.5 0 0 1 -21,0 C71,29 75,24 81.5,14 Z" fill="#14307a" stroke="#7ea6ea" stroke-width="1.4"/>
-    <rect x="157" y="2" width="103" height="55" fill="#4c95fc" stroke="#2f6fd0" stroke-width="1.4"/>
-    <g transform="translate(208.5,29.5) scale(1.35)" fill="#1d50d8" stroke="#cfe0fd" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><circle cx="0" cy="0" r="2.2" fill="#cfe0fd" stroke="none"/></g>
-    <rect x="284" y="2" width="103" height="55" fill="#94b394" stroke="#6f8c6a" stroke-width="1.4"/>
-    <g transform="translate(335.5,29.5) scale(1.35)" fill="#4e6f48" stroke="#dfeadb" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><circle cx="0" cy="0" r="2.2" fill="#dfeadb" stroke="none"/></g>
-    <rect x="411" y="2" width="103" height="55" fill="#9c8d52" stroke="#776830" stroke-width="1.4"/>
-    <g transform="translate(462.5,29.5) scale(1.35)" fill="#5d4c1f" stroke="#e8dfc2" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><circle cx="0" cy="0" r="2.2" fill="#e8dfc2" stroke="none"/></g>
-    <rect x="538" y="2" width="103" height="55" fill="#315682" stroke="#22405f" stroke-width="1.4"/>
-    <g transform="translate(589.5,29.5) scale(1.35)" fill="#16243f" stroke="#b6c6dd" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"/><circle cx="0" cy="0" r="2.2" fill="#b6c6dd" stroke="none"/></g>
-    <rect x="665" y="2" width="103" height="55" fill="#2e69b5" stroke="#23538f" stroke-width="1.4"/>
+    <rect x="0" y="0" width="769" height="60" fill="#58718c"></rect>
+    <rect x="0" y="59" width="769" height="2.5" fill="#a8ccfa"></rect>
+    <rect x="30" y="2" width="103" height="55" fill="url(#btn1G)" stroke="#1d4a94" stroke-width="1.4"></rect>
+    <path d="M81.5,14 C88,24 92,29 92,33.5 a10.5,10.5 0 0 1 -21,0 C71,29 75,24 81.5,14 Z" fill="#14307a" stroke="#7ea6ea" stroke-width="1.4"></path>
+    <rect x="157" y="2" width="103" height="55" fill="#4c95fc" stroke="#2f6fd0" stroke-width="1.4"></rect>
+    <g transform="translate(208.5,29.5) scale(1.35)" fill="#1d50d8" stroke="#cfe0fd" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><circle cx="0" cy="0" r="2.2" fill="#cfe0fd" stroke="none"></circle></g>
+    <rect x="284" y="2" width="103" height="55" fill="#94b394" stroke="#6f8c6a" stroke-width="1.4"></rect>
+    <g transform="translate(335.5,29.5) scale(1.35)" fill="#4e6f48" stroke="#dfeadb" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><circle cx="0" cy="0" r="2.2" fill="#dfeadb" stroke="none"></circle></g>
+    <rect x="411" y="2" width="103" height="55" fill="#9c8d52" stroke="#776830" stroke-width="1.4"></rect>
+    <g transform="translate(462.5,29.5) scale(1.35)" fill="#5d4c1f" stroke="#e8dfc2" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><circle cx="0" cy="0" r="2.2" fill="#e8dfc2" stroke="none"></circle></g>
+    <rect x="538" y="2" width="103" height="55" fill="#315682" stroke="#22405f" stroke-width="1.4"></rect>
+    <g transform="translate(589.5,29.5) scale(1.35)" fill="#16243f" stroke="#b6c6dd" stroke-width="1.3"><path d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(40)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(80)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(120)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(160)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(200)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(240)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(280)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><path transform="rotate(320)" d="M0,-1.5 C0.5,-13 8,-19.5 15.5,-14 C17.5,-8 9,-3.5 0,-1.5 Z"></path><circle cx="0" cy="0" r="2.2" fill="#b6c6dd" stroke="none"></circle></g>
+    <rect x="665" y="2" width="103" height="55" fill="#2e69b5" stroke="#23538f" stroke-width="1.4"></rect>
     <g transform="translate(716.5,29.5)">
-      <path d="M-22,0 C-12,-13 12,-13 22,0 C12,13 -12,13 -22,0 Z" fill="none" stroke="#b9cdf3" stroke-width="2"/>
-      <path d="M-16.5,0 C-8.5,-10 8.5,-10 16.5,0 C8.5,10 -8.5,10 -16.5,0 Z" fill="none" stroke="#b9cdf3" stroke-width="1.4"/>
-      <circle cx="0" cy="0" r="8.5" fill="#14275e" stroke="#b9cdf3" stroke-width="1.6"/>
-      <path d="M4.5,-3.5 A5.5,5.5 0 1,0 5.6,1.8 A4,4 0 1,1 0.4,-3.8" fill="none" stroke="#b9cdf3" stroke-width="1.3"/>
+      <path d="M-22,0 C-12,-13 12,-13 22,0 C12,13 -12,13 -22,0 Z" fill="none" stroke="#b9cdf3" stroke-width="2"></path>
+      <path d="M-16.5,0 C-8.5,-10 8.5,-10 16.5,0 C8.5,10 -8.5,10 -16.5,0 Z" fill="none" stroke="#b9cdf3" stroke-width="1.4"></path>
+      <circle cx="0" cy="0" r="8.5" fill="#14275e" stroke="#b9cdf3" stroke-width="1.6"></circle>
+      <path d="M4.5,-3.5 A5.5,5.5 0 1,0 5.6,1.8 A4,4 0 1,1 0.4,-3.8" fill="none" stroke="#b9cdf3" stroke-width="1.3"></path>
     </g>
   </g>
 
   <g id="header">
-    <rect x="1268" y="0" width="345" height="60" fill="#58718c"/>
-    <rect x="1272" y="4" width="76" height="19" rx="3" fill="#4a8fd4"/>
+    <rect x="1268" y="0" width="345" height="60" fill="#58718c"></rect>
+    <rect x="1272" y="4" width="76" height="19" rx="3" fill="#4a8fd4"></rect>
     <text x="1310" y="18" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="0.4">COMPOSE</text>
-    <rect x="1353" y="4" width="84" height="19" rx="3" fill="#4a8fd4"/>
+    <rect x="1353" y="4" width="84" height="19" rx="3" fill="#4a8fd4"></rect>
     <text x="1395" y="18" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="0.3">MESSAGES: 0</text>
-    <rect x="1443" y="2" width="82" height="22" fill="#ffffff"/>
+    <rect x="1443" y="2" width="82" height="22" fill="#ffffff"></rect>
     <text x="1484" y="18" font-size="12" font-weight="800" fill="#111111" text-anchor="middle">WHITEBOARD</text>
-    <rect x="1529" y="4" width="81" height="19" rx="3" fill="#6c84a4"/>
+    <rect x="1529" y="4" width="81" height="19" rx="3" fill="#6c84a4"></rect>
     <text x="1569.5" y="17" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">SHOW / HIDE</text>
     <text x="1606" y="53" font-size="40" font-weight="800" fill="#ffffff" text-anchor="end" letter-spacing="1">AHU-4-6</text>
     <text x="1606" y="79" font-size="17" font-weight="800" fill="#1c3a6b" text-anchor="end">Service: Meeting Room 2nd Level</text>
@@ -248,107 +248,107 @@
   </g>
 
   <g id="wiring" fill="none" stroke="#7d8083" stroke-width="1.6">
-    <path d="M651 640 V664"/>
-    <path d="M663 430 V462" stroke-dasharray="5 5"/>
-    <path d="M746 640 V723 H1168 V701" stroke-dasharray="5 5"/>
-    <path d="M843 657 V723" stroke-dasharray="5 5"/>
+    <path d="M651 640 V664"></path>
+    <path d="M663 430 V462" stroke-dasharray="5 5"></path>
+    <path d="M746 640 V723 H1168 V701" stroke-dasharray="5 5"></path>
+    <path d="M843 657 V723" stroke-dasharray="5 5"></path>
   </g>
 
   <g id="panels" fill="#a9c8fb" fill-opacity="0.55" stroke="#e3eefd" stroke-opacity="0.8" stroke-width="2">
-    <rect x="243" y="175" width="76" height="158" rx="20"/>
-    <rect x="240" y="356" width="79" height="78" rx="20"/>
-    <rect x="338" y="356" width="111" height="78" rx="20"/>
-    <rect x="903" y="178" width="228" height="148" rx="20"/>
-    <rect x="1132" y="133" width="86" height="194" rx="20"/>
-    <rect x="1222" y="172" width="80" height="155" rx="20"/>
-    <rect x="148" y="478" width="84" height="170" rx="20"/>
-    <rect x="240" y="478" width="76" height="170" rx="20"/>
-    <rect x="430" y="478" width="74" height="160" rx="20"/>
-    <rect x="521" y="462" width="86" height="176" rx="20"/>
-    <rect x="610" y="462" width="86" height="176" rx="20"/>
-    <rect x="702" y="478" width="86" height="158" rx="20"/>
-    <rect x="795" y="462" width="94" height="190" rx="20"/>
-    <rect x="903" y="483" width="228" height="148" rx="20"/>
-    <rect x="1136" y="462" width="96" height="190" rx="20"/>
-    <rect x="1312" y="478" width="82" height="158" rx="20"/>
-    <rect x="611" y="660" width="82" height="112" rx="20"/>
+    <rect x="243" y="175" width="76" height="158" rx="20"></rect>
+    <rect x="240" y="356" width="79" height="78" rx="20"></rect>
+    <rect x="338" y="356" width="111" height="78" rx="20"></rect>
+    <rect x="903" y="178" width="228" height="148" rx="20"></rect>
+    <rect x="1132" y="133" width="86" height="194" rx="20"></rect>
+    <rect x="1222" y="172" width="80" height="155" rx="20"></rect>
+    <rect x="148" y="478" width="84" height="170" rx="20"></rect>
+    <rect x="240" y="478" width="76" height="170" rx="20"></rect>
+    <rect x="430" y="478" width="74" height="160" rx="20"></rect>
+    <rect x="521" y="462" width="86" height="176" rx="20"></rect>
+    <rect x="610" y="462" width="86" height="176" rx="20"></rect>
+    <rect x="702" y="478" width="86" height="158" rx="20"></rect>
+    <rect x="795" y="462" width="94" height="190" rx="20"></rect>
+    <rect x="903" y="483" width="228" height="148" rx="20"></rect>
+    <rect x="1136" y="462" width="96" height="190" rx="20"></rect>
+    <rect x="1312" y="478" width="82" height="158" rx="20"></rect>
+    <rect x="611" y="660" width="82" height="112" rx="20"></rect>
   </g>
 
   <g id="ducts">
-    <!-- riser (behind horizontal ducts) -->
-    <polygon points="373,271 373,545 384,556 384,282" fill="url(#riserSide)" stroke="#3f4045" stroke-width="1.4"/>
-    <rect x="384" y="282" width="24" height="274" fill="url(#riserUp)" stroke="#3f4045" stroke-width="1.4"/>
-    <rect x="408" y="282" width="12" height="274" fill="url(#riserLo)" stroke="#3f4045" stroke-width="1.4"/>
-    <!-- top duct -->
-    <polygon points="110,258 121,246 1408,246 1397,258" fill="#f4f4f6" stroke="#3f4045" stroke-width="1.4"/>
-    <polygon points="110,258 121,246 1408,246 1397,258" fill="url(#pTopHatch)"/>
-    <rect x="110" y="258" width="1287" height="12" fill="url(#ductUp)" stroke="#3f4045" stroke-width="1.4"/>
-    <rect x="110" y="270" width="1287" height="12" fill="url(#ductLo)" stroke="#3f4045" stroke-width="1.4"/>
-    <polygon points="1397,258 1408,246 1408,270 1397,282" fill="url(#ductCap)" stroke="#3f4045" stroke-width="1.4"/>
-    <!-- bottom duct -->
-    <polygon points="100,556 111,544 1408,544 1397,556" fill="#f4f4f6" stroke="#3f4045" stroke-width="1.4"/>
-    <polygon points="100,556 111,544 1408,544 1397,556" fill="url(#pTopHatch)"/>
-    <use href="#filterUnit" transform="translate(558,556)"/>
-    <use href="#coilR" transform="translate(650,556)"/>
-    <use href="#coilB" transform="translate(740,556)"/>
-    <rect x="100" y="556" width="1297" height="12" fill="url(#ductUp)" stroke="#3f4045" stroke-width="1.4"/>
-    <rect x="100" y="568" width="1297" height="12" fill="url(#ductLo)" stroke="#3f4045" stroke-width="1.4"/>
-    <polygon points="1397,556 1408,544 1408,568 1397,580" fill="url(#ductCap)" stroke="#3f4045" stroke-width="1.4"/>
+    
+    <polygon points="373,271 373,545 384,556 384,282" fill="url(#riserSide)" stroke="#3f4045" stroke-width="1.4"></polygon>
+    <rect x="384" y="282" width="24" height="274" fill="url(#riserUp)" stroke="#3f4045" stroke-width="1.4"></rect>
+    <rect x="408" y="282" width="12" height="274" fill="url(#riserLo)" stroke="#3f4045" stroke-width="1.4"></rect>
+    
+    <polygon points="110,258 121,246 1408,246 1397,258" fill="#f4f4f6" stroke="#3f4045" stroke-width="1.4"></polygon>
+    <polygon points="110,258 121,246 1408,246 1397,258" fill="url(#pTopHatch)"></polygon>
+    <rect x="110" y="258" width="1287" height="12" fill="url(#ductUp)" stroke="#3f4045" stroke-width="1.4"></rect>
+    <rect x="110" y="270" width="1287" height="12" fill="url(#ductLo)" stroke="#3f4045" stroke-width="1.4"></rect>
+    <polygon points="1397,258 1408,246 1408,270 1397,282" fill="url(#ductCap)" stroke="#3f4045" stroke-width="1.4"></polygon>
+    
+    <polygon points="100,556 111,544 1408,544 1397,556" fill="#f4f4f6" stroke="#3f4045" stroke-width="1.4"></polygon>
+    <polygon points="100,556 111,544 1408,544 1397,556" fill="url(#pTopHatch)"></polygon>
+    <use href="#filterUnit" transform="translate(558,556)"></use>
+    <use href="#coilR" transform="translate(650,556)"></use>
+    <use href="#coilB" transform="translate(740,556)"></use>
+    <rect x="100" y="556" width="1297" height="12" fill="url(#ductUp)" stroke="#3f4045" stroke-width="1.4"></rect>
+    <rect x="100" y="568" width="1297" height="12" fill="url(#ductLo)" stroke="#3f4045" stroke-width="1.4"></rect>
+    <polygon points="1397,556 1408,544 1408,568 1397,580" fill="url(#ductCap)" stroke="#3f4045" stroke-width="1.4"></polygon>
   </g>
 
   <g id="airLabels" font-weight="800" fill="#5c6b7c" font-size="15">
     <text x="18" y="251">EXHAUST AIR</text>
-    <use href="#arrow" transform="translate(90,265) rotate(180)"/>
+    <use href="#arrow" transform="translate(90,265) rotate(180)"></use>
     <text x="24" y="544">OUTSIDE AIR</text>
     <text x="24" y="562">PLENUM</text>
-    <use href="#arrow" transform="translate(46,572)"/>
+    <use href="#arrow" transform="translate(46,572)"></use>
     <text x="1490" y="255" text-anchor="end">RETURN AIR</text>
-    <use href="#arrow" transform="translate(1470,268) rotate(180)"/>
+    <use href="#arrow" transform="translate(1470,268) rotate(180)"></use>
     <text x="1486" y="557" text-anchor="end">SUPPLY AIR</text>
-    <use href="#arrow" transform="translate(1424,571)"/>
+    <use href="#arrow" transform="translate(1424,571)"></use>
   </g>
 
   <g id="equipment">
-    <!-- top duct equipment -->
-    <use href="#damperH" transform="translate(263,258)"/>
-    <use href="#damperV" transform="translate(384,372)"/>
-    <use href="#cubeGold" transform="translate(1172,258)"/>
-    <use href="#cubeOlive" transform="translate(1258,258)"/>
-    <!-- top fan unit -->
-    <use href="#alarmCards" transform="translate(905,96)"/>
-    <use href="#greenBlk" transform="translate(905,322)"/>
-    <use href="#fanGear" transform="translate(1016,258)"/>
-    <!-- bottom duct equipment -->
-    <use href="#oliveAF" transform="translate(186,556)"/>
-    <use href="#damperH" transform="translate(263,556)"/>
-    <use href="#cubeGold" transform="translate(464,556)"/>
-    <use href="#valveAct" transform="translate(640,606)"/>
-    <use href="#valveAct" transform="translate(730,606)"/>
-    <use href="#cubeGold" transform="translate(820,556)"/>
-    <use href="#cubeSlate" transform="translate(858,556)"/>
-    <use href="#sqig" transform="translate(820,584)"/>
-    <use href="#sqig" transform="translate(858,584)"/>
-    <!-- bottom fan unit -->
-    <use href="#alarmCards" transform="translate(905,405)"/>
-    <use href="#greenBlk" transform="translate(905,628)"/>
-    <use href="#fanGear" transform="translate(1016,556)"/>
-    <!-- cooling discharge + supply -->
-    <use href="#cubeGold" transform="translate(1172,556)"/>
-    <use href="#sqig" transform="translate(1172,584)"/>
-    <use href="#dpSensor" transform="translate(1338,556)"/>
-    <!-- freeze pump -->
+    
+    <use href="#damperH" transform="translate(263,258)"></use>
+    <use href="#damperV" transform="translate(384,372)"></use>
+    <use href="#cubeGold" transform="translate(1172,258)"></use>
+    <use href="#cubeOlive" transform="translate(1258,258)"></use>
+    
+    <use href="#alarmCards" transform="translate(905,96)"></use>
+    <use href="#greenBlk" transform="translate(905,322)"></use>
+    <use href="#fanGear" transform="translate(1016,258)"></use>
+    
+    <use href="#oliveAF" transform="translate(186,556)"></use>
+    <use href="#damperH" transform="translate(263,556)"></use>
+    <use href="#cubeGold" transform="translate(464,556)"></use>
+    <use href="#valveAct" transform="translate(640,606)"></use>
+    <use href="#valveAct" transform="translate(730,606)"></use>
+    <use href="#cubeGold" transform="translate(820,556)"></use>
+    <use href="#cubeSlate" transform="translate(858,556)"></use>
+    <use href="#sqig" transform="translate(820,584)"></use>
+    <use href="#sqig" transform="translate(858,584)"></use>
+    
+    <use href="#alarmCards" transform="translate(905,405)"></use>
+    <use href="#greenBlk" transform="translate(905,628)"></use>
+    <use href="#fanGear" transform="translate(1016,556)"></use>
+    
+    <use href="#cubeGold" transform="translate(1172,556)"></use>
+    <use href="#sqig" transform="translate(1172,584)"></use>
+    <use href="#dpSensor" transform="translate(1338,556)"></use>
+    
     <g font-weight="700" text-anchor="middle">
-      <rect x="622" y="666" width="60" height="24" rx="10" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
+      <rect x="622" y="666" width="60" height="24" rx="10" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
       <text x="652" y="683" font-size="14.5" fill="#94a6bf">FAIL</text>
-      <rect x="616" y="686" width="72" height="26" rx="10" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"/>
+      <rect x="616" y="686" width="72" height="26" rx="10" fill="#b7d3f3" stroke="#d9e8fb" stroke-width="1.5"></rect>
       <text x="652" y="704" font-size="14.5" fill="#94a6bf">TAMPER</text>
-      <use href="#pump" transform="translate(652,714)"/>
-      <rect x="624" y="736" width="56" height="21" rx="9" fill="none" stroke="#d9e8fb" stroke-width="1.5" opacity="0.9"/>
+      <use href="#pump" transform="translate(652,714)"></use>
+      <rect x="624" y="736" width="56" height="21" rx="9" fill="none" stroke="#d9e8fb" stroke-width="1.5" opacity="0.9"></rect>
       <text x="652" y="752" font-size="14.5" fill="#ffffff" font-weight="800">START</text>
       <text x="652" y="768" font-size="17" fill="#ffffff" font-weight="800">OFF</text>
     </g></g>
   <g id="values">
-    <!-- big readings: number + unit -->
+    
     <g font-weight="800" fill="#1c3a6b">
       <text x="912" y="211" font-size="26">8376</text><text x="981" y="211" font-size="13">CFM</text>
       <text x="1178" y="156" font-size="21" text-anchor="end">28</text><text x="1182" y="156" font-size="11.5">BTU</text>
@@ -363,26 +363,26 @@
       <text x="1144" y="518" font-size="21">59.9</text><text x="1192" y="518" font-size="12">°F</text>
       <text x="1364" y="514" font-size="23" text-anchor="end">2.02</text><text x="1369" y="514" font-size="13">IWC</text>
     </g>
-    <!-- value boxes -->
+    
     <g font-weight="700">
-      <g id="vb-damp-top"><rect x="263" y="293" width="34" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="292" y="308" font-size="15" fill="#16181d" text-anchor="end">0</text><text x="302" y="308" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
-      <g id="vb-riser"><rect x="338" y="386" width="48" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="381" y="401" font-size="15" fill="#16181d" text-anchor="end">100</text><text x="391" y="401" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
-      <g id="vb-econ"><rect x="256" y="386" width="34" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="285" y="401" font-size="15" fill="#e021b4" text-anchor="end">0</text><text x="295" y="401" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
-      <g id="vb-rf-cfm"><rect x="921" y="291" width="72" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="988" y="306" font-size="15" fill="#16181d" text-anchor="end">6172</text><text x="998" y="306" font-size="12" font-weight="800" fill="#1c3a6b">CFM</text></g>
-      <g id="vb-rf-hz"><rect x="1078" y="291" width="30" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="1103" y="306" font-size="15" fill="#16181d" text-anchor="end">47</text><text x="1113" y="306" font-size="12" font-weight="800" fill="#1c3a6b">Hz</text></g>
-      <g id="vb-rh"><rect x="1144" y="291" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="1185" y="306" font-size="15" fill="#16181d" text-anchor="end">50.0</text><text x="1195" y="306" font-size="12" font-weight="800" fill="#1c3a6b">%RH</text></g>
-      <g id="vb-ppm"><rect x="1240" y="291" width="44" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="1279" y="306" font-size="15" fill="#16181d" text-anchor="end">900</text><text x="1289" y="306" font-size="12" font-weight="800" fill="#1c3a6b">PPM</text></g>
-      <g id="vb-oaf"><rect x="158" y="595" width="54" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="207" y="610" font-size="15" fill="#16181d" text-anchor="end">4500</text><text x="217" y="610" font-size="12" font-weight="800" fill="#1c3a6b">CFM</text></g>
-      <g id="vb-damp-bot"><rect x="263" y="595" width="34" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="292" y="610" font-size="15" fill="#16181d" text-anchor="end">0</text><text x="302" y="610" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
-      <g id="vb-sp58"><rect x="444" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="485" y="610" font-size="15" fill="#16181d" text-anchor="end">58.0</text><text x="495" y="610" font-size="12" font-weight="800" fill="#1c3a6b">°F</text></g>
-      <g id="vb-htg"><rect x="645" y="596" width="32" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="672" y="611" font-size="15" fill="#16181d" text-anchor="end">0</text><text x="682" y="611" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
-      <g id="vb-clg"><rect x="735" y="596" width="32" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="762" y="611" font-size="15" fill="#16181d" text-anchor="end">38</text><text x="772" y="611" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
-      <g id="vb-sp55"><rect x="820" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="861" y="610" font-size="15" fill="#16181d" text-anchor="end">55.0</text><text x="871" y="610" font-size="12" font-weight="800" fill="#1c3a6b">°F</text></g>
-      <g id="vb-sf-hz"><rect x="1078" y="597" width="30" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="1103" y="612" font-size="15" fill="#16181d" text-anchor="end">47</text><text x="1113" y="612" font-size="12" font-weight="800" fill="#1c3a6b">Hz</text></g>
-      <g id="vb-sp60"><rect x="1148" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="1189" y="610" font-size="15" fill="#e021b4" text-anchor="end">60.0</text><text x="1199" y="610" font-size="12" font-weight="800" fill="#1c3a6b">°F</text></g>
-      <g id="vb-iwc"><rect x="1330" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"/><text x="1371" y="610" font-size="15" fill="#16181d" text-anchor="end">2.00</text><text x="1381" y="610" font-size="12" font-weight="800" fill="#1c3a6b">IWC</text></g>
+      <g id="vb-damp-top"><rect x="263" y="293" width="34" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="292" y="308" font-size="15" fill="#16181d" text-anchor="end">0</text><text x="302" y="308" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
+      <g id="vb-riser"><rect x="338" y="386" width="48" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="381" y="401" font-size="15" fill="#16181d" text-anchor="end">100</text><text x="391" y="401" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
+      <g id="vb-econ"><rect x="256" y="386" width="34" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="285" y="401" font-size="15" fill="#e021b4" text-anchor="end">0</text><text x="295" y="401" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
+      <g id="vb-rf-cfm"><rect x="921" y="291" width="72" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="988" y="306" font-size="15" fill="#16181d" text-anchor="end">6172</text><text x="998" y="306" font-size="12" font-weight="800" fill="#1c3a6b">CFM</text></g>
+      <g id="vb-rf-hz"><rect x="1078" y="291" width="30" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="1103" y="306" font-size="15" fill="#16181d" text-anchor="end">47</text><text x="1113" y="306" font-size="12" font-weight="800" fill="#1c3a6b">Hz</text></g>
+      <g id="vb-rh"><rect x="1144" y="291" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="1185" y="306" font-size="15" fill="#16181d" text-anchor="end">50.0</text><text x="1195" y="306" font-size="12" font-weight="800" fill="#1c3a6b">%RH</text></g>
+      <g id="vb-ppm"><rect x="1240" y="291" width="44" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="1279" y="306" font-size="15" fill="#16181d" text-anchor="end">900</text><text x="1289" y="306" font-size="12" font-weight="800" fill="#1c3a6b">PPM</text></g>
+      <g id="vb-oaf"><rect x="158" y="595" width="54" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="207" y="610" font-size="15" fill="#16181d" text-anchor="end">4500</text><text x="217" y="610" font-size="12" font-weight="800" fill="#1c3a6b">CFM</text></g>
+      <g id="vb-damp-bot"><rect x="263" y="595" width="34" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="292" y="610" font-size="15" fill="#16181d" text-anchor="end">0</text><text x="302" y="610" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
+      <g id="vb-sp58"><rect x="444" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="485" y="610" font-size="15" fill="#16181d" text-anchor="end">58.0</text><text x="495" y="610" font-size="12" font-weight="800" fill="#1c3a6b">°F</text></g>
+      <g id="vb-htg"><rect x="645" y="596" width="32" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="672" y="611" font-size="15" fill="#16181d" text-anchor="end">0</text><text x="682" y="611" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
+      <g id="vb-clg"><rect x="735" y="596" width="32" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="762" y="611" font-size="15" fill="#16181d" text-anchor="end">38</text><text x="772" y="611" font-size="13" font-weight="800" fill="#1c3a6b">%</text></g>
+      <g id="vb-sp55"><rect x="820" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="861" y="610" font-size="15" fill="#16181d" text-anchor="end">55.0</text><text x="871" y="610" font-size="12" font-weight="800" fill="#1c3a6b">°F</text></g>
+      <g id="vb-sf-hz"><rect x="1078" y="597" width="30" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="1103" y="612" font-size="15" fill="#16181d" text-anchor="end">47</text><text x="1113" y="612" font-size="12" font-weight="800" fill="#1c3a6b">Hz</text></g>
+      <g id="vb-sp60"><rect x="1148" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="1189" y="610" font-size="15" fill="#e021b4" text-anchor="end">60.0</text><text x="1199" y="610" font-size="12" font-weight="800" fill="#1c3a6b">°F</text></g>
+      <g id="vb-iwc"><rect x="1330" y="595" width="46" height="19" fill="url(#boxG)" stroke="#333a4a" stroke-width="1.8"></rect><text x="1371" y="610" font-size="15" fill="#16181d" text-anchor="end">2.00</text><text x="1381" y="610" font-size="12" font-weight="800" fill="#1c3a6b">IWC</text></g>
     </g>
-    <!-- annotations -->
+    
     <g font-weight="700" text-anchor="middle">
       <text x="279" y="419" font-size="11" fill="#1c3a6b" font-weight="800">ECONOMIZER</text>
       <text x="279" y="431" font-size="11" fill="#1c3a6b" font-weight="800">SIGNAL</text>

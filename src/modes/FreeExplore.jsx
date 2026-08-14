@@ -157,31 +157,39 @@
         ),
 
         // Right: Speed controls
-        React.createElement('div', {
-          className: 'flex items-center gap-1',
-          role: 'group',
-          'aria-label': 'Simulation speed controls'
-        },
-          React.createElement('span', { className: 'text-xs text-gray-400 mr-2' }, 'Speed:'),
-          SPEED_OPTIONS.map(function (opt) {
-            var isActive = speed === opt.value;
-            return React.createElement('button', {
-              key: opt.value,
-              type: 'button',
-              className: 'px-2 py-1 text-xs font-medium rounded transition-colors ' +
-                (isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'),
-              onClick: function () { handleSpeedChange(opt.value); },
-              title: opt.label + ' speed',
-              'aria-pressed': isActive ? 'true' : 'false',
-              'aria-label': opt.label + ' speed'
+        window.SpeedControls
+          ? React.createElement('div', { className: 'flex items-center gap-2' },
+              React.createElement('span', { className: 'text-xs text-gray-400' }, 'Speed:'),
+              React.createElement(window.SpeedControls, {
+                speed: speed,
+                onChange: handleSpeedChange
+              })
+            )
+          : React.createElement('div', {
+              className: 'flex items-center gap-1',
+              role: 'group',
+              'aria-label': 'Simulation speed controls'
             },
-              React.createElement('span', { 'aria-hidden': 'true' }, opt.icon),
-              ' ' + opt.label
-            );
-          })
-        )
+              React.createElement('span', { className: 'text-xs text-gray-400 mr-2' }, 'Speed:'),
+              SPEED_OPTIONS.map(function (opt) {
+                var isActive = speed === opt.value;
+                return React.createElement('button', {
+                  key: opt.value,
+                  type: 'button',
+                  className: 'px-2 py-1 text-xs font-medium rounded transition-colors ' +
+                    (isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'),
+                  onClick: function () { handleSpeedChange(opt.value); },
+                  title: opt.label + ' speed',
+                  'aria-pressed': isActive ? 'true' : 'false',
+                  'aria-label': opt.label + ' speed'
+                },
+                  React.createElement('span', { 'aria-hidden': 'true' }, opt.icon),
+                  ' ' + opt.label
+                );
+              })
+            )
       ),
 
       // ─── Confirmation Banner ──────────────────────────────────────────────

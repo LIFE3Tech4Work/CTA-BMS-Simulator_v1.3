@@ -189,26 +189,31 @@
           'aria-label': 'Select scenario'
         }, '📋 Select Scenario'),
         // Speed controls
-        React.createElement('div', {
-          className: 'flex items-center gap-1',
-          role: 'group',
-          'aria-label': 'Simulation speed controls'
-        },
-          SPEED_OPTIONS.map(function (opt) {
-            var isActive = speed === opt.value;
-            return React.createElement('button', {
-              key: opt.value,
-              type: 'button',
-              className: 'px-1.5 py-1 text-[10px] font-medium rounded transition-colors ' +
-                (isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'),
-              onClick: function () { handleSpeedChange(opt.value); },
-              title: opt.label + ' speed',
-              'aria-pressed': isActive ? 'true' : 'false'
-            }, opt.icon + ' ' + opt.label);
-          })
-        )
+        window.SpeedControls
+          ? React.createElement(window.SpeedControls, {
+              speed: speed,
+              onChange: handleSpeedChange
+            })
+          : React.createElement('div', {
+              className: 'flex items-center gap-1',
+              role: 'group',
+              'aria-label': 'Simulation speed controls'
+            },
+              SPEED_OPTIONS.map(function (opt) {
+                var isActive = speed === opt.value;
+                return React.createElement('button', {
+                  key: opt.value,
+                  type: 'button',
+                  className: 'px-1.5 py-1 text-[10px] font-medium rounded transition-colors ' +
+                    (isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'),
+                  onClick: function () { handleSpeedChange(opt.value); },
+                  title: opt.label + ' speed',
+                  'aria-pressed': isActive ? 'true' : 'false'
+                }, opt.icon + ' ' + opt.label);
+              })
+            )
       ),
 
       // Active scenario display
@@ -368,25 +373,31 @@
     // ─── Render ───────────────────────────────────────────────────────────────
 
     return React.createElement('div', {
-      className: 'flex flex-col h-full bg-gray-900 text-white',
+      className: 'flex flex-col h-full text-white',
+      style: { background: 'transparent', fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" },
       'aria-label': 'Capstone Mode Worksheet'
     },
       // Header bar
       React.createElement('div', {
-        className: 'px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between'
+        className: 'flex items-center justify-between',
+        style: { padding: '9px 14px 9px 22px', background: '#1b2536',
+                 borderBottom: '1px solid #232c3d', flexShrink: 0 }
       },
         React.createElement('div', { className: 'flex items-center gap-2' },
-          React.createElement('span', { className: 'text-blue-400 text-lg' }, '📝'),
+          React.createElement('span', { style: { fontSize: '14px' }, 'aria-hidden': 'true' }, '📝'),
           React.createElement('h2', {
-            className: 'text-sm font-bold text-gray-100'
+            style: { fontSize: '12.5px', fontWeight: 800, color: '#eef3fa', letterSpacing: '.2px', margin: 0 }
           }, 'Capstone Worksheet')
         ),
         // Progress badge
         React.createElement('span', {
-          className: 'text-xs font-mono px-2 py-1 rounded ' +
-            (completedCount === 5
-              ? 'bg-green-900/50 text-green-300 border border-green-700/50'
-              : 'bg-gray-700 text-gray-400')
+          style: Object.assign(
+            { fontSize: '10.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '9px',
+              letterSpacing: '.3px', whiteSpace: 'nowrap' },
+            completedCount === 5
+              ? { background: 'rgba(34,163,93,.18)', color: '#6ee7a8', border: '1px solid #2f7a52' }
+              : { background: '#131b28', color: '#9db0c8', border: '1px solid #2b3850' }
+          )
         }, completedCount + '/5 complete')
       ),
 
@@ -427,7 +438,8 @@
       },
         // Left sidebar: section navigation
         React.createElement('div', {
-          className: 'w-44 flex-shrink-0 overflow-hidden border-r border-gray-700'
+          className: 'w-48 flex-shrink-0 overflow-hidden',
+          style: { borderRight: '1px solid #232c3d' }
         },
           window.WorksheetSidebar
             ? React.createElement(window.WorksheetSidebar, {
@@ -462,19 +474,23 @@
 
       // Footer: auto-save status and navigation
       React.createElement('div', {
-        className: 'px-4 py-2 bg-gray-800 border-t border-gray-700 flex items-center justify-between'
+        className: 'flex items-center justify-between',
+        style: { padding: '8px 14px', background: '#1b2536',
+                 borderTop: '1px solid #232c3d', flexShrink: 0 }
       },
         // Auto-save status
-        React.createElement('div', { className: 'flex items-center gap-2 text-xs text-gray-500' },
+        React.createElement('div', { className: 'flex items-center gap-2',
+          style: { fontSize: '10.5px', fontWeight: 700, color: '#9db0c8' } },
           lastSaved && React.createElement(React.Fragment, null,
             React.createElement('span', {
-              className: 'w-2 h-2 rounded-full bg-green-500 inline-block'
+              style: { width: '7px', height: '7px', borderRadius: '50%',
+                       background: '#3f8f5a', display: 'inline-block' }
             }),
-            React.createElement('span', null, 'Saved at ' + lastSaved)
+            React.createElement('span', null, 'Saved ' + lastSaved)
           ),
-          !lastSaved && storageAvailable && React.createElement('span', null, 'Auto-save enabled (2s debounce)'),
+          !lastSaved && storageAvailable && React.createElement('span', null, 'Auto-save on'),
           !storageAvailable && React.createElement('span', {
-            className: 'text-yellow-400'
+            style: { color: '#e6a23c' }
           }, 'Auto-save disabled')
         ),
 

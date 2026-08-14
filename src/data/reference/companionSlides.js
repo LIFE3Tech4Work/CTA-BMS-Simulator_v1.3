@@ -17,7 +17,7 @@ export const CompanionSlides = [
   {
     slide: 1,
     title: "Welcome to CTA BMS Training",
-    prompt: "Welcome to the CTA Building Management Systems training simulator. This companion guide will walk you through the Honeywell SymmetrE and EBI interfaces used at a NYC commercial building. Use the arrow buttons to advance through the slides.",
+    prompt: "Welcome to the CTA Building Management Systems training simulator. This companion guide will walk you through the LIFE3 SymmetrE and EBI interfaces used at a NYC commercial building. Use the arrow buttons to advance through the slides.",
     scenario: null
   },
   {
@@ -35,7 +35,7 @@ export const CompanionSlides = [
   {
     slide: 4,
     title: "Understanding Security Levels",
-    prompt: "The Honeywell system uses six security levels: View Only, Ack Only, Oper, Supv, Engr, and Mngr. As a CTA student (Oper level), you can adjust setpoints and issue commands but cannot modify schedules or configure points.",
+    prompt: "The LIFE3 system uses six security levels: View Only, Ack Only, Oper, Supv, Engr, and Mngr. As a CTA student (Oper level), you can adjust setpoints and issue commands but cannot modify schedules or configure points.",
     scenario: null
   },
   {

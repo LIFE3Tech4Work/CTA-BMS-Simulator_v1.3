@@ -225,9 +225,28 @@
     return Object.assign({}, state);
   }
 
+  // Tracks which state keys the operator has manually overridden — same shape
+  // and semantics as AHU44NewController/AHU46Controller's `modes`. Added so the
+  // point-detail dialog can show and release overrides on this unit too;
+  // setValue()'s existing behaviour is unchanged apart from recording the flag.
+  var modes = {};
+
   function setValue(key, value) {
     if (state.hasOwnProperty(key)) {
       state[key] = value;
+      modes[key] = 'Manual';
+      recalculate();
+    }
+  }
+
+  function getModes() {
+    return Object.assign({}, modes);
+  }
+
+  /* Release ONE key's Manual override back to Auto. */
+  function clearMode(key) {
+    if (modes[key]) {
+      delete modes[key];
       recalculate();
     }
   }
@@ -249,6 +268,8 @@
   window.AHU23Controller = {
     getState: getState,
     setValue: setValue,
+    getModes: getModes,
+    clearMode: clearMode,
     subscribe: subscribe,
     recalculate: recalculate,
   };
