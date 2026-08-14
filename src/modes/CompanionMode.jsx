@@ -176,34 +176,52 @@ const CompanionMode = (function () {
     // ─── Render ─────────────────────────────────────────────────────────────
 
     return React.createElement('div', {
-      className: 'flex flex-col h-full bg-gray-900 border-l border-gray-700 text-white',
+      className: 'flex flex-col h-full text-white',
+      style: { background: 'transparent', fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" },
       'aria-label': 'Companion Mode Panel'
     },
       // Header
       React.createElement('div', {
-        className: 'px-4 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between'
+        className: 'flex items-center justify-between',
+        style: { padding: '9px 14px 9px 22px', background: '#1b2536',
+                 borderBottom: '1px solid #232c3d', flexShrink: 0 }
       },
         React.createElement('div', { className: 'flex items-center gap-2' },
-          React.createElement('span', { className: 'text-blue-400 text-lg' }, '📖'),
-          React.createElement('h2', { className: 'text-sm font-bold text-gray-100' }, 'Companion Mode')
+          React.createElement('span', { style: { fontSize: '14px' }, 'aria-hidden': 'true' }, '📖'),
+          React.createElement('h2', {
+            style: { fontSize: '12.5px', fontWeight: 800, color: '#eef3fa', letterSpacing: '.2px', margin: 0 }
+          }, 'Companion Mode')
         ),
         // Slide counter
         React.createElement('span', {
-          className: 'text-xs font-mono text-gray-400 bg-gray-700 px-2 py-1 rounded',
+          style: { fontSize: '10.5px', fontWeight: 800, letterSpacing: '.3px', padding: '2px 8px',
+                   borderRadius: '9px', background: '#131b28', color: '#9db0c8',
+                   border: '1px solid #2b3850', whiteSpace: 'nowrap' },
           'aria-label': 'Slide ' + currentSlide + ' of ' + slideCount
         }, currentSlide + ' / ' + slideCount)
+      ),
+
+      // Slide progress rail
+      React.createElement('div', {
+        style: { height: '3px', background: '#131b28', flexShrink: 0 }
+      },
+        React.createElement('div', {
+          style: { height: '100%', width: ((currentSlide / Math.max(1, slideCount)) * 100) + '%',
+                   background: 'linear-gradient(90deg,#3f6fbf,#5b9bd5)', transition: 'width .25s ease' }
+        })
       ),
 
       // Slide content area
       React.createElement('div', { className: 'flex-1 overflow-auto px-4 py-4' },
         // Slide title
         React.createElement('h3', {
-          className: 'text-base font-semibold text-blue-300 mb-3'
+          style: { fontSize: '14px', fontWeight: 800, color: '#8fd0ff', lineHeight: 1.3,
+                   margin: '0 0 10px 0' }
         }, slideData.title),
 
         // Instructional text
         React.createElement('p', {
-          className: 'text-sm text-gray-300 leading-relaxed whitespace-pre-wrap'
+          style: { fontSize: '12.5px', lineHeight: 1.6, color: '#c3cfdd', whiteSpace: 'pre-wrap', margin: 0 }
         }, slideData.prompt),
 
         // Scenario indicator
@@ -244,22 +262,31 @@ const CompanionMode = (function () {
 
       // Paused clock indicator
       React.createElement('div', {
-        className: 'px-4 py-2 bg-gray-800 border-t border-gray-700 flex items-center gap-2 text-xs text-gray-500'
+        className: 'flex items-center gap-2',
+        style: { padding: '7px 14px', background: '#1b2536', borderTop: '1px solid #232c3d',
+                 fontSize: '10.5px', fontWeight: 700, color: '#9db0c8', flexShrink: 0 }
       },
-        React.createElement('span', { className: 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse inline-block' }),
+        React.createElement('span', {
+          className: 'animate-pulse',
+          style: { width: '7px', height: '7px', borderRadius: '50%', background: '#e6a23c',
+                   display: 'inline-block', flexShrink: 0 }
+        }),
         React.createElement('span', null, 'Simulation paused — advance slides to progress')
       ),
 
       // Navigation buttons
       React.createElement('div', {
-        className: 'px-4 py-3 bg-gray-800 border-t border-gray-700 flex items-center justify-between gap-3'
+        className: 'flex items-center justify-between gap-3',
+        style: { padding: '10px 14px', background: '#1b2536',
+                 borderTop: '1px solid #232c3d', flexShrink: 0 }
       },
         // Previous button
         React.createElement('button', {
-          className: 'flex-1 px-3 py-2 text-sm font-medium rounded transition-colors ' +
-            (currentSlide <= 1
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-gray-700 text-gray-200 hover:bg-gray-600 hover:text-white'),
+          type: 'button',
+          style: { flex: 1, padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 800,
+                   cursor: 'pointer', fontFamily: 'inherit', transition: 'background .15s, color .15s',
+                   background: '#1b2230', border: '1px solid #38445c',
+                   color: currentSlide <= 1 ? '#5d6b83' : '#c3cfdd' },
           onClick: goPrevious,
           disabled: false, // Still clickable to show bounds message
           'aria-label': 'Previous slide'
@@ -269,10 +296,14 @@ const CompanionMode = (function () {
 
         // Next button
         React.createElement('button', {
-          className: 'flex-1 px-3 py-2 text-sm font-medium rounded transition-colors ' +
-            (currentSlide >= slideCount
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-500'),
+          type: 'button',
+          style: Object.assign(
+            { flex: 1, padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 800,
+              cursor: 'pointer', fontFamily: 'inherit', transition: 'background .15s, color .15s' },
+            currentSlide >= slideCount
+              ? { background: '#1b2230', border: '1px solid #38445c', color: '#5d6b83' }
+              : { background: 'linear-gradient(180deg,#3f6fbf,#2d5aa8)', border: '1px solid #2d5aa8', color: '#fff' }
+          ),
           onClick: goNext,
           disabled: false, // Still clickable to show bounds message
           'aria-label': 'Next slide'

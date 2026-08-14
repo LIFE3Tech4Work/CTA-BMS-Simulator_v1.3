@@ -85,7 +85,7 @@ function AuthScreen() {
   return React.createElement('div', { className: 'flex items-center justify-center h-screen bg-gray-900 text-white' },
     React.createElement('div', { className: 'text-center' },
       React.createElement('h1', { className: 'text-2xl font-bold' }, 'Sign On'),
-      React.createElement('p', { className: 'text-gray-400 mt-2' }, 'Honeywell BMS Simulator — Auth Screen')
+      React.createElement('p', { className: 'text-gray-400 mt-2' }, 'LIFE3 BMS Simulator — Auth Screen')
     )
   );
 }
@@ -108,8 +108,8 @@ function SymmetreScreen({ params }) {
         React.createElement('div', { className: 'flex flex-1 min-h-0' },
           // Controls Sidebar (scrollable column)
           React.createElement('div', {
-            className: 'h-full flex-shrink-0 overflow-y-auto border-r border-gray-700 bg-gray-800',
-            style: { width: params.ahuId === 'AHU-23-1' ? '280px' : '250px' }
+            className: 'sym-panel h-full flex-shrink-0 overflow-y-auto',
+            style: { width: '304px' }
           },
             (params.ahuId === 'AHU-4-4' && window.AHU44NewControlsSidebar)
               ? React.createElement(window.AHU44NewControlsSidebar, null)
@@ -128,9 +128,13 @@ function SymmetreScreen({ params }) {
               ? React.createElement(window.LL97Panel, null)
               : null
           ),
-          // AHU Graphic area (scrollable)
-          React.createElement('div', { className: 'flex-1 relative overflow-auto bg-gray-900' },
-            (params.ahuId === 'AHU-4-4' && window.AHU44NewImageOverlay)
+          // AHU Graphic area — the three AHU views render the SymmetrE vector
+          // board (fixed 1613x878 stage, scaled to fit); VAV keeps its own graphic.
+          React.createElement('div', { className: 'flex-1 relative overflow-hidden bg-gray-900' },
+            (window.SymmetreBoard && window.SymmetreBoardPoints &&
+             window.SymmetreBoardPoints.UNITS[params.ahuId])
+              ? React.createElement(window.SymmetreBoard, { ahuId: params.ahuId })
+              : (params.ahuId === 'AHU-4-4' && window.AHU44NewImageOverlay)
               ? React.createElement(window.AHU44NewImageOverlay, null)
               : (params.ahuId === 'AHU-23-1' && window.AHUImageOverlay)
               ? React.createElement(window.AHUImageOverlay, { ahuId: 'AHU-23-1' })

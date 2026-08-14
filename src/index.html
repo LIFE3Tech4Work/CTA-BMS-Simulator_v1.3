@@ -3,9 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CTA BMS Simulator — Honeywell SymmetrE / EBI</title>
+  <title>LIFE3 BMS Simulator — SymmetrE / EBI</title>
 
   <link href="./output.css" rel="stylesheet">
+
+  <!-- Barlow — the typeface the SymmetrE vector board and point-detail dialog
+       are drawn in (matches the CTA BMS design reference) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- Custom Tailwind config for BMS-specific colors -->
   <script>
@@ -42,6 +48,218 @@
       overflow: hidden;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
+
+    /* SymmetrE vector board motion — airflow dashes, fan wheels, alarm
+       emphasis. Referenced from SymmetreBoard.jsx / boardArt.js. */
+    @keyframes dashmove { to { stroke-dashoffset: -40; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes bms-blink { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+    @keyframes bms-ring {
+      0%, 100% { box-shadow: 0 0 0 2px #e0342b; }
+      50% { box-shadow: 0 0 0 4px rgba(224,52,43,.35); }
+    }
+
+    /* ── Controls sidebar palette (tokens in ui/symmetre/panelTheme.js) ──
+       Light neutral panel + blue section bars + navy values, matching the
+       CTA BMS design reference's left control panel. */
+    .cta-row {
+      color: #3f5170;
+      border-bottom: 1px solid #d8e1ee;
+    }
+    .cta-row:nth-of-type(even) { background: rgba(255, 255, 255, .38); }
+    .cta-row--click { cursor: pointer; }
+    .cta-row--click:hover { background: #dde7f4; }
+    .cta-val { color: #12294f; }
+    .cta-unit { color: #5a6f8e; font-weight: 700; }
+    .cta-head-title { color: #eef3fa; letter-spacing: .2px; }
+    .cta-box {
+      background: #fff;
+      border: 1.5px solid #8496b4;
+      border-radius: 4px;
+      box-shadow: inset 0 1px 2px rgba(30, 50, 90, .1);
+      color: #12294f;
+      font-weight: 700;
+      text-align: right;
+    }
+    .cta-box--edit {
+      border-color: #2d5aa8;
+      box-shadow: 0 0 0 2px rgba(45, 90, 168, .18);
+      outline: none;
+    }
+    .cta-pill {
+      border-radius: 5px;
+      color: #fff;
+      font-weight: 800;
+      letter-spacing: .3px;
+      text-shadow: 0 1px 1px rgba(10, 25, 50, .28);
+    }
+    .cta-pill--on { background: linear-gradient(180deg, #5fd694, #22a35d); border: 1px solid #9ff0c2; }
+    .cta-pill--off { background: linear-gradient(180deg, #8d9cb4, #68788f); border: 1px solid #b8c3d3; }
+    .cta-pill--alarm { background: linear-gradient(180deg, #e88f88, #c0332b); border: 1px solid #eeaba4; }
+
+    /* The AHU-23-1 artwork ships with a baked-in static value layer from its
+       source file; the live chips replace it. */
+    #ahu-board #values,
+    #ahu-board #valueBoxes,
+    #ahu-board #pumpStatusBaked,
+    #ahu-board use[href="#greenBlk2"] { display: none; }
+
+    /* Alarm Summary grid — fixed columns keep their width and the grid scrolls
+       sideways on a narrow window rather than collapsing to ellipses.
+       width:max-content makes each row's box span ALL its columns, so the row
+       and header backgrounds paint under the rightmost columns instead of
+       stopping at the viewport edge; min-width:100% still fills a wide window. */
+    .alarm-grid,
+    .alarm-rows { width: max-content; min-width: 100%; }
+    .alarm-grid > div { flex-shrink: 0; }
+
+    /* ── Left controls panel ────────────────────────────────────────────
+       Presentation-only pass over the existing sidebars (ControlsSidebar,
+       AHU44New/AHU46/AHU23/VAV variants). Every row, label, value and control
+       still comes from those components — this only restyles them to the
+       SymmetrE design reference. Selectors match the exact utility-class
+       combinations those row components emit, so the dark LL97 card that also
+       lives in this column is untouched. */
+    .sym-panel {
+      background: linear-gradient(180deg, #eef2f8, #e4eaf3) !important;
+      border-right: 1px solid #b9c4d6 !important;
+      font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+      color: #33455f;
+    }
+
+    /* Panel title bar ("Controls — AHU-4-6") */
+    .sym-panel > div:first-child > div:first-child {
+      background: linear-gradient(180deg, #2b3a52, #243247) !important;
+      min-height: 28px;
+      padding: 0 10px !important;
+    }
+    .sym-panel > div:first-child > div:first-child span,
+    .sym-panel > div:first-child > div:first-child h2 {
+      color: #fff !important;
+      font-size: 12.5px !important;
+      font-weight: 700 !important;
+    }
+    .sym-panel > div:first-child > div:first-child button { color: #9fb0c9 !important; }
+
+    /* Section headers */
+    .sym-panel .bg-blue-600 {
+      background: linear-gradient(180deg, #3f6fbf, #30528e) !important;
+      color: #fff !important;
+      font-size: 11.5px !important;
+      font-weight: 800 !important;
+      letter-spacing: .5px;
+      padding: 4px 10px !important;
+      border-top: 1px solid #5f8bce;
+    }
+
+    /* Value rows */
+    .sym-panel .justify-between.cursor-pointer,
+    .sym-panel .cursor-pointer.justify-between {
+      min-height: 26px;
+      padding: 3px 10px !important;
+      font-size: 11.5px !important;
+      color: #33455f !important;
+      border-bottom: 1px solid rgba(150, 170, 200, .28);
+    }
+    .sym-panel .justify-between.cursor-pointer:hover { background: #e4ecf7 !important; }
+
+    /* Value chips — white box = editable, grey box = read-only/commanded */
+    .sym-panel .font-mono.rounded.border {
+      height: 21px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 46px;
+      padding: 0 6px !important;
+      background: #fff !important;
+      border: 1.5px solid #8496b4 !important;
+      border-radius: 4px !important;
+      box-shadow: inset 0 1px 2px rgba(30, 50, 90, .1);
+      font-family: 'Barlow', 'Segoe UI', sans-serif !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      color: #12294f !important;
+    }
+    .sym-panel .justify-between > span:last-child {
+      font-size: 11px !important;
+      font-weight: 800;
+      color: #12294f;
+    }
+    .sym-panel input[type="number"],
+    .sym-panel input[type="text"] {
+      background: #fff !important;
+      border: 1.5px solid #2d6fd0 !important;
+      border-radius: 4px !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      color: #12294f !important;
+      padding: 1px 5px !important;
+    }
+    .sym-panel select {
+      background: #fff !important;
+      border: 1px solid #98a6bd !important;
+      border-radius: 3px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: #12294f !important;
+    }
+    /* Action buttons (Alarm Reset etc.) — bg-gray-100 is the AHU-23-1 sidebar's
+       RESET, bg-gray-200 the other three sidebars' */
+    .sym-panel .bg-gray-200,
+    .sym-panel .bg-gray-100 {
+      background: linear-gradient(180deg, #f2f5fa, #d9e1ee) !important;
+      border: 1px solid #8496b4 !important;
+      border-radius: 9px !important;
+      color: #3f5170 !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      letter-spacing: .4px;
+    }
+    .sym-panel .bg-gray-200:hover,
+    .sym-panel .bg-gray-100:hover {
+      background: linear-gradient(180deg, #ffffff, #e6ecf6) !important;
+      border-color: #2d5aa8 !important;
+      color: #12294f !important;
+    }
+    .sym-panel .bg-gray-200:active,
+    .sym-panel .bg-gray-100:active {
+      background: linear-gradient(180deg, #d9e1ee, #eef2f8) !important;
+    }
+
+    /* State pills must win over the generic last-child value rule above
+       (0,2,2) — hence .sym-panel + the class, plus !important to beat that
+       rule's own !important font-size. */
+    .sym-panel .cta-pill,
+    .sym-panel .justify-between > span:last-child.cta-pill {
+      color: #fff !important;
+      font-size: 10.5px !important;
+      font-weight: 800 !important;
+      letter-spacing: .3px;
+      text-shadow: 0 1px 1px rgba(10, 25, 50, .3);
+    }
+    .sym-panel .cta-pill--alarm,
+    .sym-panel .justify-between > span:last-child.cta-pill--alarm {
+      /* deeper red so white bold text clears WCAG AA */
+      background: linear-gradient(180deg, #d3453a, #a4241b) !important;
+      border-color: #e88f88 !important;
+    }
+    /* Legend strip under the panel header — must not inherit the action-button
+       treatment from the .bg-gray-* rules above. */
+    .sym-panel .cta-legend {
+      background: rgba(255, 255, 255, .5);
+      border-bottom: 1px solid #cdd8e6;
+    }
+    .sym-panel .cta-swatch {
+      border-radius: 2px;
+      vertical-align: middle;
+    }
+    .sym-panel .cta-swatch--white { background: #fff; border: 1px solid #8496b4; }
+    .sym-panel .cta-swatch--grey { background: #e3e8f0; border: 1px solid #a9b6c9; }
+    /* LL97 panel muted label tone. The panel shell now uses the station title
+       bar's dark gradient, on which Tailwind's gray-500 measures ~2.7:1 — this
+       is the chrome's own muted tone (CTAPanel.headSub) at ~6:1. Declared here
+       because output.css is a prebuilt Tailwind file with no arbitrary values. */
+    .ll97-muted { color: #9db0c8; }
   </style>
 </head>
 
@@ -89,6 +307,16 @@
   <script type="text/babel" src="ui/shared/WhiteBox.jsx"></script>
   <script type="text/babel" src="ui/shared/GreyBox.jsx"></script>
   <script type="text/babel" src="ui/shared/ASHRAECallout.jsx"></script>
+  <script type="text/babel" src="ui/shared/SpeedControls.jsx"></script>
+
+  <script src="ui/symmetre/panelTheme.js"></script>
+
+  <!-- SymmetrE vector board — artwork, chip schema, point-detail dialog.
+       Must load before SymmetreBoard.jsx / AppChrome.jsx. -->
+  <script src="assets/vector/boardArt.js?v=2"></script>
+  <script src="ui/symmetre/boardPoints.js"></script>
+  <script type="text/babel" src="ui/ebi/PointDialog.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/SymmetreBoard.jsx"></script>
 
   <!-- SymmetrE Station UI components -->
   <script type="text/babel" src="ui/symmetre/BottomStatusBar.jsx"></script>
@@ -297,6 +525,45 @@
 
   <!-- Main application entry — Babel transforms JSX to React.createElement calls -->
   <script type="text/babel" src="App.jsx"></script>
+
+  <!-- ── JSX loader fallback ───────────────────────────────────────────────
+       @babel/standalone normally fetches and runs every
+       <script type="text/babel" src="…"> above by itself. Some hosts block the
+       blob:/inline <script> it injects for the compiled output, which silently
+       leaves every JSX module unloaded and #root empty.
+
+       This runs only in that case: if App.jsx never defined window.App, it
+       fetches the same files, in the same order, transforms them with the Babel
+       that is already on the page, and executes them. Nothing about the file
+       layout or the tags above changes — this is purely a delivery fallback. -->
+  <script>
+    (function () {
+      function loadFallback() {
+        if (window.App || !window.Babel) return;
+        var tags = Array.prototype.slice.call(
+          document.querySelectorAll('script[type="text/babel"][src]'));
+        console.info('[BMS Bootstrap] Babel did not execute the JSX modules; ' +
+          'loading ' + tags.length + ' of them directly.');
+        var i = 0;
+        function next() {
+          if (i >= tags.length) return;
+          var src = tags[i++].getAttribute('src');
+          fetch(src)
+            .then(function (r) { return r.text(); })
+            .then(function (code) {
+              var out = window.Babel.transform(code, { presets: ['react'] }).code;
+              try { (new Function(out))(); }
+              catch (e) { console.error('[BMS Bootstrap] ' + src + ': ' + e.message); }
+            })
+            .catch(function (e) { console.error('[BMS Bootstrap] ' + src + ': ' + e.message); })
+            .then(next);
+        }
+        next();
+      }
+      if (document.readyState === 'complete') setTimeout(loadFallback, 400);
+      else window.addEventListener('load', function () { setTimeout(loadFallback, 400); });
+    })();
+  </script>
 
 </body>
 </html>

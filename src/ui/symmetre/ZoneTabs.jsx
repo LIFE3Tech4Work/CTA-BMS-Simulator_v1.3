@@ -4,12 +4,15 @@
  * Renders the row of station tabs (AHU-4-6, AHU-4-4, AHU-23-1, VAV-4-4-02)
  * and the blue OA Strip below them that shows live TMY3 weather values.
  *
+ * Styling follows the CTA BMS design reference. Tabs, labels, icons, routes and
+ * the five weather cells are unchanged from v1.3.
+ *
  * No import/export — exposes window.ZoneTabs and window.OutsideAirStrip
  */
 
 // ── OutsideAirStrip ───────────────────────────────────────────────────────────
 // Reads TMY3 weather from SimulationContext and renders the horizontal blue bar
-// that mimics the Honeywell SymmetrE / EBI bottom-of-screen weather display.
+// that mimics the Honeywell SymmetrE / EBI weather display.
 const OutsideAirStrip = (function () {
   'use strict';
   const { useContext } = React;
@@ -27,32 +30,47 @@ const OutsideAirStrip = (function () {
       return (val != null && !isNaN(val)) ? Number(val).toFixed(dec != null ? dec : 1) : '--';
     }
 
-    // Honeywell blue style (used by AHU-4-4 and AHU-23-1)
-    // Standard gray style (used by AHU-4-6 and VAV screens)
-    var isBlue = variant !== 'standard';
-
-    var bgClass  = isBlue ? 'bg-blue-700'      : 'bg-gray-700';
-    var lblClass = isBlue ? 'text-blue-200'     : 'text-gray-400';
-    var valClass = isBlue ? 'text-white font-bold' : 'text-gray-100 font-bold';
-
+    // The design reference uses one treatment for this strip on every screen,
+    // so the old blue/standard split is no longer applied visually. The prop is
+    // still accepted so existing callers (ZoneTabs, VAV screens) keep working.
     function Cell(label, value, unit) {
       return React.createElement('div', {
         key: label,
-        className: 'flex flex-col items-center px-3 border-r border-blue-600/40 last:border-r-0'
+        style: { display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                 padding: '0 13px', borderLeft: '1px solid rgba(255,255,255,.22)', flexShrink: 0 },
       },
-        React.createElement('span', { className: lblClass + ' text-[9px] uppercase tracking-wide' }, label),
-        React.createElement('span', { className: valClass + ' text-[11px]' },
-          value + (unit ? '\u00a0' + unit : '')
+        React.createElement('span', {
+          style: { color: '#c6d8f2', fontSize: '9px', fontWeight: 700, letterSpacing: '.4px',
+                   lineHeight: 1.15, textTransform: 'uppercase' },
+        }, label),
+        React.createElement('span', { style: { color: '#fff', fontSize: '14px', fontWeight: 800, lineHeight: 1.15 } },
+          value,
+          unit ? React.createElement('span', {
+            style: { fontSize: '9px', color: '#d5e4f8', marginLeft: '2px' },
+          }, unit) : null
         )
       );
     }
 
+    // Same blue as the left control panel's section bars (CTAPanel.section) so
+    // the strip and the panel read as one palette.
+    var SECTION_BLUE = (window.CTAPanel || {}).section || 'linear-gradient(180deg,#3f6fbf,#30528e)';
+
     return React.createElement('div', {
-      className: bgClass + ' flex items-center h-8 px-2 border-b border-gray-600 select-none overflow-x-auto',
-      style: { minHeight: '32px' }
+      className: 'select-none',
+      style: { height: '34px', background: SECTION_BLUE,
+               display: 'flex', alignItems: 'center', padding: '0 12px',
+               overflowX: 'auto', flexShrink: 0 },
     },
-      React.createElement('span', { className: lblClass + ' text-[9px] font-semibold uppercase tracking-wider mr-3 shrink-0' },
-        'Outside Air'
+      React.createElement('div', {
+        style: { display: 'flex', flexDirection: 'column', marginRight: '8px', flexShrink: 0 },
+      },
+        React.createElement('span', {
+          style: { color: '#eaf2ff', fontSize: '11px', fontWeight: 800, letterSpacing: '.5px', lineHeight: 1.15 },
+        }, 'OUTSIDE AIR'),
+        React.createElement('span', {
+          style: { color: '#c6d8f2', fontSize: '8.5px', fontWeight: 700, letterSpacing: '.3px', lineHeight: 1.15 },
+        }, 'TMY WEATHER DATA')
       ),
       Cell('OA Temp',    fmt(weather && weather.dryBulb),     '°F'),
       Cell('RH',         fmt(weather && weather.relHumidity),  '%'),
@@ -82,7 +100,6 @@ const ZoneTabs = (function () {
   ];
 
   // ─── OA Strip variant per tab ────────────────────────────────────────────────
-  // AHU-4-4 and AHU-23-1 use the Honeywell blue style; others use standard gray
   function oaVariant(tabId) {
     return (tabId === 'AHU-4-4' || tabId === 'AHU-23-1') ? 'blue' : 'standard';
   }
@@ -116,23 +133,31 @@ const ZoneTabs = (function () {
       window.location.hash = tab.route;
     }, []);
 
-    return React.createElement('div', { className: 'flex flex-col select-none shrink-0' },
+    return React.createElement('div', {
+      className: 'flex flex-col select-none shrink-0',
+      style: { fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" },
+    },
 
       // ── Tab row ──────────────────────────────────────────────────────────────
       React.createElement('div', {
-        className: 'flex items-end bg-gray-900 border-b border-gray-600 px-1 pt-1 gap-0.5 overflow-x-auto'
+        style: { height: '34px', background: '#26334a', display: 'flex', alignItems: 'flex-end',
+                 gap: '3px', padding: '0 12px', overflowX: 'auto' },
       },
         ZONE_TABS.map(function (tab) {
           var isActive = tab.id === activeTab;
           return React.createElement('button', {
             key: tab.id,
             onClick: function () { handleTabClick(tab); },
-            className: [
-              'flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-t border-t border-l border-r shrink-0 transition-colors',
-              isActive
-                ? 'bg-gray-800 border-gray-500 text-cyan-300 border-b-0 -mb-px'
-                : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-gray-200 hover:bg-gray-800'
-            ].join(' ')
+            style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 14px 6px',
+                     borderRadius: '7px 7px 0 0', fontSize: '12px',
+                     fontWeight: isActive ? 800 : 600, cursor: 'pointer', flexShrink: 0,
+                     color: isActive ? '#eaf3ff' : '#93a3bd',
+                     background: isActive
+                       ? ((window.CTAPanel || {}).section || 'linear-gradient(180deg,#3f6fbf,#30528e)')
+                       : 'transparent',
+                     border: 'none',
+                     borderBottom: '3px solid ' + (isActive ? '#7fb2ee' : 'transparent'),
+                     fontFamily: 'inherit' },
           },
             React.createElement('span', null, tab.icon),
             React.createElement('span', null, tab.label)

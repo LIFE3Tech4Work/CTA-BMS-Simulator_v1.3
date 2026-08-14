@@ -181,13 +181,20 @@
     }
 
     return React.createElement('div', {
-      className: 'rounded-lg border border-gray-600 bg-gray-800/80 overflow-hidden',
+      className: 'overflow-hidden',
+      // Fully opaque: this panel floats over the live diagram, so any alpha
+      // makes the schematic bleed through the chapter list.
+      style: { background: '#1b2536', border: '1px solid #171f2d', borderRadius: '8px',
+               boxShadow: '0 18px 44px rgba(6,10,20,.62)',
+               fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" },
       role: 'navigation',
       'aria-label': 'CTA Reference Guide chapters'
     },
       // Header
       React.createElement('div', {
-        className: 'flex items-center justify-between px-3 py-2 bg-gray-700/50 cursor-pointer select-none',
+        className: 'flex items-center justify-between px-3 py-2 cursor-pointer select-none',
+        style: { background: 'linear-gradient(180deg,#33425d,#2b3850)',
+                 borderBottom: '1px solid #171f2d' },
         onClick: function () { setExpanded(!expanded); },
         role: 'button',
         'aria-expanded': expanded ? 'true' : 'false',
@@ -201,44 +208,51 @@
       },
         React.createElement('div', { className: 'flex items-center gap-2' },
           React.createElement('span', { 'aria-hidden': 'true' }, '📚'),
-          React.createElement('span', { className: 'text-sm font-semibold text-white' },
+          React.createElement('span', { className: 'text-sm font-semibold', style: { color: '#f2f6fd' } },
             'CTA Reference Guide'),
-          React.createElement('span', { className: 'text-xs text-gray-400' },
+          React.createElement('span', { className: 'text-xs', style: { color: '#9db0c8' } },
             '(' + chapters.length + ' chapters)')
         ),
         React.createElement('span', {
-          className: 'text-gray-400 text-xs transition-transform duration-200 ' +
-            (expanded ? 'rotate-180' : ''),
+          className: 'text-xs transition-transform duration-200 ' + (expanded ? 'rotate-180' : ''),
+          style: { color: '#9db0c8' },
           'aria-hidden': 'true'
         }, '▼')
       ),
 
       // Chapter list
       expanded && React.createElement('div', {
-        className: 'max-h-80 overflow-y-auto divide-y divide-gray-700/50'
+        className: 'max-h-80 overflow-y-auto',
+        style: { background: '#1b2536' }
       },
-        chapters.map(function (chapter) {
+        chapters.map(function (chapter, ci) {
           return React.createElement('button', {
             key: chapter.id,
             type: 'button',
-            className: 'w-full text-left px-3 py-2 hover:bg-gray-700/50 transition-colors ' +
-              'flex items-start gap-2 group',
+            className: 'w-full text-left px-3 py-2 transition-colors flex items-start gap-2 group',
+            style: { background: 'transparent', border: 'none',
+                     borderTop: ci === 0 ? 'none' : '1px solid #232c3d',
+                     cursor: 'pointer', fontFamily: 'inherit' },
+            onMouseEnter: function (e) { e.currentTarget.style.background = '#22304a'; },
+            onMouseLeave: function (e) { e.currentTarget.style.background = 'transparent'; },
             onClick: function () { handleChapterClick(chapter); },
             'aria-label': 'Chapter ' + chapter.id + ': ' + chapter.title
           },
             // Chapter number badge
             React.createElement('span', {
-              className: 'flex-shrink-0 w-5 h-5 rounded-full bg-gray-600 group-hover:bg-blue-600 ' +
-                'flex items-center justify-center text-xs font-bold text-gray-300 group-hover:text-white ' +
-                'transition-colors mt-0.5'
+              className: 'flex-shrink-0 w-5 h-5 rounded-full group-hover:bg-blue-600 ' +
+                'flex items-center justify-center text-xs font-bold transition-colors mt-0.5',
+              style: { background: '#46536b', color: '#e8edf6' }
             }, chapter.id),
             // Title + description
             React.createElement('div', { className: 'flex-1 min-w-0' },
               React.createElement('div', {
-                className: 'text-xs font-medium text-gray-200 group-hover:text-white truncate'
+                className: 'text-xs font-semibold truncate',
+                style: { color: '#e8edf6' }
               }, chapter.title),
               !compact && React.createElement('p', {
-                className: 'text-xs text-gray-500 mt-0.5 line-clamp-1'
+                className: 'text-xs mt-0.5 line-clamp-1',
+                style: { color: '#9db0c8' }
               }, chapter.description)
             ),
             // ASHRAE badges if applicable
@@ -280,7 +294,7 @@
     },
       // Header (always visible)
       React.createElement('div', {
-        className: 'flex items-center justify-between px-3 py-2.5 bg-amber-900/20 cursor-pointer select-none ' +
+        className: 'flex items-start justify-between gap-2 px-3 py-2.5 bg-amber-900/20 cursor-pointer select-none ' +
           'hover:bg-amber-900/30 transition-colors',
         onClick: function () { setExpanded(!expanded); },
         role: 'button',
@@ -293,23 +307,35 @@
           }
         }
       },
-        React.createElement('div', { className: 'flex items-center gap-2' },
+        // Title group — the only part allowed to flex/wrap. The wrench, the
+        // step-count badge and the chevron are all shrink-0 so a narrow
+        // container wraps the title instead of breaking the badge mid-word
+        // or pushing the chevron out of the rounded clip.
+        React.createElement('div', { className: 'flex items-start gap-2 min-w-0 flex-1' },
           React.createElement('span', {
-            className: 'text-base',
+            className: 'text-base leading-none flex-shrink-0',
+            style: { marginTop: '1px' },
             'aria-hidden': 'true'
-          }, '🔧'),
-          React.createElement('span', {
-            className: 'text-sm font-semibold text-amber-200'
-          }, 'Ch. 14: Troubleshooting Framework'),
-          React.createElement('span', {
-            className: 'text-xs px-1.5 py-0.5 rounded bg-amber-800/50 text-amber-300 font-medium'
-          }, '6 steps')
+          }, '\uD83D\uDD27'),
+          React.createElement('div', {
+            className: 'min-w-0 flex-1 flex flex-wrap',
+            style: { alignItems: 'baseline', columnGap: '8px', rowGap: '4px' }
+          },
+            React.createElement('span', {
+              className: 'text-[13px] font-semibold text-amber-200 leading-snug',
+              style: { textWrap: 'pretty' }
+            }, 'Ch. 14: Troubleshooting Framework'),
+            React.createElement('span', {
+              className: 'text-[10px] px-1.5 py-0.5 rounded bg-amber-800/50 text-amber-300 ' +
+                'font-semibold whitespace-nowrap flex-shrink-0 leading-tight'
+            }, '6 steps')
+          )
         ),
         React.createElement('span', {
-          className: 'text-amber-400 text-xs transition-transform duration-200 ' +
+          className: 'text-amber-400 text-[10px] leading-none flex-shrink-0 mt-1 transition-transform duration-200 ' +
             (expanded ? 'rotate-180' : ''),
           'aria-hidden': 'true'
-        }, '▼')
+        }, '\u25BC')
       ),
 
       // Expanded content: 6-step framework

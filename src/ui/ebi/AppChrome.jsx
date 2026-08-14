@@ -120,7 +120,7 @@ const EBIAppChrome = (function() {
     return React.createElement('div', {
       className: 'h-6 bg-gray-800 border-t border-gray-600 px-4 flex items-center justify-between text-xs text-gray-400'
     },
-      React.createElement('span', null, 'Honeywell | EBI R700'),
+      React.createElement('span', null, 'LIFE3 | EBI R700'),
       React.createElement('span', null, 'Enterprise Buildings Integrator')
     );
   }

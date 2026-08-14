@@ -931,6 +931,18 @@
     }
   }
 
+  /**
+   * Release ONE key's Manual override back to Auto (added for the point-detail
+   * dialog's AUTO button). Additive: clearModes()/getModes() and every
+   * existing caller behave exactly as before.
+   */
+  function clearMode(key) {
+    if (modes[key]) {
+      delete modes[key];
+      recalculate();
+    }
+  }
+
   function getModes() {
     return Object.assign({}, modes);
   }
@@ -965,6 +977,7 @@
   recalculate();
 
   window.AHU46Controller = {
+    clearMode: clearMode,
     getState: getState,
     setValue: setValue,
     subscribe: subscribe,

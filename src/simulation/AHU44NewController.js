@@ -347,6 +347,18 @@
    * Returns a shallow copy of which state keys are currently flagged Manual.
    * Use: window.AHU44NewController.getModes()[stateKey] === 'Manual'
    */
+  /**
+   * Release ONE key's Manual override back to Auto (added for the point-detail
+   * dialog's AUTO button). Additive: clearModes()/getModes() and every
+   * existing caller behave exactly as before.
+   */
+  function clearMode(key) {
+    if (modes[key]) {
+      delete modes[key];
+      recalculate();
+    }
+  }
+
   function getModes() {
     return Object.assign({}, modes);
   }
@@ -384,6 +396,7 @@
   // ─── Expose ─────────────────────────────────────────────────────────────────
 
   window.AHU44NewController = {
+    clearMode: clearMode,
     getState: getState,
     setValue: setValue,
     subscribe: subscribe,

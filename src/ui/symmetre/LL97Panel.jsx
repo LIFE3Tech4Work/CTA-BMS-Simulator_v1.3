@@ -123,11 +123,11 @@ const LL97Panel = (function () {
     var statusText = getStatusText(compliant, percentOfLimit);
     var dotColor = getDotColor(compliant, percentOfLimit);
 
-    return React.createElement('div', { className: 'px-3 py-2 border-t border-gray-800' },
+    return React.createElement('div', { className: 'px-3 py-2', style: { borderTop: '1px solid #2b3850' } },
       React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
         React.createElement('div', { className: 'flex items-center gap-2' },
           React.createElement('span', { className: 'text-[10px] font-bold text-gray-300 tracking-wide' }, label),
-          React.createElement('span', { className: 'text-[10px] text-gray-500' },
+          React.createElement('span', { className: 'text-[10px] ll97-muted' },
             formatNumber(limit, 2) + ' kgCO₂e/sf'
           )
         ),
@@ -141,7 +141,8 @@ const LL97Panel = (function () {
       React.createElement('div', { className: 'flex items-center justify-between' },
         React.createElement('div', { className: 'flex items-center gap-2 flex-1' },
           React.createElement('div', {
-            className: 'h-1.5 rounded-full bg-gray-700 overflow-hidden flex-1',
+            className: 'h-1.5 rounded-full overflow-hidden flex-1',
+            style: { background: '#3a4a66' },
             role: 'progressbar',
             'aria-valuenow': Math.min(percentOfLimit, 100),
             'aria-valuemin': 0,
@@ -245,17 +246,19 @@ const LL97Panel = (function () {
     var buildingName = compliance ? compliance.buildingName : (selectedBuildingMeta ? selectedBuildingMeta.name : '');
 
     return React.createElement('div', {
-      className: 'bg-gray-900 border border-gray-700 rounded-md mx-2 my-2 overflow-hidden',
+      className: 'rounded-md mx-2 my-2 overflow-hidden',
+      style: { background: 'linear-gradient(180deg,#243044,#1b2536)', border: '1px solid #171f2d' },
       'aria-label': 'LL97 Compliance Panel',
       role: 'region'
     },
       // Panel header
       React.createElement('div', {
-        className: 'flex items-center justify-between px-3 py-2 bg-gray-800 border-b border-gray-700'
+        className: 'flex items-center justify-between px-3 py-2',
+        style: { background: '#26334a', borderBottom: '1px solid #171f2d' }
       },
         React.createElement('div', { className: 'flex items-center gap-2' },
           React.createElement('span', { className: 'text-xs font-bold text-gray-200 tracking-wide' }, 'LL97'),
-          React.createElement('span', { className: 'text-[10px] text-gray-500' }, 'NYC Carbon Limit')
+          React.createElement('span', { className: 'text-[10px] ll97-muted' }, 'NYC Carbon Limit')
         ),
         isSynthetic
           ? React.createElement('span', {
@@ -263,17 +266,18 @@ const LL97Panel = (function () {
               title: 'Synthetic comparison building — not a real LL84 disclosure'
             }, 'SYNTHETIC')
           : React.createElement('span', {
-              className: 'text-[9px] font-semibold text-gray-400 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5'
+              className: 'text-[9px] font-semibold rounded px-1.5 py-0.5',
+              style: { color: '#c7d4e6', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.16)' }
             }, 'LL84 VERIFIED')
       ),
 
       // Building selector
-      React.createElement('div', { className: 'px-3 py-2 border-b border-gray-800' },
-        React.createElement('label', { className: 'text-[10px] text-gray-500 uppercase tracking-wider block mb-1' },
+      React.createElement('div', { className: 'px-3 py-2', style: { borderBottom: '1px solid #2b3850' } },
+        React.createElement('label', { className: 'text-[10px] ll97-muted uppercase tracking-wider block mb-1' },
           'Active Building'
         ),
         React.createElement('select', {
-          className: 'w-full bg-gray-800 text-white text-xs border border-gray-600 rounded px-2 py-1 focus:border-cyan-500 focus:outline-none',
+          className: 'w-full text-xs rounded px-2 py-1 focus:outline-none',
           value: selectedBuildingId,
           onChange: function (e) { handleBuildingChange(e.target.value); },
           'aria-label': 'Select active building for LL97 compliance comparison'
@@ -283,7 +287,7 @@ const LL97Panel = (function () {
           })
         ),
         selectedBuildingMeta
-          ? React.createElement('div', { className: 'text-[9px] text-gray-500 mt-1 leading-snug' },
+          ? React.createElement('div', { className: 'text-[9px] ll97-muted mt-1 leading-snug' },
               selectedBuildingMeta.description
             )
           : null
@@ -295,34 +299,34 @@ const LL97Panel = (function () {
       },
         // Annual Energy
         React.createElement('div', { className: 'flex flex-col' },
-          React.createElement('span', { className: 'text-[10px] text-gray-500 uppercase tracking-wider' }, 'Total Energy'),
+          React.createElement('span', { className: 'text-[10px] ll97-muted uppercase tracking-wider' }, 'Total Energy'),
           React.createElement('span', { className: 'text-xs font-mono text-gray-200' },
             formatNumber(totalEnergy, 0), ' ',
-            React.createElement('span', { className: 'text-gray-500' }, 'kBTU')
+            React.createElement('span', { className: 'll97-muted' }, 'kBTU')
           )
         ),
         // Electric Energy
         React.createElement('div', { className: 'flex flex-col' },
-          React.createElement('span', { className: 'text-[10px] text-gray-500 uppercase tracking-wider' }, 'Electric'),
+          React.createElement('span', { className: 'text-[10px] ll97-muted uppercase tracking-wider' }, 'Electric'),
           React.createElement('span', { className: 'text-xs font-mono text-gray-200' },
             formatNumber(electricEnergy, 0), ' ',
-            React.createElement('span', { className: 'text-gray-500' }, 'kWh')
+            React.createElement('span', { className: 'll97-muted' }, 'kWh')
           )
         ),
         // Steam Energy
         React.createElement('div', { className: 'flex flex-col' },
-          React.createElement('span', { className: 'text-[10px] text-gray-500 uppercase tracking-wider' }, 'Steam'),
+          React.createElement('span', { className: 'text-[10px] ll97-muted uppercase tracking-wider' }, 'Steam'),
           React.createElement('span', { className: 'text-xs font-mono text-gray-200' },
             formatNumber(steamEnergy, 0), ' ',
-            React.createElement('span', { className: 'text-gray-500' }, 'kBTU')
+            React.createElement('span', { className: 'll97-muted' }, 'kBTU')
           )
         ),
         // GHG Emissions
         React.createElement('div', { className: 'flex flex-col' },
-          React.createElement('span', { className: 'text-[10px] text-gray-500 uppercase tracking-wider' }, 'GHG Emissions'),
+          React.createElement('span', { className: 'text-[10px] ll97-muted uppercase tracking-wider' }, 'GHG Emissions'),
           React.createElement('span', { className: 'text-xs font-mono text-gray-200' },
             formatNumber(ghgEmissions, 2), ' ',
-            React.createElement('span', { className: 'text-gray-500' }, 'mtCO₂e')
+            React.createElement('span', { className: 'll97-muted' }, 'mtCO₂e')
           )
         )
       ),

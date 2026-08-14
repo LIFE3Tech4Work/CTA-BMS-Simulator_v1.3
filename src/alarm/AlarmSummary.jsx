@@ -184,32 +184,38 @@
 
   function FilterTree({ selectedNode, onSelectNode, alarmCounts }) {
     return React.createElement('div', {
-      className: 'w-56 bg-gray-900 border-r border-gray-700 p-2 flex flex-col gap-1 overflow-y-auto',
+      style: { width: '230px', background: '#0e1420', borderRight: '1px solid #232c3d',
+               padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: '2px',
+               overflowY: 'auto', flexShrink: 0 },
       role: 'tree',
       'aria-label': 'Alarm location filter'
     },
       TREE_NODES.map(function (node) {
         var isSelected = selectedNode === node.id;
         var count = alarmCounts[node.id] || 0;
-        var indent = node.parent === 'all' ? 'pl-4' : 'pl-2';
+        var isRoot = node.parent === null;
 
         return React.createElement('button', {
           key: node.id,
-          className: [
-            indent,
-            'flex items-center justify-between px-2 py-1.5 rounded text-sm text-left w-full',
-            isSelected
-              ? 'bg-blue-800 text-white'
-              : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-          ].join(' '),
+          style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                   width: '100%', textAlign: 'left', padding: '7px 10px', borderRadius: '5px',
+                   fontSize: '12.5px', fontWeight: isSelected ? 800 : (isRoot ? 700 : 600),
+                   paddingLeft: isRoot ? '10px' : '16px', border: 'none', cursor: 'pointer',
+                   fontFamily: 'inherit',
+                   background: isSelected ? 'linear-gradient(180deg,#2f6fd0,#1f57c8)' : 'transparent',
+                   color: isSelected ? '#fff' : '#c3cfdd' },
+          onMouseEnter: function (e) { if (!isSelected) e.currentTarget.style.background = '#18202e'; },
+          onMouseLeave: function (e) { if (!isSelected) e.currentTarget.style.background = 'transparent'; },
           onClick: function () { onSelectNode(node.id); },
           role: 'treeitem',
           'aria-selected': isSelected
         },
           React.createElement('span', null, node.label),
           React.createElement('span', {
-            className: 'text-xs px-1.5 py-0.5 rounded ' +
-              (isSelected ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400')
+            style: { fontSize: '10.5px', fontWeight: 800, minWidth: '18px', textAlign: 'center',
+                     padding: '1px 5px', borderRadius: '9px',
+                     background: isSelected ? 'rgba(8,16,32,.42)' : '#1c2432',
+                     color: isSelected ? '#e8f1ff' : '#7f8fa6' }
           }, count)
         );
       })
@@ -218,17 +224,63 @@
 
   // ─── Column Definitions ───────────────────────────────────────────────────────
 
+  // Alarm table geometry. TREE_W matches FilterTree's width and SELECT_W /
+  // CELL_PAD_X are set explicitly (rather than via w-9/px-* utilities, which the
+  // prebuilt output.css doesn't all carry) so the title bar can line the screen
+  // heading up with the Action column from the same numbers.
+  var TREE_W = 230, SELECT_W = 36, CELL_PAD_X = 10, BOX_W = 15;
+
+  // Action sits in the leftmost data position (right after the selection box),
+  // so the acknowledge state of every row reads down a single edge column.
   var COLUMNS = [
+    { key: 'select', label: '', sortable: false, width: '' },
+    { key: 'action', label: 'Action', sortable: true, width: 'w-24' },
     { key: 'icon', label: '', sortable: false, width: 'w-10' },
     { key: 'timestamp', label: 'Date/Time', sortable: true, width: 'w-40' },
     { key: 'source', label: 'Source', sortable: true, width: 'w-36' },
     { key: 'condition', label: 'Condition', sortable: true, width: 'w-24' },
     { key: 'operator', label: 'Operator', sortable: true, width: 'w-28' },
-    { key: 'action', label: 'Action', sortable: true, width: 'w-28' },
     { key: 'priority', label: 'Priority', sortable: true, width: 'w-24' },
-    { key: 'description', label: 'Description', sortable: true, width: 'flex-1' },
-    { key: 'value', label: 'Value', sortable: true, width: 'w-20' }
+    { key: 'description', label: 'Description', sortable: true, width: 'w-96' },
+    { key: 'value', label: 'Value', sortable: true, width: 'w-20', align: 'right' }
   ];
+
+  // ─── Selection tick box ───────────────────────────────────────────────────────
+  // A real <input type="checkbox"> so keyboard and screen readers get the native
+  // behaviour, but drawn explicitly (appearance:none + an inline check glyph) so
+  // the ticked state is unambiguous against the dark rows.
+  var TICK_SVG = "url(\"data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.4l2.6 2.6L11 4.6' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
+  var DASH_SVG = "url(\"data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.5 7h7' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E\")";
+
+  function TickBox({ checked, indeterminate, disabled, onToggle, label }) {
+    var on = !!checked || !!indeterminate;
+    return React.createElement('input', {
+      type: 'checkbox',
+      checked: !!checked,
+      disabled: !!disabled,
+      ref: function (el) { if (el) el.indeterminate = !!indeterminate; },
+      onChange: function () {},
+      onClick: function (e) {
+        e.stopPropagation();
+        if (disabled) { e.preventDefault(); return; }
+        onToggle(e.shiftKey);
+      },
+      style: {
+        appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+        width: BOX_W + 'px', height: BOX_W + 'px', margin: 0, padding: 0,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        flexShrink: 0, borderRadius: '3px', boxSizing: 'border-box',
+        background: disabled ? '#161c28' : (on ? '#2f6fd0' : '#1b2536'),
+        border: '1px solid ' + (disabled ? '#2b3444' : (on ? '#5b9bd5' : '#46536b')),
+        backgroundImage: disabled ? 'none' : (indeterminate ? DASH_SVG : (checked ? TICK_SVG : 'none')),
+        backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
+        backgroundSize: '13px 13px', colorScheme: 'dark',
+        opacity: disabled ? 0.55 : 1
+      },
+      title: disabled ? label : undefined,
+      'aria-label': label
+    });
+  }
 
   // ─── Sorting Logic (Property 14) ─────────────────────────────────────────────
 
@@ -278,9 +330,12 @@
 
   // ─── Alarm Table Header ───────────────────────────────────────────────────────
 
-  function AlarmTableHeader({ sortColumn, sortDirection, onSort }) {
+  function AlarmTableHeader({ sortColumn, sortDirection, onSort, allChecked, someChecked, onToggleAll }) {
     return React.createElement('div', {
-      className: 'flex items-stretch bg-gray-800 border-b border-gray-600 select-none',
+      className: 'select-none alarm-grid',
+      style: { display: 'flex', alignItems: 'stretch', background: '#23272e',
+               borderBottom: '1px solid #0f1319',
+               position: 'sticky', top: 0, zIndex: 10 },
       role: 'row'
     },
       COLUMNS.map(function (col) {
@@ -290,13 +345,30 @@
           sortIndicator = sortDirection === 'asc' ? ' ▲' : ' ▼';
         }
 
+        if (col.key === 'select') {
+          return React.createElement('div', {
+            key: col.key,
+            className: 'flex items-center justify-center',
+            style: { width: SELECT_W + 'px', flexShrink: 0, padding: '8px 6px', boxSizing: 'border-box' },
+            role: 'columnheader'
+          },
+            React.createElement(TickBox, {
+              checked: allChecked,
+              indeterminate: someChecked && !allChecked,
+              onToggle: onToggleAll,
+              label: allChecked ? 'Deselect all alarms' : 'Select all alarms'
+            })
+          );
+        }
+
         return React.createElement('div', {
           key: col.key,
-          className: [
-            col.width,
-            'px-2 py-1.5 text-xs font-semibold text-gray-300 truncate',
-            col.sortable ? 'cursor-pointer hover:bg-gray-700 hover:text-white' : ''
-          ].join(' '),
+          className: col.width + ' truncate',
+          style: { padding: '8px ' + CELL_PAD_X + 'px', fontSize: '11.5px', fontWeight: 700,
+                   color: '#9db0c8', letterSpacing: '.3px',
+                   textAlign: col.align || 'left',
+                   minWidth: col.minWidth, flexShrink: col.minWidth ? 0 : undefined,
+                   cursor: col.sortable ? 'pointer' : 'default' },
           role: 'columnheader',
           'aria-sort': isSorted ? sortDirection + 'ending' : 'none',
           onClick: col.sortable ? function () { onSort(col.key); } : undefined
@@ -307,19 +379,44 @@
 
   // ─── Alarm Table Row ──────────────────────────────────────────────────────────
 
-  function AlarmTableRow({ alarm, isSelected, onSelect, onContextMenu }) {
-    var rowClass = [
-      'flex items-center border-b border-gray-800 text-xs',
-      isSelected ? 'bg-blue-900 text-white' : 'text-gray-300 hover:bg-gray-800'
-    ].join(' ');
+  function AlarmTableRow({ alarm, isSelected, isChecked, onSelect, onToggleCheck, onContextMenu, index }) {
+    var priColor = alarm.priority === 'urgent' ? '#fca5a5'
+      : (alarm.priority === 'low' ? '#93c5fd' : '#fcd34d');
+    var acked = !!alarm.acknowledged;
 
     return React.createElement('div', {
-      className: rowClass,
+      className: 'flex items-center alarm-grid',
+      style: { borderBottom: '1px solid #0f1319', fontSize: '11.5px',
+               color: isSelected ? '#fff' : '#c3cfdd',
+               background: isSelected
+                 ? 'linear-gradient(180deg,#22437f,#1b3568)'
+                 : (index % 2 ? '#1b2029' : '#171c24') },
       role: 'row',
       'aria-selected': isSelected,
       onClick: function () { onSelect(alarm.id); },
       onContextMenu: function (e) { onContextMenu(e, alarm); }
     },
+      // Selection tick box — shift-click extends from the last box ticked
+      React.createElement('div', {
+        className: 'flex items-center justify-center',
+        style: { width: SELECT_W + 'px', flexShrink: 0, padding: '6px', boxSizing: 'border-box' }
+      },
+        React.createElement(TickBox, {
+          checked: isChecked,
+          disabled: acked,
+          onToggle: function (shift) { onToggleCheck(alarm.id, index, shift); },
+          label: acked
+            ? (alarm.condition || 'Alarm') + ' is already acknowledged'
+            : (isChecked ? 'Deselect ' : 'Select ') + (alarm.condition || 'alarm') + ' — ' + (alarm.description || '')
+        })
+      ),
+      // Action (leftmost data column)
+      React.createElement('div', {
+        className: 'w-24 py-1.5 truncate',
+        style: { padding: '6px ' + CELL_PAD_X + 'px', color: acked ? '#6ee7a8' : '#e6a23c',
+                 fontWeight: 700 },
+        title: alarm.action || 'Awaiting acknowledgment'
+      }, alarm.action || 'Awaiting'),
       // Icon column
       React.createElement('div', { className: 'w-10 px-2 py-1.5 flex items-center justify-center' },
         React.createElement(AlarmIcon, {
@@ -334,7 +431,10 @@
       ),
       // Source (clickable — navigates to EBI Point Detail)
       React.createElement('div', {
-        className: 'w-36 px-2 py-1.5 truncate font-mono text-blue-300 hover:text-blue-100 hover:underline cursor-pointer',
+        className: 'w-36 px-2 py-1.5 truncate cursor-pointer',
+        style: { fontFamily: 'Consolas,Menlo,monospace', fontSize: '11px',
+                 color: '#8fd0ff', textDecoration: 'underline',
+                 textDecorationColor: 'rgba(143,208,255,.35)' },
         onClick: function (e) {
           e.stopPropagation();
           if (alarm.source) {
@@ -353,22 +453,21 @@
       React.createElement('div', { className: 'w-28 px-2 py-1.5 truncate' },
         alarm.operator || '—'
       ),
-      // Action
-      React.createElement('div', { className: 'w-28 px-2 py-1.5 truncate' },
-        alarm.action || '—'
-      ),
       // Priority
-      React.createElement('div', { className: 'w-24 px-2 py-1.5 truncate capitalize' },
-        alarm.priority || '—'
-      ),
-      // Description
-      React.createElement('div', { className: 'flex-1 px-2 py-1.5 truncate' },
-        alarm.description || '—'
-      ),
+      React.createElement('div', {
+        className: 'w-24 px-2 py-1.5 truncate capitalize',
+        style: { color: priColor, fontWeight: 700 }
+      }, alarm.priority || '—'),
+      // Description — fixed width + truncate, same as every other column, so the
+      // row's intrinsic width matches the header's exactly when scrolled.
+      React.createElement('div', {
+        className: 'w-96 px-2 py-1.5 truncate'
+      }, alarm.description || '—'),
       // Value
-      React.createElement('div', { className: 'w-20 px-2 py-1.5 truncate text-right' },
-        alarm.value !== undefined && alarm.value !== null ? String(alarm.value) : '—'
-      )
+      React.createElement('div', {
+        className: 'w-20 truncate text-right',
+        style: { padding: '6px ' + CELL_PAD_X + 'px', fontVariantNumeric: 'tabular-nums' }
+      }, alarm.value !== undefined && alarm.value !== null ? String(alarm.value) : '—')
     );
   }
 
@@ -416,30 +515,35 @@
 
   // ─── Acknowledge Button (toolbar action) ──────────────────────────────────────
 
-  function AcknowledgeButton({ selectedAlarm, canAck, onAcknowledge }) {
-    var disabled = !selectedAlarm || !canAck || selectedAlarm.acknowledged || selectedAlarm.lifecycle !== 'active';
+  function AcknowledgeButton({ targets, canAck, onAcknowledge }) {
+    var list = targets || [];
+    var disabled = !canAck || list.length === 0;
+    var label = list.length > 1
+      ? '\u2713 Acknowledge ' + list.length + ' alarms'
+      : '\u2713 Acknowledge';
 
-    return React.createElement('div', { className: 'flex flex-col items-end' },
+    return React.createElement('div', { className: 'flex items-center gap-2' },
       React.createElement('button', {
-        className: [
-          'px-3 py-1 text-xs rounded border',
-          disabled
-            ? 'border-gray-600 text-gray-500 cursor-not-allowed'
-            : 'border-blue-500 text-blue-300 hover:bg-blue-800 hover:text-white'
-        ].join(' '),
+        style: { padding: '5px 14px', borderRadius: '5px', fontSize: '11.5px', fontWeight: 800,
+                 letterSpacing: '.3px', fontFamily: 'inherit',
+                 border: '1px solid ' + (disabled ? '#38445c' : '#2f7a52'),
+                 background: disabled ? '#1b2230' : 'linear-gradient(180deg,#3f8f5a,#2d7346)',
+                 color: disabled ? '#5d6b83' : '#fff',
+                 cursor: disabled ? 'not-allowed' : 'pointer' },
         disabled: disabled,
         onClick: function () {
-          if (!disabled && selectedAlarm) {
-            onAcknowledge(selectedAlarm);
+          if (!disabled) {
+            list.forEach(function (a) { onAcknowledge(a); });
           }
         },
         title: disabled
-          ? 'Select an active unacknowledged alarm (requires AckOnly+ security)'
-          : 'Acknowledge selected alarm — this marks it as seen but does NOT resolve the underlying fault'
-      }, '✓ Acknowledge'),
-      React.createElement('span', { className: 'text-[9px] text-amber-400 mt-0.5' },
-        'Acknowledged ≠ fixed'
-      )
+          ? 'Tick one or more active unacknowledged alarms (requires AckOnly+ security)'
+          : 'Acknowledge ' + list.length + ' alarm' + (list.length !== 1 ? 's' : '') +
+            ' — this marks them as seen but does NOT resolve the underlying fault'
+      }, label),
+      React.createElement('span', {
+        style: { fontSize: '10.5px', fontWeight: 700, color: '#6f9a82' }
+      }, 'Acknowledged ≠ fixed')
     );
   }
 
@@ -451,9 +555,11 @@
     // Alarm data state
     var [alarms, setAlarms] = useState(PRELOADED_ALARMS);
 
-    // Selection state
+    // Selection state — the highlighted row (single) and the ticked set (many)
     var [selectedAlarmId, setSelectedAlarmId] = useState(null);
+    var [checkedIds, setCheckedIds] = useState([]);
     var [selectedNode, setSelectedNode] = useState('all');
+    var lastTickedIndex = useRef(null);
 
     // Sort state (Property 14)
     var [sortColumn, setSortColumn] = useState('timestamp');
@@ -622,6 +728,44 @@
       setSelectedAlarmId(alarmId);
     }, []);
 
+    // Tick handler — plain click toggles one row, shift-click extends the range
+    // from the last row ticked (standard list-selection behaviour).
+    var handleToggleCheck = useCallback(function (alarmId, index, shift) {
+      var ids = sortedAlarms.map(function (a) { return a.id; });
+      var tickable = {};
+      sortedAlarms.forEach(function (a) { if (!a.acknowledged) tickable[a.id] = true; });
+      setCheckedIds(function (prev) {
+        if (shift && lastTickedIndex.current !== null) {
+          var from = Math.min(lastTickedIndex.current, index);
+          var to = Math.max(lastTickedIndex.current, index);
+          var range = ids.slice(from, to + 1).filter(function (id) { return tickable[id]; });
+          var adding = prev.indexOf(alarmId) === -1;
+          if (adding) {
+            var merged = prev.slice();
+            range.forEach(function (id) { if (merged.indexOf(id) === -1) merged.push(id); });
+            return merged;
+          }
+          return prev.filter(function (id) { return range.indexOf(id) === -1; });
+        }
+        lastTickedIndex.current = index;
+        return prev.indexOf(alarmId) === -1
+          ? prev.concat([alarmId])
+          : prev.filter(function (id) { return id !== alarmId; });
+      });
+      setSelectedAlarmId(alarmId);
+    }, [sortedAlarms]);
+
+    // Select-all / clear-all across the rows currently in view
+    var handleToggleAll = useCallback(function () {
+      var ids = sortedAlarms.filter(function (a) { return !a.acknowledged; })
+        .map(function (a) { return a.id; });
+      setCheckedIds(function (prev) {
+        var allOn = ids.length > 0 && ids.every(function (id) { return prev.indexOf(id) !== -1; });
+        return allOn ? prev.filter(function (id) { return ids.indexOf(id) === -1; }) : ids.slice();
+      });
+      lastTickedIndex.current = null;
+    }, [sortedAlarms]);
+
     // Context menu handler
     var handleContextMenu = useCallback(function (e, alarm) {
       e.preventDefault();
@@ -678,29 +822,61 @@
     var selectedAlarm = alarms.find(function (a) { return a.id === selectedAlarmId; }) || null;
     var canAck = auth && auth.canAcknowledge && auth.canAcknowledge();
 
+    // Only rows still awaiting acknowledgment can be acknowledged. The footer
+    // acts on the ticked set; with nothing ticked it falls back to the
+    // highlighted row, so the single-row workflow is unchanged.
+    function ackable(a) { return a && a.lifecycle === 'active' && !a.acknowledged; }
+    // Acknowledged rows are not tickable, so the select-all box reflects only
+    // the rows a tick can actually do something to.
+    var visibleIds = sortedAlarms.filter(function (a) { return !a.acknowledged; })
+      .map(function (a) { return a.id; });
+    var tickedVisible = checkedIds.filter(function (id) { return visibleIds.indexOf(id) !== -1; });
+    var ackTargets = tickedVisible.length
+      ? sortedAlarms.filter(function (a) { return tickedVisible.indexOf(a.id) !== -1 && ackable(a); })
+      : (ackable(selectedAlarm) ? [selectedAlarm] : []);
+    var allChecked = visibleIds.length > 0 && tickedVisible.length === visibleIds.length;
+    var someChecked = tickedVisible.length > 0;
+
     // ─── Render ───────────────────────────────────────────────────────────────
     return React.createElement('div', {
-      className: 'flex flex-col h-screen bg-gray-900 text-white'
+      className: 'flex flex-col h-screen',
+      style: { background: '#141a26', color: '#e8edf6',
+               fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" },
+      'data-screen-label': 'Alarm Summary'
     },
       // Title bar
       React.createElement('div', {
-        className: 'flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700'
+        style: { display: 'flex', alignItems: 'center', height: '44px',
+                 padding: '0 14px 0 0', background: '#0e1420',
+                 borderBottom: '1px solid #232c3d', flexShrink: 0 }
       },
-        React.createElement('h1', { className: 'text-sm font-semibold text-gray-200' },
-          '⚠ Alarm Summary'
+        // Back sits over the filter tree; the heading's left edge lines up with
+        // the tick boxes below it (the box is centred in the SELECT_W column).
+        React.createElement('div', {
+          style: { width: TREE_W + 'px', flexShrink: 0, padding: '0 14px', boxSizing: 'border-box',
+                   display: 'flex', alignItems: 'center' }
+        },
+        React.createElement('button', {
+          style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                   borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                   background: '#1b2230', border: '1px solid #38445c', color: '#c3cfdd',
+                   fontFamily: 'inherit', flexShrink: 0 },
+          onClick: function () { window.location.hash = '#/symmetre'; },
+          title: 'Return to SymmetrE Station'
+        }, '← Back')
         ),
-        React.createElement('div', { className: 'flex items-center gap-3' },
-          React.createElement(AcknowledgeButton, {
-            selectedAlarm: selectedAlarm,
-            canAck: canAck,
-            onAcknowledge: handleAcknowledge
-          }),
-          React.createElement('button', {
-            className: 'px-3 py-1 text-xs rounded border border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white',
-            onClick: function () { window.location.hash = '#/symmetre'; },
-            title: 'Return to SymmetrE Station'
-          }, '← Back')
-        )
+        React.createElement('h1', {
+          style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14.5px',
+                   fontWeight: 800, color: '#f2f6fd', margin: 0,
+                   paddingLeft: ((SELECT_W - BOX_W) / 2) + 'px', flexShrink: 0 }
+        },
+          React.createElement('span', { style: { color: '#e6a23c' } }, '⚠'),
+          'Alarm Summary'
+        ),
+        React.createElement('div', { style: { flex: 1 } }),
+        React.createElement('span', {
+          style: { fontSize: '10.5px', fontWeight: 700, color: '#e6a23c', flexShrink: 0 }
+        }, 'Acknowledged ≠ fixed — alarms clear only when the fault clears')
       ),
 
       // Main content: filter tree + alarm list
@@ -714,44 +890,70 @@
 
         // Right: Sortable alarm list (Requirement 13.2)
         React.createElement('div', { className: 'flex-1 flex flex-col overflow-hidden' },
-          // Column headers
-          React.createElement(AlarmTableHeader, {
-            sortColumn: sortColumn,
-            sortDirection: sortDirection,
-            onSort: handleSort
-          }),
+          // Table scroller — ONE scroller for both axes, so the sticky header
+          // scrolls sideways in lockstep with the rows and every row's
+          // background spans all columns instead of stopping at the viewport.
+          React.createElement('div', { className: 'flex-1 overflow-auto' },
+            // Column headers
+            React.createElement(AlarmTableHeader, {
+              sortColumn: sortColumn,
+              sortDirection: sortDirection,
+              onSort: handleSort,
+              allChecked: allChecked,
+              someChecked: someChecked,
+              onToggleAll: handleToggleAll
+            }),
 
-          // Alarm rows
-          React.createElement('div', {
-            className: 'flex-1 overflow-y-auto',
-            role: 'grid',
-            'aria-label': 'Alarm list'
-          },
-            sortedAlarms.length === 0
-              ? React.createElement('div', {
-                  className: 'flex items-center justify-center h-32 text-gray-500 text-sm'
-                }, 'No alarms in selected group')
-              : sortedAlarms.map(function (alarm) {
-                  return React.createElement(AlarmTableRow, {
-                    key: alarm.id,
-                    alarm: alarm,
-                    isSelected: selectedAlarmId === alarm.id,
-                    onSelect: handleSelect,
-                    onContextMenu: handleContextMenu
-                  });
-                })
+            // Alarm rows
+            React.createElement('div', {
+              className: 'alarm-rows',
+              role: 'grid',
+              'aria-label': 'Alarm list'
+            },
+              sortedAlarms.length === 0
+                ? React.createElement('div', {
+                    style: { display: 'flex', alignItems: 'center', justifyContent: 'center',
+                             height: '128px', color: '#5d6b83', fontSize: '12.5px', fontWeight: 700 }
+                  }, 'No alarms in selected group')
+                : sortedAlarms.map(function (alarm, idx) {
+                    return React.createElement(AlarmTableRow, {
+                      key: alarm.id,
+                      alarm: alarm,
+                      isSelected: selectedAlarmId === alarm.id,
+                      isChecked: checkedIds.indexOf(alarm.id) !== -1,
+                      onSelect: handleSelect,
+                      onToggleCheck: handleToggleCheck,
+                      onContextMenu: handleContextMenu,
+                      index: idx
+                    });
+                  })
+            )
           ),
 
           // Footer status
+          // Footer ack bar — the selected alarm's acknowledge action sits with
+          // the row counts, matching the design reference's footer.
           React.createElement('div', {
-            className: 'flex items-center justify-between px-3 py-1.5 bg-gray-800 border-t border-gray-700 text-xs text-gray-400'
+            style: { display: 'flex', alignItems: 'center', gap: '14px', padding: '9px 14px',
+                     background: '#0e1420', borderTop: '1px solid #232c3d', flexShrink: 0 }
           },
-            React.createElement('span', null,
-              sortedAlarms.length + ' alarm' + (sortedAlarms.length !== 1 ? 's' : '') + ' displayed'
-            ),
-            React.createElement('span', null,
-              'Filter: ' + (selectedNode === 'all' ? 'All Alarms' : selectedNode)
-            )
+            React.createElement('span', {
+              style: { fontSize: '11.5px', fontWeight: 700, color: '#8fa0b8' }
+            }, someChecked
+                 ? (tickedVisible.length + ' ticked \u2014 ' + ackTargets.length + ' can be acknowledged \u2192')
+                 : 'Tick alarms above (shift-click for a range), then acknowledge \u2192'),
+            React.createElement(AcknowledgeButton, {
+              targets: ackTargets,
+              canAck: canAck,
+              onAcknowledge: handleAcknowledge
+            }),
+            React.createElement('div', { style: { flex: 1 } }),
+            React.createElement('span', {
+              style: { fontSize: '11px', color: '#7f8fa6' }
+            }, sortedAlarms.length + ' alarm' + (sortedAlarms.length !== 1 ? 's' : '') + ' displayed'),
+            React.createElement('span', {
+              style: { fontSize: '11px', color: '#e6a23c', fontWeight: 700 }
+            }, 'Filter: ' + (selectedNode === 'all' ? 'All Alarms' : selectedNode))
           )
         )
       ),

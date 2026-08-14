@@ -2,10 +2,14 @@
  * Title bar, menu bar, toolbar, content area, and status bar.
  * No import/export — exposes window.SymmetreAppChrome
  * Reads from: window.AuthContext, window.SimulationContext
+ *
+ * Visual treatment matches the CTA BMS design reference (station title bar,
+ * menu bar, toolbar). Content, labels, menu structure, routes and behaviour are
+ * unchanged from v1.3 — this is a styling pass only.
  */
 
 const SymmetreAppChrome = (function() {
-  const { useContext, useState, useCallback } = React;
+  const { useContext, useState, useEffect, useCallback } = React;
 
   // ─── Menu Bar Items ─────────────────────────────────────────────────────────
   const MENU_ITEMS = ['Station', 'View', 'Action', 'Schedule Manager', 'Help', 'Sign Off'];
@@ -14,22 +18,47 @@ const SymmetreAppChrome = (function() {
   const TOOLBAR_BUTTONS = [
     { id: 'back', label: 'Back', icon: '◀' },
     { id: 'forward', label: 'Forward', icon: '▶' },
-    { id: 'reload', label: 'Reload Simulation', icon: '⟳' },
-    { id: 'alarms', label: 'Alarms', icon: '🔔' },
+    { id: 'reload', label: 'Reload Simulation', icon: '↻' },
   ];
 
-  // ─── Title Bar Decorations (cosmetic only) ──────────────────────────────────
+  // ─── Shared style tokens (design reference) ─────────────────────────────────
+  const TITLE_BAR = {
+    height: '26px', background: 'linear-gradient(180deg,#243044,#1b2536)',
+    display: 'flex', alignItems: 'center', padding: '0 12px', gap: '8px', flexShrink: 0,
+  };
+  const MENU_BAR = {
+    height: '34px', background: '#26334a', display: 'flex', alignItems: 'center',
+    gap: '26px', padding: '0 16px', borderBottom: '1px solid #171f2d', flexShrink: 0,
+  };
+  const TOOLBAR = {
+    height: '42px', background: 'linear-gradient(180deg,#33425d,#2b3850)',
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '0 12px',
+    borderBottom: '1px solid #1b2434', flexShrink: 0,
+  };
+  const NAV_BTN = {
+    width: '30px', height: '26px', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', borderRadius: '5px', background: 'rgba(255,255,255,.08)',
+    color: '#c7d4e6', fontSize: '14px', cursor: 'pointer',
+    border: '1px solid rgba(255,255,255,.12)', flexShrink: 0,
+  };
+
   // ─── Title Bar ──────────────────────────────────────────────────────────────
   function TitleBar({ operatorName }) {
-    const title = 'SymmetrE R410.2 — Station [' + (operatorName || 'operator') + ']';
+    const title = 'SymmetrE R410.2 — Station';
 
-    return React.createElement('div', {
-      className: 'flex items-center justify-between px-3 py-1 bg-gradient-to-r from-blue-900 to-blue-800 border-b border-gray-700 select-none'
-    },
-      React.createElement('div', { className: 'flex items-center gap-2' },
-        React.createElement('span', { className: 'text-xs text-blue-200' }, '🖥'),
-        React.createElement('span', { className: 'text-xs font-semibold text-white tracking-wide' }, title)
-      )
+    return React.createElement('div', { style: TITLE_BAR, className: 'select-none' },
+      React.createElement('img', {
+        src: 'assets/LIFE3_White_Logo.png',
+        alt: 'LIFE3',
+        style: { height: '14px', width: 'auto', flexShrink: 0 },
+        className: 'select-none',
+        draggable: false,
+      }),
+      React.createElement('span', {
+        style: { color: '#c7d4e6', fontSize: '12px', fontWeight: 700, letterSpacing: '.2px' },
+      }, title),
+      React.createElement('span', { style: { color: '#7d8ba3', fontSize: '12px' } },
+        '[' + (operatorName || 'operator') + ']')
     );
   }
 
@@ -59,7 +88,7 @@ const SymmetreAppChrome = (function() {
         { label: 'Speed: 3600×', action: function() { if (window.SimulationEngine) window.SimulationEngine.setSpeed('3600x'); } },
       ],
       'Help': [
-        { label: 'About CTA BMS Simulator', action: function() { alert('CTA BMS Simulator v2.4\nHoneywell SymmetrE / EBI Training Platform\nCTA Training Building — NYC Downtown\n\nProperty Primary Use: Multifamily Home\nProperty Secondary Use: Hotel'); } },
+        { label: 'About CTA BMS Simulator', action: function() { alert('CTA BMS Simulator v2.4\nLIFE3 SymmetrE / EBI Training Platform\nCTA Training Building — NYC Downtown\n\nProperty Primary Use: Multifamily Home\nProperty Secondary Use: Hotel'); } },
         { label: null, action: null },
         { label: 'SME QA: Log Observation', action: function() { if (window.SMEQAForm) window.SMEQAForm.open(); } },
       ],
@@ -96,9 +125,14 @@ const SymmetreAppChrome = (function() {
       return function() { document.removeEventListener('click', handleClick); };
     }, [activeMenu]);
 
-    return React.createElement('div', {
-      className: 'flex items-center bg-gray-700 border-b border-gray-600 px-1'
-    },
+    const panelSt = {
+      position: 'absolute', left: '-6px', top: '100%', marginTop: '-1px', minWidth: '200px',
+      background: 'linear-gradient(180deg,#f6f8fc,#e9eef6)', border: '1px solid #6f7f97',
+      borderRadius: '6px', boxShadow: '0 12px 30px rgba(8,14,28,.45)', padding: '4px',
+      zIndex: 80, display: 'flex', flexDirection: 'column',
+    };
+
+    return React.createElement('div', { style: MENU_BAR, className: 'select-none' },
       MENU_ITEMS.map(function(item) {
         const isActive = activeMenu === item;
         const isSignOff = item === 'Sign Off';
@@ -107,40 +141,42 @@ const SymmetreAppChrome = (function() {
 
         return React.createElement('div', {
           key: item,
-          className: 'relative'
+          style: { position: 'relative', padding: '9px 0' },
         },
           React.createElement('button', {
-            className: 'px-3 py-1 text-xs text-gray-200 hover:bg-gray-600 hover:text-white transition-colors ' +
-              (isActive ? 'bg-gray-600 text-white ' : '') +
-              (isSignOff ? 'text-red-300 hover:text-red-200' : ''),
+            style: { background: 'none', border: 'none', padding: 0,
+                     color: isSignOff ? '#e08a8a' : (isActive ? '#eaf3ff' : '#c7d4e6'),
+                     fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                     fontFamily: 'inherit' },
             onClick: function(e) { e.stopPropagation(); handleMenuClick(item); },
             'aria-label': item,
             'aria-haspopup': (dropdownItems && !isDirectAction) ? 'true' : undefined,
             'aria-expanded': isActive ? 'true' : undefined
           }, item),
           // Dropdown menu
-          isActive && !isDirectAction && dropdownItems ? React.createElement('div', {
-            className: 'absolute top-full left-0 z-50 bg-gray-800 border border-gray-600 rounded shadow-lg min-w-[180px] py-1'
-          },
+          isActive && !isDirectAction && dropdownItems ? React.createElement('div', { style: panelSt },
             dropdownItems.map(function(opt, idx) {
               if (!opt.action) {
                 return React.createElement('div', {
                   key: idx,
-                  className: 'border-t border-gray-600 my-1',
+                  style: { borderTop: '1px solid #d6dde9', margin: '4px 0' },
                 });
               }
               return React.createElement('button', {
                 key: idx,
-                className: 'block w-full text-left px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-600 hover:text-white transition-colors',
+                style: { display: 'block', width: '100%', textAlign: 'left', padding: '6px 12px',
+                         fontSize: '12px', fontWeight: 700, color: '#20324e', borderRadius: '4px',
+                         cursor: 'pointer', whiteSpace: 'nowrap', background: 'none',
+                         border: 'none', fontFamily: 'inherit' },
+                onMouseEnter: function(e) { e.currentTarget.style.background = '#dbe5f1'; },
+                onMouseLeave: function(e) { e.currentTarget.style.background = 'none'; },
                 onClick: function() { opt.action(); setActiveMenu(null); }
               }, opt.label);
             })
           ) : null,
-          // Placeholder for items without dropdowns (Edit, Configure)
-          isActive && !isDirectAction && !dropdownItems ? React.createElement('div', {
-            className: 'absolute top-full left-0 z-50 bg-gray-800 border border-gray-600 rounded shadow-lg min-w-[140px] py-1'
-          },
-            React.createElement('div', { className: 'px-3 py-1 text-xs text-gray-400 italic' }, 'No actions available')
+          // Placeholder for items without dropdowns
+          isActive && !isDirectAction && !dropdownItems ? React.createElement('div', { style: panelSt },
+            React.createElement('div', { style: { padding: '6px 12px', fontSize: '12px', color: '#8a97ab', fontStyle: 'italic' } }, 'No actions available')
           ) : null
         );
       })
@@ -149,6 +185,23 @@ const SymmetreAppChrome = (function() {
 
   // ─── Toolbar ────────────────────────────────────────────────────────────────
   function Toolbar() {
+    const auth = useContext(window.AuthContext);
+    const [alarmCount, setAlarmCount] = useState(0);
+
+    // Unacknowledged alarm count for the bell badge — read from the same
+    // aggregation the Alarm Summary screen uses. Display only.
+    useEffect(function () {
+      function read() {
+        var list = (window.AlarmSummary && window.AlarmSummary.getActiveAlarms)
+          ? window.AlarmSummary.getActiveAlarms()
+          : (window.ACTIVE_ALARMS || []);
+        setAlarmCount((list || []).length);
+      }
+      read();
+      var iv = setInterval(read, 1500);
+      return function () { clearInterval(iv); };
+    }, []);
+
     const handleToolbarClick = useCallback(function(id) {
       if (id === 'alarms') {
         window.location.hash = '#/alarms';
@@ -218,28 +271,55 @@ const SymmetreAppChrome = (function() {
       }
     }, []);
 
-    return React.createElement('div', {
-      className: 'flex items-center gap-1 px-2 py-1 bg-gray-750 border-b border-gray-600',
-      style: { backgroundColor: '#3a3a3a' }
-    },
+    const bellActive = alarmCount > 0;
+
+    return React.createElement('div', { style: TOOLBAR, className: 'select-none' },
       // Navigation toolbar buttons
       TOOLBAR_BUTTONS.map(function(btn) {
         return React.createElement('button', {
           key: btn.id,
-          className: 'flex-shrink-0 flex items-center justify-center w-7 h-7 rounded border border-gray-600 bg-gray-700 hover:bg-gray-600 hover:border-gray-500 text-sm text-gray-300 hover:text-white transition-colors',
+          style: Object.assign({}, NAV_BTN, { fontFamily: 'inherit' }),
           onClick: function() { handleToolbarClick(btn.id); },
           title: btn.label,
           'aria-label': btn.label
         }, btn.icon);
       }),
+      React.createElement('div', {
+        style: { width: '1px', height: '24px', background: '#4a5b78', margin: '0 4px', flexShrink: 0 },
+      }),
+      // Alarms — same '#/alarms' route as before, now the reference bell
+      React.createElement('button', {
+        style: { position: 'relative', width: '34px', height: '28px', display: 'flex',
+                 alignItems: 'center', justifyContent: 'center', borderRadius: '6px',
+                 background: bellActive ? 'rgba(224,52,43,.22)' : 'rgba(255,255,255,.08)',
+                 border: '1px solid ' + (bellActive ? '#e0342b' : 'rgba(255,255,255,.12)'),
+                 cursor: 'pointer', flexShrink: 0, padding: 0 },
+        onClick: function() { handleToolbarClick('alarms'); },
+        title: 'Alarms',
+        'aria-label': 'Alarms'
+      },
+        React.createElement('svg', {
+          width: 19, height: 19, viewBox: '0 0 24 24', fill: 'none',
+          stroke: bellActive ? '#ff8a7d' : '#c7d4e6', strokeWidth: 2,
+          strokeLinecap: 'round', strokeLinejoin: 'round',
+        },
+          React.createElement('path', { d: 'M6 9a6 6 0 1112 0c0 4.5 1.8 6 1.8 6H4.2S6 13.5 6 9' }),
+          React.createElement('path', { d: 'M10 20a2 2 0 004 0' })
+        ),
+        bellActive ? React.createElement('span', {
+          style: { position: 'absolute', top: '-6px', right: '-6px', minWidth: '16px',
+                   height: '16px', padding: '0 3px', borderRadius: '8px', background: '#e0342b',
+                   color: '#fff', fontSize: '10px', fontWeight: 800, display: 'flex',
+                   alignItems: 'center', justifyContent: 'center', border: '1.5px solid #2b3850' },
+        }, alarmCount) : null
+      ),
       // Spacer to push mode selector to the right
-      React.createElement('div', { className: 'flex-1 min-w-0' }),
+      React.createElement('div', { style: { flex: 1, minWidth: 0 } }),
       // Mode Selector (Companion / Explore / Capstone) — only for instructor level
       (function() {
-        var auth = useContext(window.AuthContext);
         var isInstructor = auth && auth.securityLevel === 'Engr';
         if (isInstructor && window.ModeSelector) {
-          return React.createElement('div', { className: 'flex-shrink-0' },
+          return React.createElement('div', { style: { flexShrink: 0 } },
             React.createElement(window.ModeSelector, null)
           );
         }
@@ -254,7 +334,8 @@ const SymmetreAppChrome = (function() {
     const operatorName = auth.operator || 'operator';
 
     return React.createElement('div', {
-      className: 'flex flex-col h-full w-full overflow-hidden bg-gray-900'
+      className: 'flex flex-col h-full w-full overflow-hidden',
+      style: { background: '#1a2230', fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" },
     },
       // Title Bar
       React.createElement(TitleBar, { operatorName: operatorName }),
@@ -263,14 +344,20 @@ const SymmetreAppChrome = (function() {
       // Toolbar
       React.createElement(Toolbar, null),
       // Content Area (renders children)
+      // data-station-content marks the region the Companion / Capstone side
+      // panels dock into, so they overlay the diagram without covering the
+      // title bar, menu bar or toolbar above it (ModeController.js measures it).
       React.createElement('div', {
-        className: 'flex-1 overflow-hidden relative'
+        className: 'flex-1 overflow-hidden relative',
+        'data-station-content': 'true'
       }, children),
       // Status Bar (BottomStatusBar component, rendered separately)
       window.BottomStatusBar
         ? React.createElement(window.BottomStatusBar, null)
         : React.createElement('div', {
-            className: 'h-6 bg-gray-800 border-t border-gray-700 px-3 flex items-center text-xs text-gray-400'
+            style: { height: '24px', background: '#26334a', borderTop: '1px solid #171f2d',
+                     padding: '0 12px', display: 'flex', alignItems: 'center',
+                     fontSize: '11px', color: '#7d8ba3' },
           }, 'Status bar loading...')
     );
   }

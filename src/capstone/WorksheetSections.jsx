@@ -106,37 +106,45 @@
     },
       // Section header
       React.createElement('div', {
-        className: 'px-4 py-3 border-b border-gray-700'
+        className: 'px-4 py-3',
+        style: { borderBottom: '1px solid #232c3d' }
       },
-        React.createElement('div', { className: 'flex items-center gap-2 mb-1' },
+        React.createElement('div', { className: 'flex items-start gap-2' },
           React.createElement('span', {
-            className: 'inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold'
+            className: 'inline-flex items-center justify-center flex-shrink-0',
+            style: { width: '20px', height: '20px', borderRadius: '50%', marginTop: '1px',
+                     background: 'linear-gradient(180deg,#3f6fbf,#2d5aa8)', color: '#fff',
+                     fontSize: '10.5px', fontWeight: 800 }
           }, sectionId),
           React.createElement('h3', {
-            className: 'text-sm font-semibold text-white'
+            style: { fontSize: '12.5px', fontWeight: 800, color: '#eef3fa', lineHeight: 1.3, margin: 0 }
           }, sectionDef.title)
         )
       ),
 
       // Prompt text
       React.createElement('div', {
-        className: 'px-4 py-3 bg-gray-800/50 border-b border-gray-700'
+        className: 'px-4 py-3',
+        style: { background: 'rgba(19,27,40,.55)', borderBottom: '1px solid #232c3d' }
       },
         React.createElement('p', {
-          className: 'text-xs text-gray-400 leading-relaxed italic'
+          style: { fontSize: '11.5px', lineHeight: 1.55, color: '#9db0c8', margin: 0 }
         }, sectionDef.prompt)
       ),
 
       // Text input area
       React.createElement('div', { className: 'flex-1 flex flex-col p-4 min-h-0' },
         React.createElement('textarea', {
-          className: 'flex-1 w-full resize-none rounded border bg-gray-800 text-sm text-gray-100 ' +
-            'placeholder-gray-500 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 ' +
-            'border-gray-600 focus:border-blue-500 transition-colors',
+          className: 'flex-1 w-full resize-none focus:outline-none',
+          style: { background: '#131b28', border: '1px solid #2b3850', borderRadius: '5px',
+                   color: '#e8edf6', fontSize: '12px', lineHeight: 1.5, padding: '10px',
+                   fontFamily: 'inherit', minHeight: '120px' },
           value: value,
           onChange: handleChange,
+          onFocus: function (e) { e.currentTarget.style.borderColor = '#3f6fbf'; },
+          onBlur: function (e) { e.currentTarget.style.borderColor = '#2b3850'; },
           maxLength: MAX_CHARS,
-          placeholder: 'Enter your response here (max ' + MAX_CHARS + ' characters)...',
+          placeholder: 'Enter your response here (max ' + MAX_CHARS + ' characters)…',
           'aria-label': 'Section ' + sectionId + ' response: ' + sectionDef.title,
           spellCheck: 'true'
         }),
@@ -146,12 +154,11 @@
           className: 'flex items-center justify-between mt-2'
         },
           React.createElement('span', {
-            className: 'text-xs ' +
-              (isAtLimit ? 'text-red-400 font-medium' :
-                isNearLimit ? 'text-yellow-400' : 'text-gray-500')
+            style: { fontSize: '10.5px', fontWeight: 700,
+                     color: isAtLimit ? '#ff9d92' : (isNearLimit ? '#e6a23c' : '#7f8fa6') }
           }, charCount + ' / ' + MAX_CHARS + ' characters'),
           isAtLimit && React.createElement('span', {
-            className: 'text-xs text-red-400'
+            style: { fontSize: '10.5px', fontWeight: 700, color: '#ff9d92' }
           }, 'Character limit reached')
         )
       )

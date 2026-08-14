@@ -26,8 +26,8 @@ const AHU23ControlsSidebar = (() => {
   // Section header — dark blue/navy bar with white bold text
   function SectionHeader({ title }) {
     return React.createElement('div', {
-      className: 'px-3 py-1.5 text-[13px] font-bold text-white uppercase tracking-wide',
-      style: { backgroundColor: '#3366cc' }
+      className: 'px-2.5 py-1 text-[10px]',
+      style: (window.CTAPanel || {}).sectionStyle
     }, title);
   }
 
@@ -51,15 +51,15 @@ const AHU23ControlsSidebar = (() => {
     var offText = offLabel || 'OFF';
 
     return React.createElement('div', {
-      className: 'flex items-center justify-between px-3 py-2 text-[13px] text-gray-900 cursor-pointer hover:bg-blue-200/40 border-b border-blue-300/30',
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row cta-row--click',
       onClick: toggle,
     },
       React.createElement('span', { className: 'flex-1 font-medium' }, label),
       React.createElement('span', {
-        className: 'px-3 py-0.5 text-[12px] font-bold rounded border ' +
+        className: 'px-2 py-0 text-[10px] font-bold rounded border ' +
           (value
-            ? 'bg-green-500 text-white border-green-600'
-            : 'bg-gray-100 text-gray-700 border-gray-400')
+            ? 'cta-pill cta-pill--on'
+            : 'cta-pill cta-pill--off')
       }, value ? onText : offText)
     );
   }
@@ -80,10 +80,10 @@ const AHU23ControlsSidebar = (() => {
     var nText = noLabel || 'NO';
 
     return React.createElement('div', {
-      className: 'flex items-center justify-between px-3 py-2 text-[13px] text-gray-900 border-b border-blue-300/30',
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row',
     },
       React.createElement('span', { className: 'flex-1 font-medium' }, label),
-      React.createElement('span', { className: 'font-bold text-[13px]' }, value ? yText : nText)
+      React.createElement('span', { className: 'font-bold text-[10px] cta-val' }, value ? yText : nText)
     );
   }
 
@@ -122,31 +122,31 @@ const AHU23ControlsSidebar = (() => {
     }
 
     if (editing) {
-      return React.createElement('div', { className: 'flex items-center justify-between px-3 py-1.5 text-[13px] text-gray-900 border-b border-blue-300/30' },
+      return React.createElement('div', { className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row' },
         React.createElement('span', { className: 'flex-1 font-medium' }, label),
         React.createElement('input', {
           type: 'number', step: step || 1, min: min, max: max,
-          className: 'w-16 px-1.5 py-0.5 text-[13px] border-2 border-blue-500 rounded bg-white text-black font-mono font-bold text-right',
+          className: 'w-14 px-1 py-0 text-[10px] font-mono cta-box cta-box--edit',
           value: editVal,
           onChange: function(e) { setEditVal(e.target.value); },
           onKeyDown: handleKeyDown,
           onBlur: handleSubmit,
           autoFocus: true,
         }),
-        React.createElement('span', { className: 'text-[11px] text-gray-600 ml-1.5 w-8' }, units)
+        React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units)
       );
     }
 
     return React.createElement('div', {
-      className: 'flex items-center justify-between px-3 py-1.5 text-[13px] text-gray-900 cursor-pointer hover:bg-blue-200/40 border-b border-blue-300/30',
+      className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row cta-row--click',
       onClick: handleClick,
       title: 'Click to edit'
     },
       React.createElement('span', { className: 'flex-1 font-medium' }, label),
       React.createElement('span', {
-        className: 'px-2 py-0.5 text-[13px] font-mono font-bold rounded border bg-white text-black border-gray-400 text-right min-w-[50px] inline-block'
+        className: 'px-1.5 py-0 text-[10px] font-mono font-bold rounded border bg-white text-black border-gray-400 text-right min-w-[44px] inline-block'
       }, typeof value === 'number' ? value.toFixed(1) : String(value)),
-      React.createElement('span', { className: 'text-[11px] text-gray-600 ml-1.5 w-8' }, units)
+      React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units)
     );
   }
 
@@ -164,10 +164,10 @@ const AHU23ControlsSidebar = (() => {
 
     var display = format ? format(value) : (typeof value === 'number' ? value.toFixed(1) : String(value));
 
-    return React.createElement('div', { className: 'flex items-center justify-between px-3 py-1.5 text-[13px] text-gray-900 border-b border-blue-300/30' },
+    return React.createElement('div', { className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row' },
       React.createElement('span', { className: 'flex-1 font-medium' }, label),
-      React.createElement('span', { className: 'font-mono font-bold text-[13px]' }, display),
-      React.createElement('span', { className: 'text-[11px] text-gray-600 ml-1.5 w-8' }, units || '')
+      React.createElement('span', { className: 'font-mono font-bold text-[10px]' }, display),
+      React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units || '')
     );
   }
 
@@ -179,26 +179,26 @@ const AHU23ControlsSidebar = (() => {
     if (collapsed) {
       return React.createElement('aside', {
         className: 'w-8 flex flex-col items-center pt-2 border-r border-gray-400',
-        style: { backgroundColor: '#b8ccde' }
+        style: { background: (window.CTAPanel || {}).head || '#243247' }
       },
         React.createElement('button', {
-          className: 'text-sm text-gray-700 hover:text-black', onClick: function() { setCollapsed(false); }
+          className: 'text-xs text-gray-700 hover:text-black', onClick: function() { setCollapsed(false); }
         }, '▶')
       );
     }
 
     return React.createElement('aside', {
       className: 'w-full border-r border-gray-400',
-      style: { backgroundColor: '#c4d6ea' },
+      style: { background: (window.CTAPanel || {}).panel || '#e8edf5' },
     },
       // Header bar
       React.createElement('div', {
-        className: 'flex items-center justify-between px-3 py-2 border-b border-gray-500',
-        style: { backgroundColor: '#a0b8d0' }
+        className: 'flex items-center justify-between px-2 py-1 border-b border-gray-400',
+        style: { background: (window.CTAPanel || {}).head || '#243247' }
       },
-        React.createElement('span', { className: 'text-[14px] font-bold text-gray-900' }, 'Controls — AHU-23-1'),
+        React.createElement('span', { className: 'text-[11px] font-bold cta-head-title' }, 'Controls — AHU-23-1'),
         React.createElement('button', {
-          className: 'text-sm text-gray-600 hover:text-black font-bold', onClick: function() { setCollapsed(true); }
+          className: 'text-xs text-gray-600 hover:text-black', onClick: function() { setCollapsed(true); }
         }, '◀')
       ),
 
@@ -222,7 +222,7 @@ const AHU23ControlsSidebar = (() => {
       React.createElement(SectionHeader, { title: 'Alarm Reset' }),
       React.createElement('div', { className: 'flex justify-center py-3' },
         React.createElement('button', {
-          className: 'px-6 py-1.5 text-[13px] font-bold text-gray-800 bg-gray-100 border-2 border-gray-500 rounded-full hover:bg-gray-200 active:bg-gray-300',
+          className: 'px-5 py-1 text-[10px] font-bold bg-gray-100',
           style: { minWidth: '100px' },
           onClick: function() { /* Alarm reset placeholder */ }
         }, 'RESET')
