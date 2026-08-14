@@ -29,6 +29,13 @@
     } else if (lifecycle === 'active' && acknowledged) {
       // Active + Acknowledged → solid filled
       return { background: colors.fill, border: 'none', flashing: false };
+    } else if (lifecycle === 'inactive' && acknowledged) {
+      // Inactive + Acknowledged → outline with a muted centre. v1.3 had no icon
+      // for this because such alarms were filtered off the Summary; they now
+      // stay on the list, so they need to read differently from a cleared alarm
+      // still awaiting acknowledgment.
+      return { background: colors.fill, border: '2px solid ' + colors.outline,
+               flashing: false, opacity: 0.45 };
     } else {
       // Inactive + Unacknowledged → outline only
       return { background: 'transparent', border: '2px solid ' + colors.outline, flashing: false };
@@ -51,6 +58,7 @@
       minWidth: '16px',
       minHeight: '16px'
     };
+    if (style.opacity != null) inlineStyle.opacity = style.opacity;
 
     // Build aria label for accessibility
     var stateLabel = lifecycle + (acknowledged ? '-acknowledged' : '-unacknowledged');
@@ -486,7 +494,10 @@
       return function () { document.removeEventListener('mousedown', handleClickOutside); };
     }, [onClose]);
 
-    var canAck = alarm && alarm.lifecycle === 'active' && !alarm.acknowledged;
+    // Any unacknowledged alarm can be acknowledged, active or returned-to-normal.
+    // Acknowledging is the operator saying "I have seen this" — it is not a
+    // statement that the condition is gone, so a cleared alarm still needs it.
+    var canAck = alarm && !alarm.acknowledged;
 
     return React.createElement('div', {
       ref: menuRef,
@@ -670,17 +681,14 @@
                 }
               }
             }
-            // Per the SymmetrE Operator Manual's alarm-icon legend, only 3
-            // lifecycle×ack combinations are ever shown: active+unack,
-            // inactive+unack, and active+ack. There is no inactive+ack icon —
-            // once an alarm both clears AND is acknowledged, real Station
-            // drops it from the Alarm Summary (it remains in Event history,
-            // which this simulator doesn't separately model). The engines
-            // keep full history via getAllAlarms() for Property 21 testing;
-            // this filter only governs what the visible Summary displays.
+            // Acknowledging is the operator recording "I have seen this" — it is
+            // not a claim the condition is fixed, so an acknowledged alarm stays
+            // on the Summary and reads Acknowledged rather than disappearing.
+            // (Real Station retires a cleared+acknowledged alarm to Event
+            // history; here the row is the teaching artifact, so it remains.)
+            // The engines keep full history via getAllAlarms() regardless.
             return merged.filter(function (a) {
               if (a.priority === 'journal') return false;
-              if (a.lifecycle === 'inactive' && a.acknowledged) return false;
               return true;
             });
           });
@@ -825,7 +833,7 @@
     // Only rows still awaiting acknowledgment can be acknowledged. The footer
     // acts on the ticked set; with nothing ticked it falls back to the
     // highlighted row, so the single-row workflow is unchanged.
-    function ackable(a) { return a && a.lifecycle === 'active' && !a.acknowledged; }
+    function ackable(a) { return a && !a.acknowledged; }
     // Acknowledged rows are not tickable, so the select-all box reflects only
     // the rows a tick can actually do something to.
     var visibleIds = sortedAlarms.filter(function (a) { return !a.acknowledged; })

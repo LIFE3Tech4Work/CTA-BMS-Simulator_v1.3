@@ -85,7 +85,48 @@
 
   // ─── Engineering Calculations ───────────────────────────────────────────────
 
+  /**
+   * Run the control sequences, then re-assert every Manual override on top of
+   * the result. Callers keep calling recalculate() exactly as before.
+   */
+  // Outputs a safety sequence drives directly. v1.3 lets the program win over an
+  // operator hold in these cases — with the fan off the dampers close (SOO System
+  // Off #1) whatever the operator commanded — so the override yields while the
+  // condition is active and resumes when it clears. The Manual flag is kept
+  // throughout, so the point still reads as overridden.
+  var SAFETY_DRIVEN_KEYS = {
+    oaDamperPosition: true, oaCFM: true, cfm: true, fanSpeed: true,
+    returnFanCFM: true, returnCFM: true, economizerActive: true,
+    exhaustDamperPct: true, returnAirDamperPosition: true, spillDamperPosition: true,
+  };
+
+  function safetyOverridesOperator() {
+    return state.fanRunning === false ||
+           state.hardSafetyShutdown === true ||
+           state.freezestatShutdown === true ||
+           state.fireAlarmShutdown === true;
+  }
+
   function recalculate() {
+    computeSequences();
+    if (!manualValues) return;
+    // computeSequences() notifies subscribers from inside the pass, i.e. BEFORE
+    // the overrides go back on — so the UI would render the sequence's value
+    // and a commanded point looked like it never took. Re-notify when an
+    // override actually changed something so what is displayed is what the
+    // point reports.
+    var safety = safetyOverridesOperator();
+    var overrode = false;
+    for (var mk in manualValues) {
+      if (!Object.prototype.hasOwnProperty.call(manualValues, mk)) continue;
+      if (!state.hasOwnProperty(mk)) continue;
+      if (safety && SAFETY_DRIVEN_KEYS[mk]) continue;
+      if (state[mk] !== manualValues[mk]) { state[mk] = manualValues[mk]; overrode = true; }
+    }
+    if (overrode && typeof notifySubscribers === 'function') notifySubscribers();
+  }
+
+  function computeSequences() {
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. FAN LOGIC: Run Schedule On/Off → Fan ON/OFF status + CFM display
@@ -231,10 +272,28 @@
   // setValue()'s existing behaviour is unchanged apart from recording the flag.
   var modes = {};
 
+  // Operator-commanded values for every key currently in Manual. A real BMS
+  // point override sits at priority 8 and OUTRANKS the control program: the
+  // sequence still computes its own answer each pass, but the override is what
+  // the point reports until it is released. recalculate() re-applies these
+  // after every pass, which is what makes a commanded value actually hold —
+  // previously only a handful of keys were spared by their own
+  // "modes.X !== 'Manual'" guards and everything else was recomputed straight
+  // back over the operator's value.
+  var manualValues = {};
+
+  // The value each overridden key held before the operator took it. Releasing
+  // to Auto restores it, so a key the sequence does not recompute (a mode, a
+  // config flag, a field-condition boolean) comes back to what it was instead
+  // of being stuck at the commanded value forever.
+  var autoValues = {};
+
   function setValue(key, value) {
     if (state.hasOwnProperty(key)) {
+      if (!Object.prototype.hasOwnProperty.call(manualValues, key)) autoValues[key] = state[key];
       state[key] = value;
       modes[key] = 'Manual';
+      manualValues[key] = value;
       recalculate();
     }
   }
@@ -245,8 +304,13 @@
 
   /* Release ONE key's Manual override back to Auto. */
   function clearMode(key) {
-    if (modes[key]) {
+    if (modes[key] || Object.prototype.hasOwnProperty.call(manualValues, key)) {
       delete modes[key];
+      delete manualValues[key];
+      if (Object.prototype.hasOwnProperty.call(autoValues, key)) {
+        state[key] = autoValues[key];
+        delete autoValues[key];
+      }
       recalculate();
     }
   }

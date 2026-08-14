@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LIFE3 BMS Simulator — SymmetrE / EBI</title>
 
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="./assets/favicon.png">
+  <link rel="apple-touch-icon" href="./assets/favicon.png">
+
   <link href="./output.css" rel="stylesheet">
 
   <!-- Barlow — the typeface the SymmetrE vector board and point-detail dialog
@@ -250,11 +254,24 @@
       border-bottom: 1px solid #cdd8e6;
     }
     .sym-panel .cta-swatch {
-      border-radius: 2px;
+      /* One footprint for every key, so no single swatch reads louder. */
+      width: 15px;
+      height: 11px;
+      border-radius: 3px;
       vertical-align: middle;
     }
     .sym-panel .cta-swatch--white { background: #fff; border: 1px solid #8496b4; }
     .sym-panel .cta-swatch--grey { background: #e3e8f0; border: 1px solid #a9b6c9; }
+    /* Diagram chip vocabulary, so the key in the panel matches the board. */
+    .sym-panel .cta-swatch--pill { background: #243247; border: 1px solid #16202e; border-radius: 5px; }
+    .sym-panel .cta-swatch--alarm { background: transparent; border: 1.5px solid #e0342b; }
+    .sym-panel .cta-ovr-sample {
+      display: inline-block; width: 15px; height: 11px; margin-right: 4px;
+      border-radius: 3px; box-sizing: border-box;
+      font-family: ui-monospace, monospace; font-size: 8px; font-weight: 800;
+      line-height: 10px; text-align: center;
+      color: #c81fae; border: 1px solid #c81fae; vertical-align: middle;
+    }
     /* LL97 panel muted label tone. The panel shell now uses the station title
        bar's dark gradient, on which Tailwind's gray-500 measures ~2.7:1 — this
        is the chrome's own muted tone (CTAPanel.headSub) at ~6:1. Declared here

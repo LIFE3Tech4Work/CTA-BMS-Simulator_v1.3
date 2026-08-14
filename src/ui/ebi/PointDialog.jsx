@@ -252,6 +252,9 @@ const PointDialog = (function () {
 
     const [tab, setTab] = useState('general');
     const [mode, setMode] = useState(isManual ? 'man' : 'auto');
+    // A binary's Command list selects a state; SET commits it. Applying on click
+    // left CANCEL with nothing to cancel and no SET to match the analog points.
+    const [pendingBin, setPendingBin] = useState(null);
     const [draft, setDraft] = useState(function () {
       if (isBinary) return '';
       const n = typeof raw === 'number' ? raw : 0;
@@ -265,7 +268,19 @@ const PointDialog = (function () {
 
     const bac = BP.bacnetFor(unitId, stateKey);
     const rec = bac.record;
-    const commandable = (kind === 'sp' || kind === 'ao' || kind === 'bo');
+    // Every point is commandable. In a real BMS an operator override is written
+    // at priority 8 and outranks the control program regardless of whether the
+    // point is an input or an output — a sensor can be overridden for testing
+    // just as a damper can. AUTO releases the override back to the sequence.
+    const commandable = true;
+
+    // Command a binary in whatever shape this point's state actually holds, so
+    // an 'ON'/'OFF' status string doesn't come back as a boolean.
+    function binVal(on) {
+      if (typeof raw === 'string') return on ? options[0] : options[1];
+      if (typeof raw === 'number') return on ? 1 : 0;
+      return on;
+    }
     const display = BP.format(stateKey, raw);
 
     // ── attribute rows ──
@@ -291,8 +306,9 @@ const PointDialog = (function () {
     const statusText = (kind === 'ao')
       ? (isManual ? 'MANUAL (overridden)' : 'AUTO')
       : (kind === 'sp' ? 'Operator setpoint'
-        : (kind === 'ai' ? 'Read-only sensor — field / TMY input' : 'Read-only'));
-    const statusColor = isManual ? '#c81fae' : (kind === 'bi' ? '#3f5170' : '#2a6a2a');
+        : (isManual ? 'MANUAL (overridden)'
+          : (kind === 'ai' ? 'AUTO — field / TMY input' : 'AUTO')));
+    const statusColor = isManual ? '#c81fae' : '#2a6a2a';
 
     // ── history series ──
     const series = useMemo(function () {
@@ -421,12 +437,22 @@ const PointDialog = (function () {
     }
 
     function commitSet() {
-      if (isBinary) { onClose(); return; }
+      // Control Mode is a pending choice like the Command list — SET commits it.
+      // Setpoints have no Auto/Manual, so SET always writes their value.
+      if (kind !== 'sp' && mode === 'auto') { onSet(null, 'auto'); onClose(); return; }
+      if (isBinary) {
+        if (pendingBin !== null) onSet(binVal(pendingBin === options[0]), 'man');
+        onClose();
+        return;
+      }
       let v = parseFloat(draft);
       if (isNaN(v)) v = typeof raw === 'number' ? raw : 0;
       v = clamp(v, lo != null ? lo : -1e9, hi != null ? hi : 1e9);
       v = m.dec ? +v.toFixed(m.dec) : Math.round(v);
-      onSet(v, kind === 'sp' ? 'man' : mode);
+      // SET always writes the override — the same as a real point command,
+      // which forces the point to Manual rather than quietly doing nothing
+      // while the point is still in Auto.
+      onSet(v, 'man');
       onClose();
     }
 
@@ -522,26 +548,31 @@ const PointDialog = (function () {
                 })
               )
             ) : null,
-            isBinary ? React.createElement('div', {
-              style: { padding: '8px 10px', borderRadius: '7px', fontWeight: 800, fontSize: '13px',
-                       textAlign: 'center', width: '100%', color: '#fff',
-                       background: (display === options[0])
-                         ? 'linear-gradient(180deg,#5fd694,#22a35d)'
-                         : 'linear-gradient(180deg,#8d9cb4,#68788f)' },
-            }, String(display).toUpperCase()) : null,
+            // Binary points command from the General tab's Command list; a second
+            // set of buttons here was the same control twice.
             React.createElement('div', { style: { width: '100%', textAlign: 'center' } },
               React.createElement('div', { style: { fontSize: '10px', fontWeight: 800, color: '#5a6f8e', letterSpacing: '0.5px' } }, 'PRESENT VALUE'),
+              // A readout, not a field. No box or border — the boxed treatment read
+              // as an editable input, but commands go through the entry field and
+              // SET below, never by typing here.
+              // Unit sits on the value's baseline, not stacked under it.
               React.createElement('div', {
-                style: { background: '#fff', border: '1.5px solid #35bdd3', borderRadius: '5px',
-                         padding: '4px 6px', marginTop: '3px', fontSize: '16px', fontWeight: 800,
-                         color: isManual ? '#c81fae' : '#12294f' },
-              }, display),
-              React.createElement('div', { style: { fontSize: '10px', fontWeight: 700, color: '#5a6f8e', marginTop: '2px' } }, m.unit)
+                style: { display: 'flex', alignItems: 'baseline', justifyContent: 'center',
+                         gap: '3px', padding: '2px 4px 0', marginTop: '1px' },
+              },
+                React.createElement('span', {
+                  style: { fontSize: '19px', fontWeight: 800, lineHeight: 1.15,
+                           color: isManual ? '#c81fae' : '#12294f' },
+                }, display),
+                m.unit ? React.createElement('span', {
+                  style: { fontSize: '10px', fontWeight: 700, color: '#5a6f8e' },
+                }, m.unit) : null
+              )
             ),
             React.createElement('div', { style: { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
               React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, color: '#5a6f8e' } }, 'Mode'),
               React.createElement('span', { style: { fontSize: '12px', fontWeight: 800, color: isManual ? '#c81fae' : '#12294f' } },
-                (kind === 'sp') ? 'Operator' : ((kind === 'ai' || kind === 'bi') ? '—' : (isManual ? 'Manual Ovr' : 'Auto')))
+                (kind === 'sp') ? 'Operator' : (isManual ? 'Manual Ovr' : 'Auto'))
             ),
             React.createElement('div', { style: { width: '100%', display: 'flex', flexDirection: 'column', gap: '5px' } },
               [{ label: 'Alarm', lit: !!alarm, val: alarm ? 'ALARM' : 'Normal', vc: alarm ? '#c22222' : '#2a6a2a' },
@@ -581,13 +612,24 @@ const PointDialog = (function () {
             },
               tab === 'general' ? React.createElement(GeneralTab, {
                 rows: rows, statusText: statusText, statusColor: statusColor,
-                cmdAnalog: !isBinary && (kind === 'sp' || (kind === 'ao' && mode === 'man')),
-                cmdMode: kind === 'ao',
-                cmdOptions: (kind === 'bo') ? options.map(function (o) {
-                  return { label: o, active: display === o, onClick: function () { onSet(o === options[0], 'man'); onClose(); } };
+                cmdAnalog: !isBinary && (kind === 'sp' || mode === 'man'),
+                cmdMode: kind !== 'sp',
+                // The Command list is only meaningful while the point is Manual —
+                // in Auto the sequence owns the point, so offering states to
+                // command implies a write that would silently be overwritten.
+                cmdOptions: (isBinary && mode === 'man') ? options.map(function (o) {
+                  return {
+                    label: o,
+                    active: (pendingBin !== null)
+                      ? (o === pendingBin)
+                      : (String(display).toUpperCase() === String(o).toUpperCase()),
+                    onClick: function () { setPendingBin(o); },
+                  };
                 }) : null,
                 draft: draft, onDraft: setDraft, onStep: step,
-                mode: mode, onAuto: () => setMode('auto'), onManual: () => setMode('man'),
+                mode: mode,
+                onAuto: () => setMode('auto'),
+                onManual: () => setMode('man'),
               }) : null,
               tab === 'prio' ? React.createElement(PriorityTab, {
                 prios: prios,
@@ -665,9 +707,8 @@ const PointDialog = (function () {
                 },
                   React.createElement('span', { style: { fontSize: '10.5px', fontWeight: 700, color: '#5a6f8e' } }, 'History offset'),
                   React.createElement('span', {
-                    style: { background: '#fff', border: '1px solid #98a6bd', borderRadius: '3px',
-                             padding: '2px 8px', fontSize: '10.5px', fontWeight: 700, color: '#12294f',
-                             minWidth: '46px', textAlign: 'center' },
+                    style: { padding: '2px 4px', fontSize: '10.5px', fontWeight: 800, color: '#12294f',
+                             minWidth: '46px', textAlign: 'right' },
                   }, hist.off || '0 d'),
                   React.createElement('span', { style: { fontSize: '10.5px', fontWeight: 700, color: '#5a6f8e', marginLeft: 'auto' } }, 'Value at'),
                   React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, color: '#12294f' } }, hist.at || 'now'),
@@ -687,18 +728,18 @@ const PointDialog = (function () {
                    borderTop: '1px solid #cdd8e6', flexShrink: 0,
                    background: 'linear-gradient(180deg,#eef2f8,#e4eaf3)' },
         },
-          (commandable && !isBinary) ? React.createElement('div', {
-            style: { flex: 1, textAlign: 'center', padding: '10px', borderRadius: '6px',
-                     background: 'linear-gradient(180deg,#3f8f5a,#2d7346)', color: '#fff',
-                     fontWeight: 800, cursor: 'pointer' },
-            onClick: commitSet,
-          }, 'SET') : null,
           React.createElement('div', {
             style: { flex: 1, textAlign: 'center', padding: '10px', borderRadius: '6px',
                      background: '#e2e8f2', border: '1px solid #b7c3d6', color: '#3f5170',
                      fontWeight: 800, cursor: 'pointer' },
             onClick: onClose,
-          }, 'CLOSE')
+          }, 'CANCEL'),
+          commandable ? React.createElement('div', {
+            style: { flex: 1, textAlign: 'center', padding: '10px', borderRadius: '6px',
+                     background: 'linear-gradient(180deg,#3f8f5a,#2d7346)', color: '#fff',
+                     fontWeight: 800, cursor: 'pointer' },
+            onClick: commitSet,
+          }, 'SET') : null
         )
       )
     ), document.body);

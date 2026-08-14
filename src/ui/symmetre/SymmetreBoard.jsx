@@ -179,7 +179,22 @@ const SymmetreBoard = (function () {
 
   // ─── Fan command block ──────────────────────────────────────────────────────
 
-  function FanBlock({ cfg, on, cmdOn, interlock, showInterlock, onOpen, onToggle, starting, secsLeft }) {
+  // Flip a point in whatever shape it holds, so an 'ON'/'OFF' status point
+  // doesn't come back as a boolean and stop matching its own display.
+  function invertOf(v) {
+    if (typeof v === 'boolean') return !v;
+    if (typeof v === 'number') return v ? 0 : 1;
+    const s = String(v).toUpperCase();
+    if (s === 'ON') return 'OFF';
+    if (s === 'OFF') return 'ON';
+    if (s === 'START') return 'STOP';
+    if (s === 'STOP') return 'START';
+    if (s === 'OPEN') return 'CLOSED';
+    if (s === 'CLOSED') return 'OPEN';
+    return !v;
+  }
+
+  function FanBlock({ cfg, on, cmdOn, interlock, showInterlock, onOpen, onToggle, starting, secsLeft, overridden }) {
     const bg = starting
       ? 'linear-gradient(180deg,#f5c46a,#d18b16)'
       : (on ? 'linear-gradient(180deg,#5fd694,#22a35d)' : 'linear-gradient(180deg,#e88f88,#c0332b)');
@@ -192,7 +207,7 @@ const SymmetreBoard = (function () {
 
     return React.createElement('div', {
       style: { position: 'absolute', left: cfg.x + 'px', top: cfg.y + 'px', width: '205px',
-               height: '58px', borderRadius: '12px', background: bg,
+               height: '64px', borderRadius: '12px', background: bg,
                border: '1.4px solid ' + (starting ? '#ffe0a0' : (on ? '#9ff0c2' : '#eeaba4')),
                cursor: 'pointer',
                color: '#fff', textAlign: 'center', boxShadow: '0 3px 8px rgba(20,60,40,.22)', zIndex: 4 },
@@ -205,9 +220,11 @@ const SymmetreBoard = (function () {
                  border: '1px solid rgba(255,255,255,0.38)',
                  boxShadow: 'inset 0 1.5px 4px rgba(0,0,0,0.35)', cursor: 'pointer',
                  zIndex: 5, overflow: 'hidden' },
-        title: cmdOn
-          ? 'Click to command Shutdown (Run Schedule Off)'
-          : 'Click to command Start (Run Schedule On)',
+        title: overridden
+          ? ('Manual override \u2014 click to command ' + (cmdOn ? 'Shutdown' : 'Start'))
+          : (cmdOn
+            ? 'Click to command Shutdown (Run Schedule Off)'
+            : 'Click to command Start (Run Schedule On)'),
         onClick: (e) => { e.stopPropagation(); onToggle(); },
       },
         React.createElement('div', {
@@ -230,7 +247,7 @@ const SymmetreBoard = (function () {
         : React.createElement('div', {
             style: { position: 'absolute', left: 0, top: '31px', width: '205px', fontSize: '20px',
                      fontWeight: 800, lineHeight: 1 },
-          }, on ? 'ON' : 'OFF')
+          }, (on ? 'ON' : 'OFF') + (overridden ? ' \u00b7 MANUAL' : ''))
     );
   }
 
@@ -261,9 +278,12 @@ const SymmetreBoard = (function () {
       key: key,
       style: { position: 'absolute', left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px',
                borderRadius: '8px',
-               background: lit ? 'linear-gradient(180deg,#ff6a5a,#d21f1f)' : 'rgba(190,210,238,0.5)',
-               border: '1px solid ' + (lit ? '#ffb3aa' : 'rgba(227,238,251,0.85)'),
-               color: lit ? '#fff' : '#8299b7', fontWeight: 800, fontSize: '10.5px',
+               background: lit ? 'linear-gradient(180deg,#ff6a5a,#d21f1f)' : 'rgba(203,221,244,0.6)',
+               border: '1px solid ' + (lit ? '#ffb3aa' : 'rgba(233,241,252,0.85)'),
+               // Unlit pills sat at #8299b7 on this fill — about 2.5:1, which read as
+               // mush. The fill stays close to its original tone; the label carries
+               // the legibility instead.
+               color: lit ? '#fff' : '#486080', fontWeight: 800, fontSize: '10.5px',
                letterSpacing: '.2px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                zIndex: 2, animation: lit ? 'bms-blink 1s infinite' : 'none' },
     }, label);
@@ -400,12 +420,13 @@ const SymmetreBoard = (function () {
 
     const children = [];
 
-    // artwork
-    children.push(React.createElement('div', {
+    // Artwork is rendered outside `children` so a unit's artView wrapper scales
+    // only the overlay — the SVG already carries that zoom in its own viewBox.
+    const artChild = React.createElement('div', {
       key: 'art',
       style: { position: 'absolute', left: 0, top: 0, width: BOARD_W + 'px', height: BOARD_H + 'px' },
       dangerouslySetInnerHTML: { __html: svg },
-    }));
+    });
 
     // pill stacks + fan blocks
     cfg.fans.forEach(function (fan, i) {
@@ -414,17 +435,25 @@ const SymmetreBoard = (function () {
       const on = (typeof rawOn === 'boolean') ? rawOn : (rawOn === 'ON' || rawOn === 'On' || rawOn === 'Start');
       const cmdKey = fan.cmdKey || fan.key;
       const rawCmd = state[cmdKey];
-      const cmdOn = (typeof rawCmd === 'boolean') ? rawCmd : (rawCmd === 'ON' || rawCmd === 'On' || rawCmd === 'Start');
+      const runCmdOn = (typeof rawCmd === 'boolean') ? rawCmd : (rawCmd === 'ON' || rawCmd === 'On' || rawCmd === 'Start');
+      // With the status point under a manual override, the run command is no
+      // longer what the fan reports — showing the toggle on START next to a
+      // forced OFF made the block contradict itself. While overridden the
+      // toggle follows the status it is displaying, and flips that same point.
+      const statusManual = modes[fan.key] === 'Manual';
+      const toggleKey = statusManual ? fan.key : cmdKey;
+      const cmdOn = statusManual ? on : runCmdOn;
       // Staged start (SOO System Start): the unit is commanded on but the fan
       // is still held off while dampers travel. Surfaced so a commanded START
-      // doesn't just read OFF for minutes with no explanation.
-      const starting = !on && cmdOn && !!state.systemStarting;
+      // doesn't just read OFF for minutes with no explanation. A forced status
+      // isn't a staged start, so it never shows the countdown.
+      const starting = !statusManual && !on && runCmdOn && !!state.systemStarting;
       children.push(React.createElement(FanBlock, {
-        key: 'fan' + i, cfg: fan, on: on, cmdOn: cmdOn,
+        key: 'fan' + i, cfg: fan, on: on, cmdOn: cmdOn, overridden: statusManual,
         starting: starting, secsLeft: state.startingTimeLeft,
         interlock: !!state[fan.interlockKey], showInterlock: !!fan.interlockKey,
         onOpen: () => setOpenKey(fan.key),
-        onToggle: () => commandPoint(cmdKey, !state[cmdKey], 'man'),
+        onToggle: () => commandPoint(toggleKey, invertOf(state[toggleKey]), 'man'),
       }));
     });
 
@@ -489,7 +518,23 @@ const SymmetreBoard = (function () {
           style: { position: 'absolute', left: 0, top: 0, width: BOARD_W + 'px', height: BOARD_H + 'px',
                    transformOrigin: 'top left', transform: 'scale(' + scale + ')',
                    fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif", userSelect: 'none' },
-        }, children)
+        },
+          artChild,
+          // Units whose artwork is zoomed through its viewBox map the overlay by
+          // the same transform, so every chip stays registered to its device and
+          // scales with it. Units without artView render the overlay untouched.
+          cfg.artView
+            ? React.createElement('div', {
+                key: 'overlay',
+                style: { position: 'absolute', left: 0, top: 0,
+                         width: BOARD_W + 'px', height: BOARD_H + 'px',
+                         transformOrigin: 'top left',
+                         transform: 'translate(' + (-cfg.artView.vx * cfg.artView.s) + 'px,'
+                                    + (-cfg.artView.vy * cfg.artView.s) + 'px) scale('
+                                    + cfg.artView.s + ')' },
+              }, children)
+            : children
+        )
       ),
       openKey && window.PointDialog ? React.createElement(window.PointDialog, {
         unitId: unitId,
