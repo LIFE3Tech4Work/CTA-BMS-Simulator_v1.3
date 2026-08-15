@@ -155,7 +155,7 @@
   var SAFETY_DRIVEN_KEYS = {
     oaDamperPosition: true, oaCFM: true, cfm: true, fanSpeed: true,
     returnFanCFM: true, returnCFM: true, economizerActive: true,
-    exhaustDamperPct: true, returnAirDamperPosition: true, spillDamperPosition: true,
+    exhaustDamperPct: true, returnAirDamperPct: true, spillDamperPct: true,
   };
 
   function safetyOverridesOperator() {
@@ -196,11 +196,18 @@
       state.returnFanStatus = 'OFF';
     } else {
       state.fanRunning = true;
-      state.fanSpeed = state.fanSpeedSetpoint;
+      state.fanSpeed = Math.round(Math.max(state.minPositionFanSpeedLock, Math.min(100, state.fanSpeedSetpoint)));
       state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
       state.supplyFanStatus = 'ON';
       state.returnFanStatus = 'ON';
     }
+
+    // Interlock/exhaust/common-damper status tracks fan run state — previously
+    // left at their true initial value forever since nothing here reassigned
+    // them, so the interlock indicator read "on" even after the unit shut down.
+    state.interlockOn = state.fanRunning;
+    state.exhaustFanOn = state.fanRunning;
+    state.commonDamperOpen = state.fanRunning;
 
     // 2. ECONOMIZER LOGIC: Auto-calculate enthalpy eligibility (SOO CLC #2)
     // AUTO: OA enthalpy < (Return air enthalpy − 5.0 BTU/lb) AND OA > 38°F
@@ -259,14 +266,23 @@
 
     // ── Damper positions ─────────────────────────────────────────────────────
     // DA-2: Return air damper is INVERSE of OA (SOO CLC #8: return closes as OA opens)
-    state.returnAirDamperPct = state.fanRunning ? Math.max(0, 100 - state.oaDamperPosition) : 0;
+    // — unless the operator has manually overridden it, in which case it holds
+    // its commanded value independently instead of being recomputed every tick.
+    if (state.fanRunning) {
+      if (modes.returnAirDamperPct !== 'Manual') {
+        state.returnAirDamperPct = Math.max(0, 100 - state.oaDamperPosition);
+      }
+    } else {
+      state.returnAirDamperPct = 0;
+    }
 
     // DA-3: Spill damper (SOO points list: DA-3, Normally Open = N.O.)
     // Fails OPEN when system is off (100%). When running at min OA, stays near 0%.
-    // Opens proportionally as fresh air demand exceeds minimum position.
+    // Opens proportionally as fresh air demand exceeds minimum position, unless
+    // manually overridden, which holds independently of the OA damper.
     if (!state.fanRunning) {
       state.spillDamperPct = 100; // N.O. = fully open when system off
-    } else {
+    } else if (modes.spillDamperPct !== 'Manual') {
       var extraOADemand = Math.max(0, state.oaDamperPosition - state.economizerMinPosition);
       state.spillDamperPct = Math.min(100, Math.round(extraOADemand * 1.5));
     }
