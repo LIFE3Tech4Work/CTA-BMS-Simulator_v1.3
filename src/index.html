@@ -337,6 +337,7 @@
 
   <!-- SymmetrE Station UI components -->
   <script type="text/babel" src="ui/symmetre/BottomStatusBar.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/WeatherControl.jsx"></script>
   <script type="text/babel" src="ui/symmetre/ZoneTabs.jsx"></script>
   <script type="text/babel" src="ui/symmetre/ControlsSidebar.jsx"></script>
   <script type="text/babel" src="ui/symmetre/AHUGraphic.jsx"></script>
@@ -381,6 +382,7 @@
   <script src="simulation/PointRegistry.js"></script>
   <script src="simulation/Engine.js"></script>
   <script src="simulation/TMY3Projector.js"></script>
+  <script src="simulation/WeatherOverride.js"></script>
   <script src="simulation/FaultEngine.js"></script>
   <script src="simulation/LL97Accumulator.js"></script>
   <script src="simulation/AHU23Controller.js"></script>
@@ -442,22 +444,18 @@
           // Interpolate all point values to current position
           window.PointRegistry.interpolate(event.rowIndex, event.interpolationFraction);
 
-          // Feed live weather into AHU controllers so diagrams respond to OAT changes
-          if (window.TMY3Projector && window.TMY3Projector.interpolateWeather) {
-            var weather = window.TMY3Projector.interpolateWeather(event.rowIndex, event.interpolationFraction);
-            if (weather) {
-              // AHU-23-1 controller
-              if (window.AHU23Controller) {
-                window.AHU23Controller.setValue('oaTemperature', Math.round(weather.dryBulb * 10) / 10);
-                window.AHU23Controller.setValue('oaEnthalpy', Math.round(weather.enthalpy * 10) / 10);
-              }
-              // AHU-4-4 controller
-              if (window.AHU44NewController) {
-                window.AHU44NewController.setValue('oaTemperature', Math.round(weather.dryBulb * 10) / 10);
-                window.AHU44NewController.setValue('oaEnthalpy', Math.round(weather.enthalpy * 10) / 10);
-              }
-            }
-          }
+          // Live weather for AHU-23-1/AHU-4-4/AHU-4-6 is now pushed exclusively
+          // through each controller's own updateFromTMY3() (see App.jsx's tick
+          // handler) instead of here. This block used to call .setValue()
+          // directly, which — unlike updateFromTMY3() — always overwrites and
+          // always (re-)marks the point Manual regardless of any existing
+          // override, so it silently fought the Manual Weather Control panel
+          // (checklist Section C): an instructor's "Winter" override on
+          // AHU-23-1/AHU-4-4 would hold for a moment and then get stomped back
+          // to the live TMY value on the very next tick. AHU-4-6 was never
+          // included in this block, which is exactly why it never had this
+          // problem. Removed rather than guarded, since updateFromTMY3() on
+          // all three controllers now does this job correctly.
 
           // LL97 Accumulator: tick once per simulated hour (when row advances)
           if (window.LL97Accumulator && event.rowIndex > lastAccumulatedRow) {

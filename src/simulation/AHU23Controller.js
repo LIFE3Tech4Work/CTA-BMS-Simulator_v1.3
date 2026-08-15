@@ -332,6 +332,27 @@
     };
   }
 
+  /**
+   * Push live TMY3 weather into the controller for the current simulation
+   * tick. Yields to a manual override so a hand-set outdoor condition holds
+   * (same pattern as AHU46Controller/AHU44NewController). Previously this
+   * unit had no TMY3 wiring at all — oaTemperature/oaEnthalpy were static
+   * seed values that never moved with the simulation clock.
+   *
+   * @param {number} row - current simulation row (1-indexed)
+   * @param {number} fraction - interpolation fraction between row and row+1 (0-1)
+   */
+  function updateFromTMY3(row, fraction) {
+    if (!window.TMY3Projector || !window.TMY3Projector.interpolateWeather) return;
+
+    var weather = window.TMY3Projector.interpolateWeather(row, fraction);
+    if (!weather) return;
+
+    if (modes.oaTemperature !== 'Manual') state.oaTemperature = weather.dryBulb;
+    if (modes.oaEnthalpy !== 'Manual') state.oaEnthalpy = weather.enthalpy;
+    recalculate();
+  }
+
   // Initial calculation on load
   recalculate();
 
@@ -344,6 +365,7 @@
     clearMode: clearMode,
     subscribe: subscribe,
     recalculate: recalculate,
+    updateFromTMY3: updateFromTMY3,
   };
 
 })();

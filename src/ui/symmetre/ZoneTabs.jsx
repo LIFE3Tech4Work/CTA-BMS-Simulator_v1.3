@@ -18,13 +18,29 @@ const OutsideAirStrip = (function () {
   const { useContext } = React;
 
   function OutsideAirStripComponent({ variant }) {
+    var { useState: useStateOA, useEffect: useEffectOA } = React;
     var simCtx = useContext(window.SimulationContext);
     var currentRow = (simCtx && simCtx.currentRow) || 1;
     var fraction   = (simCtx && simCtx.interpolationFraction) || 0;
 
-    var weather = (window.TMY3Projector && window.TMY3Projector.interpolateWeather)
+    // While a manual weather override is active, this strip shows the
+    // override's own reading (a real recorded TMY3 date for a preset, or the
+    // hand-typed custom condition) instead of the live sim-clock row — the
+    // sim clock itself can't move to an out-of-window date like Jan 1, so
+    // showing its unrelated May/June value here while a "Winter" override is
+    // in effect made it look like nothing had happened.
+    var [ovr, setOvr] = useStateOA(function () {
+      return window.WeatherOverride ? window.WeatherOverride.getState() : { active: false };
+    });
+    useEffectOA(function () {
+      if (!window.WeatherOverride) return;
+      return window.WeatherOverride.subscribe(setOvr);
+    }, []);
+
+    var liveWeather = (window.TMY3Projector && window.TMY3Projector.interpolateWeather)
       ? window.TMY3Projector.interpolateWeather(currentRow, fraction)
       : null;
+    var weather = ovr.active ? ovr.weather : liveWeather;
 
     function fmt(val, dec) {
       return (val != null && !isNaN(val)) ? Number(val).toFixed(dec != null ? dec : 1) : '--';
@@ -69,14 +85,19 @@ const OutsideAirStrip = (function () {
           style: { color: '#eaf2ff', fontSize: '11px', fontWeight: 800, letterSpacing: '.5px', lineHeight: 1.15 },
         }, 'OUTSIDE AIR'),
         React.createElement('span', {
-          style: { color: '#c6d8f2', fontSize: '8.5px', fontWeight: 700, letterSpacing: '.3px', lineHeight: 1.15 },
-        }, 'TMY WEATHER DATA')
+          style: { color: ovr.active ? '#ff9bec' : '#c6d8f2', fontSize: '8.5px', fontWeight: 700,
+                   letterSpacing: '.3px', lineHeight: 1.15 },
+        }, ovr.active
+             ? ('OVERRIDE' + (ovr.dateLabel ? ' — ' + ovr.dateLabel : ' — CUSTOM'))
+             : 'TMY WEATHER DATA')
       ),
       Cell('OA Temp',    fmt(weather && weather.dryBulb),     '°F'),
       Cell('RH',         fmt(weather && weather.relHumidity),  '%'),
       Cell('Dewpoint',   fmt(weather && weather.dewPoint),     '°F'),
       Cell('Wetbulb',    fmt(weather && weather.wetBulb),      '°F'),
-      Cell('Enthalpy',   fmt(weather && weather.enthalpy),     'BTU/lb')
+      Cell('Enthalpy',   fmt(weather && weather.enthalpy),     'BTU/lb'),
+      React.createElement('div', { style: { flex: 1 } }),
+      window.WeatherControl ? React.createElement(window.WeatherControl, null) : null
     );
   }
 

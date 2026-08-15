@@ -480,9 +480,22 @@ function App() {
         });
       }
 
-      // AHU-4-6: push TMY3 weather into the Meeting Room controller on each tick
+      // Push TMY3 weather into every unit controller on each tick. AHU-4-4's
+      // updateFromTMY3() existed but was only ever called from the retired
+      // AHU44NewImageOverlay.jsx (dead code since SymmetreBoard.jsx became
+      // the live renderer) — its oaTemperature/oaEnthalpy were silently
+      // stuck at their static seed values. AHU-23-1 had no TMY3 wiring at
+      // all until this pass. Fixed as part of Section C (manual weather
+      // control) — a "release to live TMY" control is meaningless if the
+      // unit was never actually following TMY3 to begin with.
       if (window.AHU46Controller && typeof window.AHU46Controller.updateFromTMY3 === 'function') {
         window.AHU46Controller.updateFromTMY3(event.rowIndex, event.interpolationFraction || 0);
+      }
+      if (window.AHU44NewController && typeof window.AHU44NewController.updateFromTMY3 === 'function') {
+        window.AHU44NewController.updateFromTMY3(event.rowIndex, event.interpolationFraction || 0);
+      }
+      if (window.AHU23Controller && typeof window.AHU23Controller.updateFromTMY3 === 'function') {
+        window.AHU23Controller.updateFromTMY3(event.rowIndex, event.interpolationFraction || 0);
       }
 
       // AHU-4-6 fault evaluation — was previously ONLY evaluated inside
