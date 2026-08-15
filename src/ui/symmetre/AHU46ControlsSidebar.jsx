@@ -452,7 +452,7 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(NormToggleRow, { label: 'Lockout Active', stateKey: 'softwareLockout' }),
 
       // CALCULATED OUTPUTS — OA Damper Position is Manual-able (same as AHU-4-4)
-      React.createElement(SectionHeader, { title: 'Calculated Outputs  ·  Read-Only' }),
+      React.createElement(SectionHeader, { title: 'Calculated Outputs' }),
       React.createElement(ReadOnlyRow, { label: 'Fan Status', stateKey: 'fanRunning', units: '',
         format: function(v) { return v ? '● RUNNING' : '○ STOPPED'; } }),
       React.createElement(ReadOnlyRow, { label: 'Supply CFM', stateKey: 'cfm', units: 'CFM',

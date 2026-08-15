@@ -373,7 +373,7 @@ const AHU44NewControlsSidebar = (() => {
       // CALCULATED OUTPUTS (mostly read-only — OA Damper Position can be
       // manually overridden, same as a real BACnet AO going Manual; see
       // the Manual-output note in AHU44NewController.js's file header)
-      React.createElement(SectionHeader, { title: 'Calculated Outputs  ·  Read-Only' }),
+      React.createElement(SectionHeader, { title: 'Calculated Outputs' }),
       React.createElement(ReadOnlyRow, { label: 'Fan Status', stateKey: 'fanRunning', units: '',
         format: function(v) { return v ? '● RUNNING' : '○ STOPPED'; } }),
       React.createElement(ReadOnlyRow, { label: 'Supply CFM', stateKey: 'cfm', units: 'CFM',
