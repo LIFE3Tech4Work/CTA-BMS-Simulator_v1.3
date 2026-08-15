@@ -138,7 +138,7 @@
       state.cfm = 0;
     } else {
       state.fanRunning = true;
-      state.fanSpeed = state.fanSpeedSetpoint;
+      state.fanSpeed = Math.round(Math.max(state.minPositionFanSpeedLock, Math.min(100, state.fanSpeedSetpoint)));
       state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
     }
 
@@ -150,30 +150,38 @@
     state.economizerActive = false;
 
     if (state.fanRunning) {
-      // Economizer activates when ALL conditions are met:
-      // - OAT is below economizer changeover setpoint (free cooling available)
-      // - Enthalpy is OK (outdoor air is dry enough)
-      // - Low OAT lockout is NOT active (not too cold to use 100% OA)
-      if (state.oaTemperature < state.economizerTempControlSP &&
-          state.enthalpyOKForEconomizer &&
-          !state.lowOATLockout) {
-        state.economizerActive = true;
-        // Full economizer: damper opens to 100% for maximum free cooling
-        state.oaDamperPosition = 100;
-      } else {
-        // No economizer: damper sits at minimum position floor
-        state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
-      }
+      // Unlike AHU-4-6/4-4, this unit's economizer block had no manual-mode
+      // guard at all — an operator override on the OA damper was overwritten
+      // on the very next tick regardless of starting/running state.
+      var oaDamperManual = modes.oaDamperPosition === 'Manual';
 
-      // CO₂ Demand-Controlled Ventilation (DCV) override
-      // When CO₂ exceeds setpoint, increase OA damper above minimum to bring
-      // in more fresh air — proportional to excess CO₂
-      if (state.co2Sensor > state.co2Setpoint && !state.economizerActive) {
-        var co2Excess = state.co2Sensor - state.co2Setpoint;
-        // Proportional gain: every 5 PPM over setpoint = 1% more damper
-        var co2DamperCommand = Math.min(100, state.economizerMinPosition + (co2Excess / 5));
-        state.oaDamperPosition = Math.round(co2DamperCommand);
+      if (!oaDamperManual) {
+        // Economizer activates when ALL conditions are met:
+        // - OAT is below economizer changeover setpoint (free cooling available)
+        // - Enthalpy is OK (outdoor air is dry enough)
+        // - Low OAT lockout is NOT active (not too cold to use 100% OA)
+        if (state.oaTemperature < state.economizerTempControlSP &&
+            state.enthalpyOKForEconomizer &&
+            !state.lowOATLockout) {
+          state.economizerActive = true;
+          // Full economizer: damper opens to 100% for maximum free cooling
+          state.oaDamperPosition = 100;
+        } else {
+          // No economizer: damper sits at minimum position floor
+          state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
+        }
+
+        // CO₂ Demand-Controlled Ventilation (DCV) override
+        // When CO₂ exceeds setpoint, increase OA damper above minimum to bring
+        // in more fresh air — proportional to excess CO₂
+        if (state.co2Sensor > state.co2Setpoint && !state.economizerActive) {
+          var co2Excess = state.co2Sensor - state.co2Setpoint;
+          // Proportional gain: every 5 PPM over setpoint = 1% more damper
+          var co2DamperCommand = Math.min(100, state.economizerMinPosition + (co2Excess / 5));
+          state.oaDamperPosition = Math.round(co2DamperCommand);
+        }
       }
+      // else: Manual hold — program yields authority (same as AHU-4-6/4-4)
     } else {
       // Fan off: damper closed
       state.oaDamperPosition = 0;
