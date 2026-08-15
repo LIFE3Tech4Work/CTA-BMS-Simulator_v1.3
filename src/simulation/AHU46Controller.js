@@ -385,12 +385,20 @@
     state.exhaustFanOn = fanOn;
     state.commonDamperOpen = fanOn;
 
+    // The OA damper is held at floor throughout staging per the SOO — unless
+    // the operator has manually overridden it, in which case the commanded
+    // value holds through the ramp too, instead of being silently stomped
+    // back to the floor every tick while the box shows purple/Manual.
+    var oaDamperManualDuringStart = modes.oaDamperPosition === 'Manual';
+
     if (!fanOn) {
       // Pre-start: OA/RA dampers traveling, SF/RF both still off.
       state.fanSpeed = 0;
       state.cfm = 0;
-      var travelFraction = sfDelayEnd > 0 ? Math.min(1, elapsedSec / sfDelayEnd) : 1;
-      state.oaDamperPosition = Math.round(OA_DAMPER_FLOOR * travelFraction);
+      if (!oaDamperManualDuringStart) {
+        var travelFraction = sfDelayEnd > 0 ? Math.min(1, elapsedSec / sfDelayEnd) : 1;
+        state.oaDamperPosition = Math.round(OA_DAMPER_FLOOR * travelFraction);
+      }
     } else if (elapsedSec < sfRampEnd) {
       // SF ramping from its minimum-position lock speed up to setpoint.
       var rampSpan = sfRampEnd - sfDelayEnd;
@@ -399,12 +407,12 @@
         state.minPositionFanSpeedLock + rampFraction * (state.fanSpeedSetpoint - state.minPositionFanSpeedLock)
       );
       state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
-      state.oaDamperPosition = OA_DAMPER_FLOOR;
+      if (!oaDamperManualDuringStart) state.oaDamperPosition = OA_DAMPER_FLOOR;
     } else {
       // SF holding at setpoint speed; RF starting/holding; VAV poll hold.
       state.fanSpeed = state.fanSpeedSetpoint;
       state.cfm = Math.round(DESIGN_CFM * state.fanSpeed / 100);
-      state.oaDamperPosition = OA_DAMPER_FLOOR;
+      if (!oaDamperManualDuringStart) state.oaDamperPosition = OA_DAMPER_FLOOR;
     }
 
     // No economizer/CO₂ DCV authority until the sequence completes — the
@@ -779,9 +787,16 @@
     // [and] spill air dampers will be closed"), not the naive
     // complementary value (100 − 0 = 100) that formula would otherwise
     // give at a closed OA damper. SCENARIO_TRACKING.md item #11.
+    // As with the OA damper above, a manual override on either point holds
+    // its own commanded value independently instead of being recomputed from
+    // oaDamperPosition every tick.
     if (state.fanRunning) {
-      state.returnAirDamperPosition = 100 - state.oaDamperPosition;
-      state.spillDamperPosition = state.oaDamperPosition;
+      if (modes.returnAirDamperPosition !== 'Manual') {
+        state.returnAirDamperPosition = 100 - state.oaDamperPosition;
+      }
+      if (modes.spillDamperPosition !== 'Manual') {
+        state.spillDamperPosition = state.oaDamperPosition;
+      }
     } else {
       state.returnAirDamperPosition = 0;
       state.spillDamperPosition = 0;
