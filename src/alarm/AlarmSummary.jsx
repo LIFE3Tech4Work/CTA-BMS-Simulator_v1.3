@@ -238,8 +238,12 @@
   // heading up with the Action column from the same numbers.
   var TREE_W = 230, SELECT_W = 36, CELL_PAD_X = 10, BOX_W = 15;
 
-  // Action sits in the leftmost data position (right after the selection box),
-  // so the acknowledge state of every row reads down a single edge column.
+  // Action sits in the leftmost data position (right after the selection
+  // spacer), so the acknowledge state of every row reads down a single edge
+  // column. The 'select' column used to hold a per-row checkbox for
+  // multi-select acknowledge; that was removed (real BMS practice requires
+  // acknowledging alarms one at a time, per Lev) but the column stays as a
+  // plain spacer so the row-highlight/click-to-select gutter still lines up.
   var COLUMNS = [
     { key: 'select', label: '', sortable: false, width: '' },
     { key: 'action', label: 'Action', sortable: true, width: 'w-24' },
@@ -257,39 +261,6 @@
   // A real <input type="checkbox"> so keyboard and screen readers get the native
   // behaviour, but drawn explicitly (appearance:none + an inline check glyph) so
   // the ticked state is unambiguous against the dark rows.
-  var TICK_SVG = "url(\"data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.4l2.6 2.6L11 4.6' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
-  var DASH_SVG = "url(\"data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.5 7h7' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E\")";
-
-  function TickBox({ checked, indeterminate, disabled, onToggle, label }) {
-    var on = !!checked || !!indeterminate;
-    return React.createElement('input', {
-      type: 'checkbox',
-      checked: !!checked,
-      disabled: !!disabled,
-      ref: function (el) { if (el) el.indeterminate = !!indeterminate; },
-      onChange: function () {},
-      onClick: function (e) {
-        e.stopPropagation();
-        if (disabled) { e.preventDefault(); return; }
-        onToggle(e.shiftKey);
-      },
-      style: {
-        appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-        width: BOX_W + 'px', height: BOX_W + 'px', margin: 0, padding: 0,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        flexShrink: 0, borderRadius: '3px', boxSizing: 'border-box',
-        background: disabled ? '#161c28' : (on ? '#2f6fd0' : '#1b2536'),
-        border: '1px solid ' + (disabled ? '#2b3444' : (on ? '#5b9bd5' : '#46536b')),
-        backgroundImage: disabled ? 'none' : (indeterminate ? DASH_SVG : (checked ? TICK_SVG : 'none')),
-        backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
-        backgroundSize: '13px 13px', colorScheme: 'dark',
-        opacity: disabled ? 0.55 : 1
-      },
-      title: disabled ? label : undefined,
-      'aria-label': label
-    });
-  }
-
   // ─── Sorting Logic (Property 14) ─────────────────────────────────────────────
 
   function compareAlarms(a, b, sortColumn, sortDirection) {
@@ -338,7 +309,7 @@
 
   // ─── Alarm Table Header ───────────────────────────────────────────────────────
 
-  function AlarmTableHeader({ sortColumn, sortDirection, onSort, allChecked, someChecked, onToggleAll }) {
+  function AlarmTableHeader({ sortColumn, sortDirection, onSort }) {
     return React.createElement('div', {
       className: 'select-none alarm-grid',
       style: { display: 'flex', alignItems: 'stretch', background: '#23272e',
@@ -354,19 +325,15 @@
         }
 
         if (col.key === 'select') {
+          // Plain spacer — the multi-select "acknowledge all" checkbox
+          // column was removed (item B: real BMS requires one-at-a-time
+          // acknowledgment). Kept as an empty cell so columns still line up
+          // with each row's selection gutter.
           return React.createElement('div', {
             key: col.key,
-            className: 'flex items-center justify-center',
             style: { width: SELECT_W + 'px', flexShrink: 0, padding: '8px 6px', boxSizing: 'border-box' },
             role: 'columnheader'
-          },
-            React.createElement(TickBox, {
-              checked: allChecked,
-              indeterminate: someChecked && !allChecked,
-              onToggle: onToggleAll,
-              label: allChecked ? 'Deselect all alarms' : 'Select all alarms'
-            })
-          );
+          });
         }
 
         return React.createElement('div', {
@@ -387,7 +354,7 @@
 
   // ─── Alarm Table Row ──────────────────────────────────────────────────────────
 
-  function AlarmTableRow({ alarm, isSelected, isChecked, onSelect, onToggleCheck, onContextMenu, index }) {
+  function AlarmTableRow({ alarm, isSelected, onSelect, onContextMenu, index }) {
     var priColor = alarm.priority === 'urgent' ? '#fca5a5'
       : (alarm.priority === 'low' ? '#93c5fd' : '#fcd34d');
     var acked = !!alarm.acknowledged;
@@ -404,20 +371,12 @@
       onClick: function () { onSelect(alarm.id); },
       onContextMenu: function (e) { onContextMenu(e, alarm); }
     },
-      // Selection tick box — shift-click extends from the last box ticked
+      // Spacer — click anywhere on the row to select it (single alarm at a
+      // time); see the header's matching spacer comment for why this column
+      // no longer holds a checkbox.
       React.createElement('div', {
-        className: 'flex items-center justify-center',
         style: { width: SELECT_W + 'px', flexShrink: 0, padding: '6px', boxSizing: 'border-box' }
-      },
-        React.createElement(TickBox, {
-          checked: isChecked,
-          disabled: acked,
-          onToggle: function (shift) { onToggleCheck(alarm.id, index, shift); },
-          label: acked
-            ? (alarm.condition || 'Alarm') + ' is already acknowledged'
-            : (isChecked ? 'Deselect ' : 'Select ') + (alarm.condition || 'alarm') + ' — ' + (alarm.description || '')
-        })
-      ),
+      }),
       // Action (leftmost data column)
       React.createElement('div', {
         className: 'w-24 py-1.5 truncate',
@@ -526,12 +485,12 @@
 
   // ─── Acknowledge Button (toolbar action) ──────────────────────────────────────
 
-  function AcknowledgeButton({ targets, canAck, onAcknowledge }) {
-    var list = targets || [];
-    var disabled = !canAck || list.length === 0;
-    var label = list.length > 1
-      ? '\u2713 Acknowledge ' + list.length + ' alarms'
-      : '\u2713 Acknowledge';
+  // Acknowledges exactly one alarm at a time — the selected/highlighted row —
+  // matching real BMS practice (per Lev: no one-click "acknowledge all", so
+  // an operator can't wave away active alarms unseen). A prior multi-select
+  // version was removed; see item B in docs/BMS_Simulator_Issue_Checklist.md.
+  function AcknowledgeButton({ alarm, canAck, onAcknowledge }) {
+    var disabled = !canAck || !alarm || alarm.acknowledged;
 
     return React.createElement('div', { className: 'flex items-center gap-2' },
       React.createElement('button', {
@@ -543,15 +502,12 @@
                  cursor: disabled ? 'not-allowed' : 'pointer' },
         disabled: disabled,
         onClick: function () {
-          if (!disabled) {
-            list.forEach(function (a) { onAcknowledge(a); });
-          }
+          if (!disabled) onAcknowledge(alarm);
         },
         title: disabled
-          ? 'Tick one or more active unacknowledged alarms (requires AckOnly+ security)'
-          : 'Acknowledge ' + list.length + ' alarm' + (list.length !== 1 ? 's' : '') +
-            ' — this marks them as seen but does NOT resolve the underlying fault'
-      }, label),
+          ? 'Select an unacknowledged alarm above (requires AckOnly+ security)'
+          : 'Acknowledge this alarm — marks it as seen but does NOT resolve the underlying fault'
+      }, '\u2713 Acknowledge'),
       React.createElement('span', {
         style: { fontSize: '10.5px', fontWeight: 700, color: '#6f9a82' }
       }, 'Acknowledged ≠ fixed')
@@ -566,11 +522,11 @@
     // Alarm data state
     var [alarms, setAlarms] = useState(PRELOADED_ALARMS);
 
-    // Selection state — the highlighted row (single) and the ticked set (many)
+    // Selection state — the single highlighted row. A ticked multi-select
+    // set used to live here too; removed along with the bulk-acknowledge UI
+    // (item B — real BMS requires acknowledging one alarm at a time).
     var [selectedAlarmId, setSelectedAlarmId] = useState(null);
-    var [checkedIds, setCheckedIds] = useState([]);
     var [selectedNode, setSelectedNode] = useState('all');
-    var lastTickedIndex = useRef(null);
 
     // Sort state (Property 14)
     var [sortColumn, setSortColumn] = useState('timestamp');
@@ -736,44 +692,6 @@
       setSelectedAlarmId(alarmId);
     }, []);
 
-    // Tick handler — plain click toggles one row, shift-click extends the range
-    // from the last row ticked (standard list-selection behaviour).
-    var handleToggleCheck = useCallback(function (alarmId, index, shift) {
-      var ids = sortedAlarms.map(function (a) { return a.id; });
-      var tickable = {};
-      sortedAlarms.forEach(function (a) { if (!a.acknowledged) tickable[a.id] = true; });
-      setCheckedIds(function (prev) {
-        if (shift && lastTickedIndex.current !== null) {
-          var from = Math.min(lastTickedIndex.current, index);
-          var to = Math.max(lastTickedIndex.current, index);
-          var range = ids.slice(from, to + 1).filter(function (id) { return tickable[id]; });
-          var adding = prev.indexOf(alarmId) === -1;
-          if (adding) {
-            var merged = prev.slice();
-            range.forEach(function (id) { if (merged.indexOf(id) === -1) merged.push(id); });
-            return merged;
-          }
-          return prev.filter(function (id) { return range.indexOf(id) === -1; });
-        }
-        lastTickedIndex.current = index;
-        return prev.indexOf(alarmId) === -1
-          ? prev.concat([alarmId])
-          : prev.filter(function (id) { return id !== alarmId; });
-      });
-      setSelectedAlarmId(alarmId);
-    }, [sortedAlarms]);
-
-    // Select-all / clear-all across the rows currently in view
-    var handleToggleAll = useCallback(function () {
-      var ids = sortedAlarms.filter(function (a) { return !a.acknowledged; })
-        .map(function (a) { return a.id; });
-      setCheckedIds(function (prev) {
-        var allOn = ids.length > 0 && ids.every(function (id) { return prev.indexOf(id) !== -1; });
-        return allOn ? prev.filter(function (id) { return ids.indexOf(id) === -1; }) : ids.slice();
-      });
-      lastTickedIndex.current = null;
-    }, [sortedAlarms]);
-
     // Context menu handler
     var handleContextMenu = useCallback(function (e, alarm) {
       e.preventDefault();
@@ -787,10 +705,17 @@
         return;
       }
 
-      // Update local alarm state
+      // Update local alarm state. Previously gated on lifecycle === 'active',
+      // which meant a cleared-but-still-unacknowledged alarm (e.g. the
+      // preloaded F-03/F-05 demo records, which seed as lifecycle:
+      // 'inactive') could never be acknowledged — ticking them and clicking
+      // Acknowledge silently did nothing (checklist item "some alarms can't
+      // be acknowledged at all"). Real BMS practice allows acknowledging an
+      // alarm whether it's still active or has already cleared; only
+      // "already acknowledged" should block it.
       setAlarms(function (prev) {
         return prev.map(function (a) {
-          if (a.id === alarm.id && a.lifecycle === 'active' && !a.acknowledged) {
+          if (a.id === alarm.id && !a.acknowledged) {
             return Object.assign({}, a, {
               acknowledged: true,
               operator: auth.operator || 'operator',
@@ -830,20 +755,8 @@
     var selectedAlarm = alarms.find(function (a) { return a.id === selectedAlarmId; }) || null;
     var canAck = auth && auth.canAcknowledge && auth.canAcknowledge();
 
-    // Only rows still awaiting acknowledgment can be acknowledged. The footer
-    // acts on the ticked set; with nothing ticked it falls back to the
-    // highlighted row, so the single-row workflow is unchanged.
-    function ackable(a) { return a && !a.acknowledged; }
-    // Acknowledged rows are not tickable, so the select-all box reflects only
-    // the rows a tick can actually do something to.
-    var visibleIds = sortedAlarms.filter(function (a) { return !a.acknowledged; })
-      .map(function (a) { return a.id; });
-    var tickedVisible = checkedIds.filter(function (id) { return visibleIds.indexOf(id) !== -1; });
-    var ackTargets = tickedVisible.length
-      ? sortedAlarms.filter(function (a) { return tickedVisible.indexOf(a.id) !== -1 && ackable(a); })
-      : (ackable(selectedAlarm) ? [selectedAlarm] : []);
-    var allChecked = visibleIds.length > 0 && tickedVisible.length === visibleIds.length;
-    var someChecked = tickedVisible.length > 0;
+    // Only the highlighted row can be acknowledged — one alarm at a time,
+    // matching real BMS practice (see AcknowledgeButton above).
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return React.createElement('div', {
@@ -906,10 +819,7 @@
             React.createElement(AlarmTableHeader, {
               sortColumn: sortColumn,
               sortDirection: sortDirection,
-              onSort: handleSort,
-              allChecked: allChecked,
-              someChecked: someChecked,
-              onToggleAll: handleToggleAll
+              onSort: handleSort
             }),
 
             // Alarm rows
@@ -928,9 +838,7 @@
                       key: alarm.id,
                       alarm: alarm,
                       isSelected: selectedAlarmId === alarm.id,
-                      isChecked: checkedIds.indexOf(alarm.id) !== -1,
                       onSelect: handleSelect,
-                      onToggleCheck: handleToggleCheck,
                       onContextMenu: handleContextMenu,
                       index: idx
                     });
@@ -947,11 +855,11 @@
           },
             React.createElement('span', {
               style: { fontSize: '11.5px', fontWeight: 700, color: '#8fa0b8' }
-            }, someChecked
-                 ? (tickedVisible.length + ' ticked \u2014 ' + ackTargets.length + ' can be acknowledged \u2192')
-                 : 'Tick alarms above (shift-click for a range), then acknowledge \u2192'),
+            }, selectedAlarm && !selectedAlarm.acknowledged
+                 ? ('Selected: ' + (selectedAlarm.condition || 'alarm') + ' \u2014 acknowledge \u2192')
+                 : 'Select an alarm above, then acknowledge \u2192'),
             React.createElement(AcknowledgeButton, {
-              targets: ackTargets,
+              alarm: selectedAlarm,
               canAck: canAck,
               onAcknowledge: handleAcknowledge
             }),
