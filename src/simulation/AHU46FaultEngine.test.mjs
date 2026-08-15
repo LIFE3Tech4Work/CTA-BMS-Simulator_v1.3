@@ -304,10 +304,10 @@ describe('AHU46FaultEngine', () => {
   // ─── API parity with AHU44NewFaultEngine (needed for AlarmSummary.jsx) ────
   //
   // Previously this engine only exposed rules/evaluate/getActiveAlarms —
-  // missing getAllAlarms/acknowledge/acknowledgeAll/reset that
-  // AlarmSummary.jsx expects from every engine it aggregates. Found and
-  // fixed while wiring AHU-4-6 into the global Alarm Summary
-  // (SCENARIO_TRACKING.md item #19 follow-up).
+  // missing getAllAlarms/acknowledge/reset that AlarmSummary.jsx expects
+  // from every engine it aggregates. Found and fixed while wiring AHU-4-6
+  // into the global Alarm Summary (SCENARIO_TRACKING.md item #19 follow-up).
+  // acknowledgeAll() was later removed entirely — see AHU46FaultEngine.js.
 
   describe('AHU46FaultEngine — API parity (getAllAlarms, acknowledge, reset)', () => {
     it('every alarm carries subsystem AHU-4-6', () => {
@@ -340,17 +340,6 @@ describe('AHU46FaultEngine', () => {
 
     it('acknowledge() on a non-existent alarm ID does nothing and does not throw', () => {
       expect(() => window.AHU46FaultEngine.acknowledge('M-99', 'jsmith')).not.toThrow();
-    });
-
-    it('acknowledgeAll() marks every currently active alarm acknowledged', () => {
-      window.AHU46FaultEngine.evaluate(baseState({ filterDirty: true, softwareLockout: true }));
-      window.AHU46FaultEngine.acknowledgeAll('bulk-op');
-      const all = window.AHU46FaultEngine.getAllAlarms();
-      expect(all.length).toBeGreaterThan(0);
-      all.forEach(a => {
-        expect(a.acknowledged).toBe(true);
-        expect(a.operator).toBe('bulk-op');
-      });
     });
 
     it('reset() clears every alarm', () => {

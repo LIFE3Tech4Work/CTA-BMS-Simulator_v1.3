@@ -181,12 +181,9 @@
     activeAlarms.clear();
   }
 
-  function acknowledgeAll(operator) {
-    activeAlarms.forEach(function(alarm) {
-      alarm.acknowledged = true;
-      alarm.operator = operator || '';
-    });
-  }
+  // acknowledgeAll() was removed — real BMS practice requires acknowledging
+  // every alarm individually (per Lev), so a one-call bulk-ack was dropped
+  // in favor of always going through acknowledge() per alarm.
 
   // ─── Expose as window global ────────────────────────────────────────────────
 
@@ -198,7 +195,6 @@
     getActiveAlarms: getActiveAlarms,
     getAllAlarms: getAllAlarms,
     acknowledge: acknowledge,
-    acknowledgeAll: acknowledgeAll,
     reset: reset,
 
     _reset: function () {

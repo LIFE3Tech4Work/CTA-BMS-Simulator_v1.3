@@ -403,20 +403,13 @@ const AHU44NewControlsSidebar = (() => {
       React.createElement(NormToggleRow, { label: 'Shutdown', stateKey: 'fireAlarmShutdown' }),
       React.createElement(NormToggleRow, { label: 'Smoke Purge', stateKey: 'fireAlarmSmokePurge' }),
 
-      // ALARM RESET + FULL RESET
+      // FULL RESET
+      // A one-click "acknowledge every alarm" button was removed here — real
+      // BMS practice (per Lev) requires acknowledging each alarm individually,
+      // precisely so an operator can't wave away active alarms unseen. Use the
+      // Alarm Summary to acknowledge alarms one at a time instead.
       React.createElement(SectionHeader, { title: 'Reset' }),
       React.createElement('div', { className: 'px-2 py-2 flex flex-col gap-2' },
-
-        // Alarm Reset — clears acknowledged alarms only
-        React.createElement('button', {
-          className: 'w-full px-3 py-1 text-[10px] bg-gray-200 border border-gray-400 rounded hover:bg-gray-300 text-gray-800 font-bold',
-          onClick: function() {
-            var engine = window.AHU44NewFaultEngine;
-            if (engine && typeof engine.acknowledgeAll === 'function') {
-              engine.acknowledgeAll('operator');
-            }
-          }
-        }, 'ALARM RESET'),
 
         // Reset All to Defaults — clears every manual override and restores starting values
         React.createElement('button', {
