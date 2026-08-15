@@ -45,12 +45,23 @@ window.AlarmContext = AlarmContext;
 
 // ─── Route Parsing ──────────────────────────────────────────────────────────────
 
+// Every unit App.jsx actually knows how to render. Anything else (a typo, a
+// stale/garbage id like the breadcrumb's "Unknown" fallback, a query string
+// stuck onto the segment) used to fall through every specific dispatch
+// branch in SymmetreScreen and land on the old generic AHUGraphic/
+// ControlsSidebar "Unknown — Air Handling Unit Schematic" screen — a
+// legacy, pre-SymmetreBoard view that's no longer part of the product.
+// Normalizing here means every consumer of params.ahuId always gets a real,
+// known unit; that screen can no longer be reached at all.
+var KNOWN_AHU_IDS = { 'AHU-4-6': true, 'AHU-4-4': true, 'AHU-23-1': true, 'VAV-4-4-02': true };
+
 function parseRoute(hash) {
   const cleaned = hash.replace(/^#\/?/, '');
   const parts = cleaned.split('/');
 
   if (parts[0] === 'symmetre') {
-    var ahuId = parts[1] || 'AHU-4-4';
+    var rawAhuId = (parts[1] || 'AHU-4-4').split('?')[0];
+    var ahuId = KNOWN_AHU_IDS[rawAhuId] ? rawAhuId : 'AHU-4-4';
     return { screen: 'symmetre', params: { ahuId: ahuId } };
   }
   if (parts[0] === 'ebi') {

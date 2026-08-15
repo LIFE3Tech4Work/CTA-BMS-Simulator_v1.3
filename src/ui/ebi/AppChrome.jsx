@@ -62,6 +62,14 @@ const EBIAppChrome = (function() {
       window.location.hash = '#/symmetre/' + encodeURIComponent(ahuId);
     }
 
+    // When the point's metadata is missing (not in PointRegistry, or has no
+    // subsystem tagged), deriveBreadcrumb() falls back to the literal string
+    // "Unknown" — that used to still render as a clickable link, navigating
+    // to a dead #/symmetre/Unknown route that hit the retired generic AHU
+    // screen. Render it as plain text instead so there's nothing to click
+    // through to a route that was never going to resolve to anything real.
+    var subsystemKnown = crumb.subsystem !== 'Unknown';
+
     return React.createElement('nav', {
       className: 'flex items-center px-4 py-2 bg-gray-700 border-b border-gray-600 text-sm',
       'aria-label': 'Breadcrumb'
@@ -75,11 +83,16 @@ const EBIAppChrome = (function() {
       // Separator
       React.createElement('span', { className: 'mx-2 text-gray-400' }, '>'),
       // Subsystem segment
-      React.createElement('button', {
-        className: 'text-blue-300 hover:text-blue-100 hover:underline cursor-pointer',
-        onClick: handleSubsystemClick,
-        'aria-label': 'Navigate to ' + crumb.subsystem
-      }, crumb.subsystem),
+      subsystemKnown
+        ? React.createElement('button', {
+            className: 'text-blue-300 hover:text-blue-100 hover:underline cursor-pointer',
+            onClick: handleSubsystemClick,
+            'aria-label': 'Navigate to ' + crumb.subsystem
+          }, crumb.subsystem)
+        : React.createElement('span', {
+            className: 'text-gray-400',
+            title: 'This point has no subsystem on record'
+          }, crumb.subsystem),
       // Separator
       React.createElement('span', { className: 'mx-2 text-gray-400' }, '>'),
       // Point Name (current, not clickable)
