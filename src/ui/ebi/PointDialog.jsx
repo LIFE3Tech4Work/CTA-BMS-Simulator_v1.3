@@ -227,6 +227,80 @@ const PointDialog = (function () {
     );
   }
 
+  // ─── Flag for Review ────────────────────────────────────────────────────────
+  // Minimal version of the checklist's "QA/QC help queue for Lev" item: let an
+  // instructor jot a note on any point and get a ready-to-paste Claude prompt
+  // with the point's context already baked in, instead of having to describe
+  // "the thing on the AHU-4-4 screen near the fan" from scratch. Deliberately
+  // has no backend/storage — a copyable prompt is the whole feature; there's
+  // no persisted multi-item queue to keep in sync with anything.
+  function FlagTab({ unitId, label, pointName, pointAddr, currentValue, statusText }) {
+    const [note, setNote] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    function buildPrompt() {
+      return [
+        'BMS Simulator — instructor-flagged point',
+        '',
+        'Screen: ' + unitId,
+        'Point: ' + label + ' (' + pointName + ' @ ' + pointAddr + ')',
+        'Current value: ' + currentValue,
+        'Status: ' + statusText,
+        '',
+        'Instructor note:',
+        note.trim() || '(no note entered)',
+        '',
+        'Please investigate this point in the CTA-BMS-Simulator_v1.3 repo and fix ' +
+          'or explain the issue described above.',
+      ].join('\n');
+    }
+
+    function copyPrompt() {
+      const text = buildPrompt();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          setCopied(true);
+          setTimeout(function () { setCopied(false); }, 2000);
+        }).catch(function () {});
+      }
+    }
+
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+      React.createElement('div', { style: { fontSize: '11px', color: '#5a6f8e', lineHeight: 1.5 } },
+        'Describe what looks wrong with this point, then copy the prompt below ',
+        'and paste it to Claude to investigate. No note is saved here — copy it ',
+        'before closing this dialog.'
+      ),
+      React.createElement('textarea', {
+        value: note,
+        onChange: function (e) { setNote(e.target.value); },
+        placeholder: 'e.g. "This should read around 55°F right now but it\'s stuck at 83.4 — seems unrelated to the fan being off."',
+        rows: 4,
+        style: { width: '100%', boxSizing: 'border-box', padding: '8px', fontSize: '12px',
+                 fontFamily: 'inherit', border: '1px solid #b9c9de', borderRadius: '6px',
+                 resize: 'vertical' },
+      }),
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '10px' },
+      },
+        React.createElement('button', {
+          type: 'button',
+          onClick: copyPrompt,
+          style: { padding: '7px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 800,
+                   fontFamily: 'inherit', cursor: 'pointer', border: '1px solid #2f7a52',
+                   background: 'linear-gradient(180deg,#3f8f5a,#2d7346)', color: '#fff' },
+        }, copied ? '✓ Copied' : 'Copy Fix Prompt'),
+        React.createElement('span', { style: { fontSize: '10.5px', color: '#5a6f8e' } },
+          'Copies point context + your note as one paste-ready block')
+      ),
+      React.createElement('pre', {
+        style: { margin: 0, padding: '10px', background: '#22262c', color: '#c3cfdd',
+                 fontSize: '10.5px', lineHeight: 1.5, borderRadius: '6px', overflowX: 'auto',
+                 whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
+      }, buildPrompt())
+    );
+  }
+
   function parseInline(css) {
     const out = {};
     String(css || '').split(';').forEach(function (part) {
@@ -417,7 +491,7 @@ const PointDialog = (function () {
     // ── tabs ──
     const tabList = [['general', 'General']]
       .concat(commandable ? [['prio', 'Command Priorities']] : [])
-      .concat([['hist', 'History'], ['events', 'Recent Events']]);
+      .concat([['hist', 'History'], ['events', 'Recent Events'], ['flag', 'Flag for Review']]);
 
     const dot = (lit, color) => ({
       width: '11px', height: '11px', borderRadius: '50%', display: 'inline-block',
@@ -637,6 +711,10 @@ const PointDialog = (function () {
                 relinqNote: manActive ? 'Ignored while priority 8 (Manual Operator) is set' : 'Controlling now — no higher priority is set',
               }) : null,
               tab === 'events' ? React.createElement(EventsTab, { rows: pointEvents }) : null,
+              tab === 'flag' ? React.createElement(FlagTab, {
+                unitId: unitId, label: m.label, pointName: bac.name, pointAddr: bac.addr,
+                currentValue: display, statusText: statusText,
+              }) : null,
               tab === 'hist' ? React.createElement('div', null,
                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' } },
                   React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, color: '#3f5170' } }, 'Period'),
