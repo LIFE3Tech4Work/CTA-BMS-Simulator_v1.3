@@ -174,6 +174,35 @@ const VAVControlsSidebar = (() => {
         }, '◀')
       ),
 
+      // LEGEND — same box-style key shown on every AHU sidebar (checklist
+      // item: "visual indicator for what colors/box styles mean" was missing
+      // from this one sidebar).
+      React.createElement('div', {
+        className: 'px-2 py-1 cta-legend flex flex-wrap',
+        style: { columnGap: '10px', rowGap: '3px' }
+      },
+        React.createElement('span', { className: 'text-[9px] cta-unit' },
+          React.createElement('span', { className: 'inline-block cta-swatch cta-swatch--white mr-1' }),
+          'White box = editable setpoint'
+        ),
+        React.createElement('span', { className: 'text-[9px] cta-unit' },
+          React.createElement('span', { className: 'inline-block cta-swatch cta-swatch--grey mr-1' }),
+          'Gray = calculated — click to override'
+        ),
+        React.createElement('span', { className: 'text-[9px] cta-unit' },
+          React.createElement('span', { className: 'inline-block cta-swatch cta-swatch--pill mr-1' }),
+          'Dark pill = actual value'
+        ),
+        React.createElement('span', { className: 'text-[9px] cta-unit' },
+          React.createElement('span', { className: 'inline-block cta-swatch cta-swatch--alarm mr-1' }),
+          'Red ring = in alarm'
+        ),
+        React.createElement('span', { className: 'text-[9px] cta-unit' },
+          React.createElement('span', { className: 'cta-ovr-sample' }, '42'),
+          'Magenta text = override (manual value)'
+        )
+      ),
+
       // SCHEDULE
       React.createElement(SectionHeader, { title: 'Schedule' }),
       React.createElement(ToggleRow, { zoneId: zoneId, label: 'Run Schedule', stateKey: 'runSchedule' }),
