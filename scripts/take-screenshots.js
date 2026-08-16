@@ -41,6 +41,8 @@ const ROUTES = [
   { name: 'auth-screen', hash: '#/auth', waitFor: 2000, description: 'Sign On Screen' },
   { name: 'symmetre-ahu44', hash: '#/symmetre/AHU-4-4', waitFor: 3000, description: 'SymmetrE Station — AHU-4-4' },
   { name: 'symmetre-ahu46', hash: '#/symmetre/AHU-4-6', waitFor: 2000, description: 'SymmetrE Station — AHU-4-6' },
+  { name: 'symmetre-ahu23', hash: '#/symmetre/AHU-23-1', waitFor: 2000, description: 'SymmetrE Station — AHU-23-1' },
+  { name: 'symmetre-vav', hash: '#/symmetre/VAV-4-4-02', waitFor: 2000, description: 'SymmetrE Station — VAV-4-4-02' },
   { name: 'alarms', hash: '#/alarms', waitFor: 2000, description: 'Alarm Summary' },
   { name: 'schedule', hash: '#/schedule', waitFor: 2000, description: 'Schedule Manager' },
   { name: 'reports', hash: '#/reports', waitFor: 2000, description: 'Point Attribute Report' },
