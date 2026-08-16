@@ -33,11 +33,11 @@ function mockTMY3Projector(window, dryBulb, enthalpy) {
 }
 
 describe('AHU44NewController — design constants match Honeywell reference', () => {
-  it('produces 8550 CFM at 75% fan speed (screenshot reference value)', () => {
+  it('produces 4332 CFM at 38% fan speed (real 3-month export average, not the 75% screenshot moment)', () => {
     const ctrl = loadController();
     const state = ctrl.getState();
-    expect(state.fanSpeedSetpoint).toBe(75);
-    expect(state.cfm).toBe(8550);
+    expect(state.fanSpeedSetpoint).toBe(38);
+    expect(state.cfm).toBe(4332);
   });
 
   it('economizerTempControlSP is 58.0°F (screenshot reference, was 52.0)', () => {
@@ -50,9 +50,9 @@ describe('AHU44NewController — design constants match Honeywell reference', ()
     expect(ctrl.getState().lowOATLockout).toBe(false);
   });
 
-  it('returnAirTemp is 72.0°F (screenshot reference, was hardcoded 75)', () => {
+  it('returnAirTemp is 62.0°F (real 3-month export average of 61.86°F, not the 72°F screenshot moment)', () => {
     const ctrl = loadController();
-    expect(ctrl.getState().returnAirTemp).toBe(72.0);
+    expect(ctrl.getState().returnAirTemp).toBe(62.0);
   });
 });
 

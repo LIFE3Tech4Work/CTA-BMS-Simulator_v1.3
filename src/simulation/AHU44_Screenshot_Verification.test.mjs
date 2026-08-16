@@ -38,8 +38,20 @@ describe('Scenario 1 — cold load matches the screenshot baseline, unmodified',
     expect(s.heatingCoilSetpoint).toBe(55.0);
     expect(s.plenumMinSetpoint).toBe(40.0);
     expect(s.economizerTempControlSP).toBe(58.0);
-    expect(s.returnAirTemp).toBe(72.0);
-    expect(s.supplyAirTemp).toBe(60.0);
+    // returnAirTemp: the screenshot's own live reading was 72.0°F, but the
+    // controller's default was since recalibrated to 62.0°F — Lev's real
+    // 3-month BMS export average (61.86°F), which is what this unit
+    // actually runs at day to day, not the one moment the screenshot was
+    // taken (checklist Section F: "AHU-4-4 calibration mismatch"). The
+    // fault-reproduction scenarios below (Scenario 4) don't depend on this
+    // field, so this correction doesn't affect their validity.
+    expect(s.returnAirTemp).toBe(62.0);
+    // supplyAirTemp cascades from returnAirTemp/fanSpeed via mixedAirTemp and
+    // the CHW valve's cooling response — no longer the screenshot's 60.0°F
+    // now that the upstream baseline is corrected; 63.2°F is this
+    // controller's own live recalculation from the new inputs, not a second
+    // independently-chosen number.
+    expect(s.supplyAirTemp).toBe(63.2);
     // NOTE: the 72.9°F seeded in the source literal is a pre-recalculate
     // seed value only. getState() reflects the live recalculated value —
     // since OAT (83.4°F) is above the 55°F heating setpoint, the preheat
@@ -54,7 +66,7 @@ describe('Scenario 1 — cold load matches the screenshot baseline, unmodified',
   });
 
   it('airflow/CO2/setpoint fields match the screenshot readout', () => {
-    expect(s.cfm).toBe(8550);              // supply CFM label on the graphic
+    expect(s.cfm).toBe(4332);              // supply CFM at the corrected 38% fan speed baseline
     expect(s.minOAAirflowSetpoint).toBe(4900);
     expect(s.co2Sensor).toBe(538);
     expect(s.co2Setpoint).toBe(900);
@@ -71,25 +83,26 @@ describe('Scenario 1 — cold load matches the screenshot baseline, unmodified',
 });
 
 describe('FINDING — the unmodified default state already trips N-01, before any student interaction', () => {
-  it('supplyAirTemp defaults to exactly 60.0°F, matching the screenshot\'s discharge reading and coolingCoilSetpoint — but N-01\'s design band caps at 58°F', () => {
+  it('supplyAirTemp defaults to 63.2°F (recalculated from the corrected returnAirTemp/fanSpeed baseline) — still outside N-01\'s design band', () => {
     const ctrl = loadController();
     const s = ctrl.getState();
     expect(s.coolingCoilSetpoint).toBe(60.0);
-    expect(s.supplyAirTemp).toBe(60.0);
+    expect(s.supplyAirTemp).toBe(63.2);
   });
 
-  it('so the fault engine flags N-01 on cold load, with zero user interaction — the tab\'s own calibrated "healthy" screenshot state is self-inconsistent with its own fault rule', () => {
+  it('so the fault engine flags N-01 on cold load, with zero user interaction — the tab\'s own calibrated "healthy" default state is self-inconsistent with its own fault rule', () => {
     const ctrl = loadController();
     const engine = loadFaultEngine();
     const alarms = engine.evaluate(ctrl.getState());
     const n01 = alarms.find(a => a.condition === 'N-01');
     // This SHOULD arguably be undefined for a screen calibrated to represent
-    // a real, presumably-intended operating point. It isn't. Either N-01's
-    // band (52-58°F) needs to widen to 52-60°F to match the real design
-    // setpoint, or the default coolingCoilSetpoint doesn't actually reflect
-    // the "no active fault" baseline the screenshot implies. Documenting the
-    // current (buggy) behavior here so it isn't silently reintroduced if
-    // "fixed" without a test covering it.
+    // a real, presumably-intended operating point. It isn't — supplyAirTemp
+    // (63.2°F, itself now a real-data-corrected recalculation, not a second
+    // invented number) still falls outside N-01's 52-58°F band. Either that
+    // band needs revisiting against the real design setpoint, or the default
+    // coolingCoilSetpoint doesn't actually reflect a "no active fault"
+    // baseline. Documenting the current (buggy) behavior here so it isn't
+    // silently reintroduced if "fixed" without a test covering it.
     expect(n01).toBeDefined();
   });
 });
@@ -122,11 +135,14 @@ describe('Scenario 3 — CO2 at 538 ppm is healthy, confirm no false-positive al
 });
 
 describe('Scenario 4 — reproducing the screenshot\'s actual fault: OA damper stuck low', () => {
-  it('the unmodified default does NOT show the fault (damper sits at the 20% floor, oaCFM = configured minimum)', () => {
+  it('the unmodified default does NOT show the fault (damper sits at the 20% floor, oaCFM capped by the corrected supply CFM)', () => {
     const ctrl = loadController();
     const s = ctrl.getState();
     expect(s.oaDamperPosition).toBe(20);
-    expect(s.oaCFM).toBe(4900);
+    // Configured minimum (4900*20/20=4900) would apply, but the corrected
+    // 38%-fan-speed supply CFM (4332) is now the binding cap — oaCFM can
+    // never exceed total supply CFM.
+    expect(s.oaCFM).toBe(4332);
   });
 
   it('forcing oaDamperPosition to ~1% (as annotated "Manually Overridden" in the screenshot) starves oaCFM into the screenshot\'s ~215 CFM range', () => {

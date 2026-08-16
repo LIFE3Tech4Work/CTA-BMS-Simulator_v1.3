@@ -47,8 +47,15 @@
 
   // ─── Design Constants ───────────────────────────────────────────────────────
 
-  var DESIGN_CFM = 11400;          // Rated max supply airflow at 100% fan speed — calibrated so 75% setpoint yields ~8550 CFM, matching Honeywell screenshot reference (Hotel_AHU4_4Edit.png)
-  var RETURN_AIR_TEMP = 72.0;      // Assumed return air temperature (°F) — corrected to match screenshot's live RF-4-7 reading (was 75)
+  var DESIGN_CFM = 11400;          // Rated max supply airflow at 100% fan speed
+  // Return air temp and fan speed were previously calibrated to a single
+  // Honeywell reference screenshot's live reading (72.0°F / 75%). Lev's real
+  // 3-month BMS export (src/data/points/AHU04_04RATemp.js,
+  // AHU04_04SAFanSpeed.js — 1017 hourly readings each) averages 61.86°F and
+  // 37.64% respectively, which is what this unit actually runs at day to
+  // day — a single screenshot moment isn't representative. Corrected per
+  // checklist Section F: "AHU-4-4 calibration mismatch."
+  var RETURN_AIR_TEMP = 62.0;      // °F — real 3-month export average (61.86°F), not the 72°F screenshot moment
   var OA_DAMPER_FLOOR = 20;        // Minimum damper position (%) per ASHRAE 62.1
 
   // ─── Shared State Object ────────────────────────────────────────────────────
@@ -73,7 +80,7 @@
     co2Setpoint: 900,              // PPM
     minOAAirflowSetpoint: 4900,    // CFM
     fanTrackMode: 'CFM',
-    fanSpeedSetpoint: 75,          // %
+    fanSpeedSetpoint: 38,          // % — real 3-month export average (37.64%), not the 75% screenshot moment
     fireAlarmShutdown: false,      // NORM
     fireAlarmSmokePurge: false,    // NORM
 
@@ -85,17 +92,17 @@
 
     // ═══ OUTPUTS (calculated — READ-ONLY on diagram) ═════════════════════════
     fanRunning: true,
-    fanSpeed: 75,                  // % actual
-    cfm: 8550,                     // Supply air CFM — corrected design point to match Honeywell screenshot (was 16500 max → 12375 calc'd)
-    oaCFM: 4900,                   // Outside air CFM (min OA)
+    fanSpeed: 38,                  // % actual — real 3-month export average
+    cfm: 4332,                     // Supply air CFM at 38% fan speed
+    oaCFM: 4332,                   // Outside air CFM (min OA, capped by supply CFM)
     oaDamperPosition: 20,          // %
     economizerActive: false,
     phtValvePosition: 0,           // % — preheat valve
     chwValvePosition: 0,           // % — chilled water valve
     supplyAirTemp: 60.0,           // °F — discharge air temp
     preheatTemp: 72.9,             // °F — after preheat coil
-    mixedAirTemp: 75.0,            // °F — mixed air
-    returnAirTemp: 72.0,           // °F — return air. Corrected from hardcoded 75.0 to match screenshot's live RF-4-7 reading (72.0°F); still a static seed, see returnAirTemp note in recalculate()
+    mixedAirTemp: 66.3,            // °F — mixed air
+    returnAirTemp: 62.0,           // °F — return air; real 3-month export average, still a static seed (see RETURN_AIR_TEMP note above)
     supplyStaticPressure: 87.6,    // % (kBn reading)
     returnStaticPressure: 80.0,    // %
     chwSupplyTemp: 41.8,           // °F
