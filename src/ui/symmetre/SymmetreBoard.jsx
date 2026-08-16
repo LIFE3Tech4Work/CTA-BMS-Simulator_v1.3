@@ -130,6 +130,17 @@ const SymmetreBoard = (function () {
         boxSt.border = '1.5px solid #a9b6c9';
         boxSt.boxShadow = 'none';
       }
+      // Economizer Signal previously read identically to every other plain
+      // ON/OFF box — no visual cue distinguished "free cooling active" from
+      // any other calculated status (checklist item: "No visual indication
+      // when the economizer turns on/off"). A distinct green highlight when
+      // ON makes it scannable on the board itself, not just readable text.
+      if (key === 'economizerActive' && value === true && !alarm) {
+        boxSt.background = '#dcf5e3';
+        boxSt.border = '1.5px solid #2f9e56';
+        boxSt.boxShadow = '0 0 0 1px rgba(47,158,86,.25)';
+        if (!manual) vst.color = '#1a7a3d';
+      }
     } else {
       st = { position: 'absolute', top: (y - 16) + 'px', display: 'flex', alignItems: 'baseline',
              gap: '2px', padding: '2px 7px', borderRadius: '5px',
