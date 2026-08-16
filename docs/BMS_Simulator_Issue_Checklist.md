@@ -77,7 +77,7 @@ Legend: ✅ Resolved/confirmed · ⚠️ Partially resolved / needs re-check · 
 - [x] ✅ **Simultaneous heating/cooling fault validated against real data** — real AHU-4-6 exports showed both CHW and preheat valves open on 100% of readings, confirming the scenario Lev described is a live, ongoing issue (not just hypothetical).
 - [x] ✅ **Stuck VFD scenario validated** — real data showed AHU-4-6 fan stuck at exactly 35.0 Hz on 65% of readings, matching the case Lev described in his lecture.
 - [x] ✅ **Economizer-eligible hours vs. actual behavior validated** — 82% of spring readings were economizer-eligible, but AHU-4-6 ran both coils anyway, compounding the waste finding above.
-- [ ] ⬜ **AHU-4-4 calibration mismatch** — real return air temp is 62°F (not the assumed 72°F) and real fan speed is 38% (not 75%) — this reference correction needs to be reflected in the simulator's baseline values.
+- [x] ✅ **AHU-4-4 calibration mismatch** — real return air temp is 62°F (not the assumed 72°F) and real fan speed is 38% (not 75%) — this reference correction needs to be reflected in the simulator's baseline values. — **Fixed 2026-08-15.** Recomputed directly from the real 3-month export data already in the repo (`src/data/points/AHU04_04RATemp.js`/`AHU04_04SAFanSpeed.js`, 1017 hourly readings each): averages 61.86°F and 37.64%, confirming the checklist's numbers. `RETURN_AIR_TEMP` and default `fanSpeedSetpoint` corrected in `AHU44NewController.js`; the two tests that hardcoded the old screenshot-derived values (design-constants test, dedicated screenshot-reproduction suite) updated to the new, actually-recomputed numbers rather than hand-calculated guesses. Verified live.
 - [x] ✅ **Bad/duplicate/empty export files identified and removed** from the working data set (one exact duplicate, one malformed file, one empty file, one subset file).
 
 ## G. Dev Workflow / Architecture
@@ -108,5 +108,7 @@ Section C is now largely closed too — manual weather control (Lev's single mos
 Section D is closed out too, aside from the explicitly-parked VAV graphic — the economizer visual indicator is built, and three other items (damper graphic consistency, toggle clickability, Start/Shutdown labeling) turned out to already be resolved by earlier work and just needed confirming, not fixing.
 
 Section E is mostly closed too — most items turned out to already be built (AHU click-to-open modals, the point-type color convention, purple-for-override, History tab) or moot (no units dropdown exists to lock down), plus one real fix (VAV sidebar legend). What's left is genuinely blocked, not just undone: engineer-only tab visibility and the instructor/student view split both depend on Lev supplying his preset values first, per Omar's own caveat in the transcripts — building either without that risks a simulation that behaves wrong once those tabs are hidden.
+
+Section F is now fully closed — the last open item (AHU-4-4's calibration mismatch) is fixed, recomputed directly from the real export data already sitting in the repo rather than taken on faith from the checklist text.
 
 Remaining work across all sections is now either explicitly parked (VAV graphic/modal work) or blocked on input only Lev can provide (Sections A/B's remaining items, Section E's access-level items).
