@@ -103,8 +103,25 @@
   // deadbands, same pattern as the freeze pump above — they stop the
   // economizer from chattering as conditions drift near the boundary.
   // SCENARIO_TRACKING.md item #5.
-  var RETURN_AIR_ENTHALPY = 26.7;      // BTU/lb — approx. enthalpy at 72.1°F/50% RH
-                                        // (SOO Closed Loop Controller #4 item 1: RA RH held at 50%)
+  // Was a fixed constant (26.7 BTU/lb, the 72.1°F/50%RH design point) that
+  // never moved — but the board's own "Return Air Enthalpy" chip shows a
+  // live, very different computed value (same T/RH-&gt;enthalpy approximation
+  // used throughout this app, e.g. boardPoints.js's returnEnthalpy()).
+  // Comparing a live oaEnthalpy against a frozen design constant meant the
+  // hysteresis below could never correctly track real conditions — the
+  // economizer failed to engage even under a textbook 55°F/40%RH
+  // free-cooling scenario set via Manual Weather Control (checklist Section
+  // I: Lev's live walkthrough). Computed live the same way the display chip
+  // is, from the previous tick's returnAirTemp/returnAirRH — same one-tick-
+  // lag convention used everywhere else in this file for values that would
+  // otherwise depend circularly on this tick's own output.
+  function liveReturnAirEnthalpy() {
+    var t = state.returnAirTemp, rh = state.returnAirRH;
+    var pws = 0.0886 * Math.exp(0.0546 * (t - 32) / 1.8 + 1.6);
+    var pw = (rh / 100) * pws;
+    var w = 0.62198 * pw / Math.max(14.696 - pw, 0.01);
+    return 0.24 * t + w * (1061 + 0.444 * t);
+  }
   var ECONOMIZER_ENABLE_ENTHALPY_DELTA = 5.0;   // BTU/lb below RA enthalpy
   var ECONOMIZER_DISABLE_ENTHALPY_DELTA = 2.5;  // BTU/lb below RA enthalpy
   var ECONOMIZER_OAT_ENABLE = 38;      // °F
@@ -722,8 +739,9 @@
     // Still respects Manual override via the "Enthalpy OK — Economizer"
     // sidebar toggle.
     if (modes.enthalpyOKForEconomizer !== 'Manual') {
-      var enthalpyFavorable = state.oaEnthalpy < (RETURN_AIR_ENTHALPY - ECONOMIZER_ENABLE_ENTHALPY_DELTA);
-      var enthalpyUnfavorable = state.oaEnthalpy > (RETURN_AIR_ENTHALPY - ECONOMIZER_DISABLE_ENTHALPY_DELTA);
+      var raEnthalpy = liveReturnAirEnthalpy();
+      var enthalpyFavorable = state.oaEnthalpy < (raEnthalpy - ECONOMIZER_ENABLE_ENTHALPY_DELTA);
+      var enthalpyUnfavorable = state.oaEnthalpy > (raEnthalpy - ECONOMIZER_DISABLE_ENTHALPY_DELTA);
       var oatAboveEnableFloor = state.oaTemperature > ECONOMIZER_OAT_ENABLE;
       var oatBelowDisableFloor = state.oaTemperature < ECONOMIZER_OAT_DISABLE;
 
@@ -951,13 +969,20 @@
     // supplyStaticPressure — see item #9) — ties to whichever coil is
     // actively conditioning the air: an active cooling coil pushes supply
     // air toward saturation (condensing moisture off a wet coil), an
-    // active heating coil dries it out; idle holds a neutral baseline.
+    // active heating coil dries it out; idle passes through whatever's
+    // actually in the airstream. The "idle" case used to be a hardcoded
+    // 55% regardless of outdoor conditions — supplyAirRH never moved no
+    // matter what OAT/RH was set to (checklist Section I: Lev's live
+    // walkthrough, supply humidity stuck at ~87% after OAT/RH was changed).
+    // returnAirRH (just computed above) is already weather-responsive —
+    // using it as the no-active-conditioning baseline instead of a
+    // constant means a manual weather change actually reaches this point.
     if (state.chwValvePosition > 0) {
-      state.supplyAirRH = 55 + (state.chwValvePosition / 100) * (90 - 55);
+      state.supplyAirRH = state.returnAirRH + (state.chwValvePosition / 100) * (90 - state.returnAirRH);
     } else if (state.phtValvePosition > 0) {
-      state.supplyAirRH = 55 - (state.phtValvePosition / 100) * (55 - 25);
+      state.supplyAirRH = state.returnAirRH - (state.phtValvePosition / 100) * (state.returnAirRH - 25);
     } else {
-      state.supplyAirRH = 55;
+      state.supplyAirRH = state.returnAirRH;
     }
     state.supplyAirRH = Math.round(state.supplyAirRH * 10) / 10;
 
