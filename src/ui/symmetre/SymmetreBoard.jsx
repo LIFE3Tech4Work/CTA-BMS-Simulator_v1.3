@@ -398,6 +398,21 @@ const SymmetreBoard = (function () {
     function commandPoint(key, value, mode) {
       const c = window[cfg.controller];
       if (!c) return;
+      // economizerActive is a derived status with no independent driving
+      // effect in the sequence logic — forcing it directly left the OA
+      // damper/CFM completely unchanged, so clicking it on the graphic did
+      // nothing even though the sidebar's damper override worked (checklist
+      // Section I: Lev's live walkthrough — "I can't turn it on here, but I
+      // can turn it on on the sidebar"). Redirect to the OA damper, the same
+      // thing the AUTO sequence itself drives when it decides to engage the
+      // economizer (state.oaDamperPosition = 100).
+      if (key === 'economizerActive') {
+        key = 'oaDamperPosition';
+        if (mode !== 'auto') {
+          var floor = (c.getState() || {}).economizerMinPosition;
+          value = value ? 100 : (typeof floor === 'number' ? floor : 20);
+        }
+      }
       const m = BP.meta(key) || {};
       const prev = BP.format(key, BP.valueOf(state, key));
       if (mode === 'auto') {
