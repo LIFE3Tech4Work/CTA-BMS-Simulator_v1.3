@@ -96,6 +96,21 @@ Legend: ✅ Resolved/confirmed · ⚠️ Partially resolved / needs re-check · 
 - [ ] Interactive Q&A "learning companion" mode (ask-a-question style, beyond simple guided navigation) — proposed by Katherine, not yet built.
 - [ ] Legacy "Capstone chapters" left over from the original Kiro build — undecided whether to keep, replace, or remove.
 
+## I. Lev's Live Walkthrough of the Deployed App (2026-08-16, Railway)
+
+*From a call where Lev, Omar, and Katherine screen-shared the live Railway deployment and Lev tested scenarios directly. Distinct from the working-session transcripts Sections A-G were compiled from.*
+
+- [ ] ⬜ **Economizer can be turned on via the Controls Sidebar but not by clicking the economizer indicator directly on the graphic.** Omar: "I can't turn it on here, but I can turn it on on the sidebar. I'm not sure why."
+- [ ] ⬜ **Economizer didn't auto-engage under textbook free-cooling conditions** (55°F OAT, 40% RH set via Manual Weather Control) — Lev expected it to switch ON automatically ("perfect condition for economizing mode") but it stayed OFF.
+- [ ] ⬜ **Supply air temperature doesn't converge toward its active setpoint** — in a 35°F-OAT winter scenario with a 60°F active cooling setpoint, supply air temp stayed stuck around 80-86°F instead of trending down. Lev: "the temperature should be dropped down to match the active set point."
+- [ ] ⬜ **Downstream sensor values don't update when Manual Weather Control changes OAT/RH** — the most-repeated finding on the call. Supply air humidity stayed at ~87% after outdoor air humidity was changed to 25%; supply/return temps didn't track a changed OAT either. Omar, on the call: "I think there are certain sensors that should change based on the change in these values... the sensor should change corresponding to the change in temperature here. And that's not happening. So that's something I could definitely take back and fix."
+- [ ] ⬜ **Two separate Railway deployments showed different "simultaneous heating/cooling" alarm states** with no apparent difference in inputs — Omar had accidentally pushed to two instances and noticed the discrepancy. Lower confidence/priority: deployment-specific, not reproducible locally without more info (possibly non-deterministic sim-clock start time between two separately-booted instances, each seeding a different TMY row/weather at any given wall-clock moment).
+- [ ] ⬜ **Simplify heating/cooling setpoint model** — Lev, twice on this call, asked for either a single active setpoint or a zone/space temperature setpoint that overrides the separate heating and cooling setpoints, because having both is confusing ("it's like too much... very complicated... maybe you can do just one set point"). Design decision, not a bug — needs discussion before building.
+- [ ] ⬜ **Winter/Summer/Economizing mode selector** — Lev expects a real BMS to expose distinct modes that determine which setpoint (heating vs. cooling) has authority over the unit at any given time; the simulator currently has no such mode concept, just two setpoints that both exist simultaneously with unclear precedence. Related to the item above.
+- [ ] ⬜ **VAV box graphic integration sequencing** — Katherine is updating the VAV graphic per Lev's feedback (damper icon consistency, adding a room/zone setpoint). Omar's requested unit build order once ready: VAV box first, then AHU-23-1, then AHU-4-6, then AHU-4-4.
+- [ ] ⬜ **Incorporate ASHRAE Standard 36** as a reference document for sequence-of-operations logic — Lev calls it "the bible for how all units should work." No source document available yet to act on this.
+- [ ] ⬜ **Extending the current AHU graphics to new/other units** — Omar and Katherine discussed feasibility of reusing existing unit types (rather than rebuilding art from scratch per building) once the current units behave correctly; not yet scoped as concrete work.
+
 ---
 
 ### Bottom line
