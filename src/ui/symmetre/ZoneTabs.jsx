@@ -113,11 +113,16 @@ const ZoneTabs = (function () {
   const { useState, useEffect, useCallback } = React;
 
   // ─── Tab Definitions ────────────────────────────────────────────────────────
+  // Order follows the teaching sequence agreed in the 14 Aug review: the simple
+  // terminal box first, then the small single-coil unit, then the two large
+  // mixing-box units. AHU-4-3 sits beside AHU-4-4, its paired twin.
   const ZONE_TABS = [
+    { id: 'VAV-02-03',  label: 'VAV-02-03 (Mtg Rm 214)', icon: '🌬️', route: '#/symmetre/VAV-02-03',  isZone: false },
+    { id: 'VAV-4-4-02', label: 'VAV-4-4-02 (Ballroom)', icon: '🌬️', route: '#/symmetre/VAV-4-4-02', isZone: false },
+    { id: 'AHU-23-1',   label: 'AHU-23-1',              icon: '🌀', route: '#/symmetre/AHU-23-1',   isZone: false },
     { id: 'AHU-4-6',    label: 'AHU-4-6',               icon: '🌀', route: '#/symmetre/AHU-4-6',    isZone: false },
     { id: 'AHU-4-4',    label: 'AHU-4-4',               icon: '🌀', route: '#/symmetre/AHU-4-4',    isZone: false },
-    { id: 'AHU-23-1',   label: 'AHU-23-1',              icon: '🌀', route: '#/symmetre/AHU-23-1',   isZone: false },
-    { id: 'VAV-4-4-02', label: 'VAV-4-4-02 (Ballroom)', icon: '🌬️', route: '#/symmetre/VAV-4-4-02', isZone: false },
+    { id: 'AHU-4-3',    label: 'AHU-4-3',               icon: '🌀', route: '#/symmetre/AHU-4-3',    isZone: false },
   ];
 
   // ─── OA Strip variant per tab ────────────────────────────────────────────────
@@ -129,6 +134,8 @@ const ZoneTabs = (function () {
   function tabFromHash(hash) {
     if (!hash) return 'AHU-4-4';
     if (hash.indexOf('VAV-4-4-02') !== -1) return 'VAV-4-4-02';
+    if (hash.indexOf('VAV-02-03')  !== -1) return 'VAV-02-03';
+    if (hash.indexOf('AHU-4-3')    !== -1) return 'AHU-4-3';
     if (hash.indexOf('AHU-23-1')   !== -1) return 'AHU-23-1';
     if (hash.indexOf('AHU-4-6')    !== -1) return 'AHU-4-6';
     if (hash.indexOf('AHU-4-4')    !== -1) return 'AHU-4-4';

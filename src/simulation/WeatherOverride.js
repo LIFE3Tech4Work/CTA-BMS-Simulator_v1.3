@@ -3,9 +3,9 @@
  * Section C, item "Manual outdoor air temperature & humidity control" — the
  * instructor's most-repeated request across every working session).
  *
- * Each unit controller (AHU46Controller, AHU44NewController, AHU23Controller)
- * already supports an operator override on oaTemperature/oaEnthalpy (and
- * oaRelHumidity on AHU-4-6) via its own setValue()/clearMode() — "a hand-set
+ * Each unit controller (AHU46Controller, AHU44NewController, AHU43Controller,
+ * AHU23Controller) already supports an operator override on oaTemperature /
+ * oaEnthalpy / oaRelHumidity via its own setValue()/clearMode() — "a hand-set
  * outdoor condition outranks the TMY3 file". What was missing was a single
  * place to drive all three at once instead of setting each unit separately,
  * plus quick presets so an instructor can jump straight to "winter" or
@@ -32,7 +32,9 @@
 (function () {
   'use strict';
 
-  var CONTROLLER_NAMES = ['AHU46Controller', 'AHU44NewController', 'AHU23Controller'];
+  // AHU-4-3 is a separate instance of the AHU-4-4 model with its own state, so it
+  // needs listing explicitly — otherwise a hand-set outdoor condition skips it.
+  var CONTROLLER_NAMES = ['AHU46Controller', 'AHU44NewController', 'AHU43Controller', 'AHU23Controller'];
   var WEATHER_KEYS = ['oaTemperature', 'oaEnthalpy', 'oaRelHumidity'];
   var PRESET_HOUR = 15; // 3 PM — a representative daytime reading, not the coldest/hottest instant
 
@@ -62,15 +64,15 @@
     subscribers.forEach(function (cb) { try { cb(getState()); } catch (e) {} });
   }
 
-  // Same T/RH -> enthalpy approximation used elsewhere in the app (see
-  // boardPoints.js's returnEnthalpy()), so a hand-typed custom condition is
-  // consistent with how the rest of the simulator computes it. Presets don't
-  // need this — their enthalpy comes straight from the recorded TMY3 row.
+  // Shared psychrometrics (src/simulation/Psychrometrics.js) so a hand-typed
+  // custom condition is computed exactly the way the controllers and the board
+  // compute theirs. Presets don't need this — their enthalpy comes straight
+  // from the recorded TMY3 row.
   function enthalpyFromTAndRH(t, rh) {
-    var pws = 0.0886 * Math.exp(0.0546 * (t - 32) / 1.8 + 1.6);
-    var pw = (rh / 100) * pws;
-    var w = 0.62198 * pw / Math.max(14.696 - pw, 0.01);
-    return Math.round((0.24 * t + w * (1061 + 0.444 * t)) * 10) / 10;
+    var psy = (typeof window !== 'undefined') && window.Psychrometrics;
+    if (!psy) return null;
+    var h = psy.enthalpy(t, rh);
+    return isFinite(h) ? Math.round(h * 10) / 10 : null;
   }
 
   function forEachController(fn) {

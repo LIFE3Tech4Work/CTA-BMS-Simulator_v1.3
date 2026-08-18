@@ -42,7 +42,16 @@
  *   window.AHU44NewState      — shared state object (read by graphic)
  */
 
-(function() {
+/**
+ * The model is a factory rather than an IIFE so a second unit built on the same
+ * sequence of operation (AHU-4-3, the twin that shares the common damper per the
+ * SOO's mixing-box diagram) gets its OWN state, modes and subscribers instead of
+ * aliasing AHU-4-4's. window.AHU44NewController is created below exactly as
+ * before, so every existing caller and test is unaffected.
+ *
+ * @param {object} [seed] - state overrides applied before the first recalculate()
+ */
+function CTA_createAHU44Controller(seed) {
   'use strict';
 
   // ─── Design Constants ───────────────────────────────────────────────────────
@@ -57,6 +66,25 @@
   // checklist Section F: "AHU-4-4 calibration mismatch."
   var RETURN_AIR_TEMP = 62.0;      // °F — real 3-month export average (61.86°F), not the 72°F screenshot moment
   var OA_DAMPER_FLOOR = 20;        // Minimum damper position (%) per ASHRAE 62.1
+
+  // ─── Season changeover and coil authority (14 Aug review) ───────────────────
+  // Same rebuild applied to AHU-4-6: the coils control the air they actually
+  // see, against whichever setpoint the season gives authority to. Shared by
+  // AHU-4-3, which is a second instance of this model.
+  var SEASON_CHANGEOVER_OAT = 60;  // °F — Auto-mode winter/summer changeover
+  var SEASON_CHANGEOVER_DB = 2;    // °F — hysteresis so the mode doesn't chatter
+  var DEHUMID_RH_TRIGGER = 52;     // %RH — above this, cooling may dry against a heating call
+  // Return-air humidity model, same form and constants as AHU-4-6 so the paired
+  // units read alike. Outdoor humidity brought in through the OA damper pulls
+  // return air away from the 50% target; the cooling coil's own condensation
+  // pulls it back down.
+  var OA_RH_WEIGHT = 0.4;          // fraction of the OA-RH gap reaching return air at full ventilation
+  var DEHUMID_RH_WEIGHT = 8;       // %RH pulled down at fully-open chwValvePosition
+  var RETURN_AIR_RH_MIN = 30;      // %
+  var RETURN_AIR_RH_MAX = 70;      // %
+  var MAX_COIL_RISE = 30;          // °F — preheat coil capacity at 100% open
+  var MAX_COIL_DROP = 30;          // °F — chilled water coil capacity at 100% open
+  var ZONE_DEADBAND = 4;           // °F — the deadband taught in the curriculum (68/72)
 
   // ─── Shared State Object ────────────────────────────────────────────────────
 
@@ -80,6 +108,13 @@
     co2Setpoint: 900,              // PPM
     minOAAirflowSetpoint: 4900,    // CFM
     fanTrackMode: 'CFM',
+    controlMode: 'Auto',            // 'Auto' | 'Winter' | 'Summer'
+    zoneTempSetpoint: 72.0,         // °F — one setpoint that can override both coils
+    zoneSetpointControl: false,
+    activeSeason: 'Summer',
+    activeSetpoint: 60.0,
+    activeSetpointSource: 'Cooling (maximum)',
+    spaceTemp: 72.0,                // °F — zone sensor
     fanSpeedSetpoint: 38,          // % — real 3-month export average (37.64%), not the 75% screenshot moment
     fireAlarmShutdown: false,      // NORM
     fireAlarmSmokePurge: false,    // NORM
@@ -116,6 +151,12 @@
     spillDamperPct: 100,           // % — DA-3 Spill Damper (N.O.): 100% when off, 0% at min OA
     returnCFM: 7695,               // CFM — return fan flow (90% of supply per SOO CLC #6)
     supplyRH: 55,                  // % — supply air relative humidity (SOO CLC #4 humidity model)
+    oaRelHumidity: 60,             // % — TMY3-driven; operator-overridable. Previously not
+                                   // pulled from weather at all (only oaTemperature and
+                                   // oaEnthalpy were), so the humidity side of this unit
+                                   // ran off an enthalpy approximation.
+    returnAirRH: 50,               // % — computed each pass; the dehumidification call below
+                                   // read this before it existed, so it never fired.
   };
 
   window.AHU44NewState = state;
@@ -148,6 +189,10 @@
   // of being stuck at the commanded value forever.
   var autoValues = {};
 
+  // The coil setpoints as the operator left them before zone setpoint control
+  // borrowed them; handed back when it is switched off.
+  var preZoneSetpoints = null;
+
   // ─── Engineering Calculations ───────────────────────────────────────────────
 
   /**
@@ -159,6 +204,13 @@
   // Off #1) whatever the operator commanded — so the override yields while the
   // condition is active and resumes when it clears. The Manual flag is kept
   // throughout, so the point still reads as overridden.
+  // Momentary points: a button press, not a sustained override. The override
+  // latch would re-assert the pressed value after every pass, so the sequence's
+  // own self-clear could never take effect — pressing ALARM RESET left
+  // resetPressed stuck true forever, and the reset it was meant to perform
+  // could not complete. These are written straight through, unlatched.
+  var MOMENTARY_KEYS = { resetPressed: true };
+
   var SAFETY_DRIVEN_KEYS = {
     oaDamperPosition: true, oaCFM: true, cfm: true, fanSpeed: true,
     returnFanCFM: true, returnCFM: true, economizerActive: true,
@@ -185,6 +237,7 @@
     for (var mk in manualValues) {
       if (!Object.prototype.hasOwnProperty.call(manualValues, mk)) continue;
       if (!state.hasOwnProperty(mk)) continue;
+      if (MOMENTARY_KEYS[mk]) continue;
       if (safety && SAFETY_DRIVEN_KEYS[mk]) continue;
       if (state[mk] !== manualValues[mk]) { state[mk] = manualValues[mk]; overrode = true; }
     }
@@ -240,8 +293,27 @@
         if (state.oaTemperature < state.economizerTempControlSP &&
             state.enthalpyOKForEconomizer &&
             !state.lowOATLockout) {
-          state.economizerActive = true;
-          state.oaDamperPosition = 100;
+          // Supply-air low limit: free cooling is damper control, not on/off.
+          // The damper modulates to the outdoor-air fraction that lands mixed air
+          // on the heating setpoint. If that fraction is below the ventilation
+          // minimum, free cooling cannot hold the floor even at the code minimum
+          // of outdoor air, so the economizer DROPS OUT rather than sitting
+          // "active" at minimum OA — which had kept the winter heating call
+          // suppressed and stranded supply air below its setpoint.
+          var econVentMin44 = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
+          var econLimit44 = 100;
+          if (RETURN_AIR_TEMP - state.oaTemperature > 0.5) {
+            econLimit44 = Math.round(
+              ((state.heatingCoilSetpoint - RETURN_AIR_TEMP) / (state.oaTemperature - RETURN_AIR_TEMP)) * 100
+            );
+          }
+          if (econLimit44 < econVentMin44) {
+            state.economizerActive = false;
+            state.oaDamperPosition = econVentMin44;
+          } else {
+            state.economizerActive = true;
+            state.oaDamperPosition = Math.min(100, econLimit44);
+          }
         } else {
           state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
         }
@@ -302,25 +374,82 @@
     // Creates slight positive pressurization of served zones (SOO Page 8)
     state.returnCFM = state.fanRunning ? Math.round(state.cfm * 0.90) : 0;
 
-    // 3. HEATING LOGIC: Heating Coil SP → PHT valve %
+    // 3. SEASON / ACTIVE SETPOINT — which setpoint owns the coils this pass.
+    var prevSeason = state.activeSeason || 'Summer';
+    if (state.controlMode === 'Winter' || state.controlMode === 'Summer') {
+      state.activeSeason = state.controlMode;
+    } else if (prevSeason === 'Winter') {
+      state.activeSeason = (state.oaTemperature > SEASON_CHANGEOVER_OAT + SEASON_CHANGEOVER_DB)
+        ? 'Summer' : 'Winter';
+    } else {
+      state.activeSeason = (state.oaTemperature < SEASON_CHANGEOVER_OAT - SEASON_CHANGEOVER_DB)
+        ? 'Winter' : 'Summer';
+    }
+
+    // One zone setpoint resets both coil setpoints around its deadband. A
+    // zone-derived setpoint is computed, not commanded, so it never seeds the
+    // release-to-Auto snapshot.
+    if (state.zoneSetpointControl) {
+      if (!preZoneSetpoints) {
+        preZoneSetpoints = {
+          heatingCoilSetpoint: state.heatingCoilSetpoint,
+          coolingCoilSetpoint: state.coolingCoilSetpoint
+        };
+      }
+      if (modes.heatingCoilSetpoint !== 'Manual') {
+        state.heatingCoilSetpoint = Math.round((state.zoneTempSetpoint - ZONE_DEADBAND / 2) * 10) / 10;
+        delete autoValues.heatingCoilSetpoint;
+      }
+      if (modes.coolingCoilSetpoint !== 'Manual') {
+        state.coolingCoilSetpoint = Math.round((state.zoneTempSetpoint + ZONE_DEADBAND / 2) * 10) / 10;
+        delete autoValues.coolingCoilSetpoint;
+      }
+    } else if (preZoneSetpoints) {
+      if (modes.heatingCoilSetpoint !== 'Manual') {
+        state.heatingCoilSetpoint = preZoneSetpoints.heatingCoilSetpoint;
+      }
+      if (modes.coolingCoilSetpoint !== 'Manual') {
+        state.coolingCoilSetpoint = preZoneSetpoints.coolingCoilSetpoint;
+      }
+      preZoneSetpoints = null;
+    }
+
+    var winter = state.activeSeason === 'Winter';
+    state.activeSetpointSource = winter ? 'Heating (minimum)' : 'Cooling (maximum)';
+    state.activeSetpoint = winter ? state.heatingCoilSetpoint : state.coolingCoilSetpoint;
+
+    // 3a. HEATING — the coil modulates to REACH its target through the mix. It
+    // used to control off outdoor air temperature alone and overshoot its own
+    // setpoint by a hardcoded +20°F, so on a cold day it drove mixed air far
+    // above the supply setpoint and the mutual-exclusivity rule then locked the
+    // cooling coil out, leaving supply air stranded (14 Aug review).
     if (state.fanRunning) {
-      if (state.oaTemperature < state.heatingCoilSetpoint) {
-        var heatError = state.heatingCoilSetpoint - state.oaTemperature;
-        state.phtValvePosition = Math.min(100, Math.round(heatError * 5));
+      var oaFrac44 = state.oaDamperPosition / 100;
+      var entering44 = state.oaTemperature * oaFrac44 + RETURN_AIR_TEMP * (1 - oaFrac44);
+      var riseNeeded = 0;
+
+      // Freeze protection: hold the OA stream at or above the plenum minimum.
+      if (state.oaTemperature < state.plenumMinSetpoint) {
+        riseNeeded = state.plenumMinSetpoint - state.oaTemperature;
+      }
+
+      // Heating call — winter authority only, and suppressed while the
+      // economizer is enabled (warming the outdoor air free cooling just brought
+      // in is the contradiction the review flagged).
+      if (winter && !state.economizerActive && oaFrac44 > 0 &&
+          entering44 < state.heatingCoilSetpoint) {
+        riseNeeded = Math.max(riseNeeded, (state.heatingCoilSetpoint - entering44) / oaFrac44);
+      }
+
+      if (riseNeeded > 0) {
+        var rise44 = Math.min(MAX_COIL_RISE, riseNeeded);
+        state.phtValvePosition = Math.min(100, Math.round((rise44 / MAX_COIL_RISE) * 100));
         state.phtValveStatus = 'ON';
-        state.preheatTemp = state.oaTemperature +
-          (state.phtValvePosition / 100) * (state.heatingCoilSetpoint - state.oaTemperature + 20);
+        state.preheatTemp = state.oaTemperature + rise44;
       } else {
         state.phtValvePosition = 0;
         state.phtValveStatus = 'OFF';
         state.preheatTemp = state.oaTemperature;
-      }
-
-      // Freeze protection
-      if (state.preheatTemp < state.plenumMinSetpoint) {
-        state.phtValvePosition = 100;
-        state.phtValveStatus = 'ON';
-        state.preheatTemp = state.plenumMinSetpoint;
       }
     } else {
       state.phtValvePosition = 0;
@@ -335,12 +464,19 @@
         (state.preheatTemp * oaFraction + RETURN_AIR_TEMP * (1 - oaFraction)) * 10
       ) / 10;
 
-      if (state.mixedAirTemp > state.coolingCoilSetpoint) {
-        var coolError = state.mixedAirTemp - state.coolingCoilSetpoint;
-        state.chwValvePosition = Math.min(100, Math.round(coolError * 8));
+      // Cooling defers while the heating valve is open (SOO #10), except to dry
+      // the air — the cold humid day the expert called correct operation. Sized
+      // by capacity, not proportional gain, which previously left a permanent
+      // 2-3°F droop below the setpoint the coil never closed.
+      var dehumidCall44 = state.returnAirRH > DEHUMID_RH_TRIGGER;
+      var coolingAllowed44 = (state.phtValvePosition === 0) || dehumidCall44;
+      state.dehumidifying = !!(dehumidCall44 && state.phtValvePosition > 0);
+
+      if (coolingAllowed44 && state.mixedAirTemp > state.coolingCoilSetpoint) {
+        var drop44 = Math.min(MAX_COIL_DROP, state.mixedAirTemp - state.coolingCoilSetpoint);
+        state.chwValvePosition = Math.min(100, Math.round((drop44 / MAX_COIL_DROP) * 100));
         state.chwValveStatus = 'ON';
-        state.supplyAirTemp = state.mixedAirTemp -
-          (state.chwValvePosition / 100) * (state.mixedAirTemp - state.coolingCoilSetpoint);
+        state.supplyAirTemp = state.mixedAirTemp - drop44;
       } else {
         state.chwValvePosition = 0;
         state.chwValveStatus = 'OFF';
@@ -358,15 +494,32 @@
     state.preheatTemp   = Math.round(state.preheatTemp   * 10) / 10;
     state.mixedAirTemp  = Math.round(state.mixedAirTemp  * 10) / 10;
     state.returnAirTemp = RETURN_AIR_TEMP;
+    // Zone sensor: the return duct carries the air leaving the space, which is
+    // what a BMS reports as zone temperature on a unit with no wall sensor.
+    if (modes.spaceTemp !== 'Manual') {
+      state.spaceTemp = state.returnAirTemp;
+    }
 
     // ── Humidity model (SOO CLC #4) ──────────────────────────────────────────
     // Return Air RH maintained at 50% by resetting SAT setpoint for CHW coil.
     // When CHW valve is active, cooling coil removes moisture from the airstream.
-    // OA RH approximated from enthalpy (higher enthalpy = higher humidity content).
-    var oaRH = Math.min(95, Math.max(15, 15 + (state.oaEnthalpy - 13) * 2.8));
+    // OA RH now comes from the weather file rather than being inferred from
+    // enthalpy; the old approximation (15 + (h-13)*2.8) stood in for a reading
+    // this controller never received.
+    var oaRH = state.oaRelHumidity;
     var oaFractionRH = state.oaDamperPosition / 100;
+    // Return air drifts off its 50% target with outdoor humidity and is dried by
+    // the cooling coil. Assigned here because the dehumidification call above
+    // depends on it — it was reading an undefined field, so a cold humid day
+    // could never open the cooling coil against a heating call.
+    var returnAirRHRaw44 = 50
+      + OA_RH_WEIGHT * (oaRH - 50) * oaFractionRH
+      - DEHUMID_RH_WEIGHT * (state.chwValvePosition / 100);
+    state.returnAirRH = Math.round(
+      Math.max(RETURN_AIR_RH_MIN, Math.min(RETURN_AIR_RH_MAX, returnAirRHRaw44)) * 10
+    ) / 10;
     // Mixed air humidity before coils (blend of OA and return air streams)
-    var returnRH = 50; // SOO target: maintain return air at 50% RH
+    var returnRH = state.returnAirRH;
     var mixedRH  = Math.round(oaFractionRH * oaRH + (1 - oaFractionRH) * returnRH);
     // CHW coil dehumidification: cooling coil removes moisture proportional to valve position
     // At 100% valve: up to 35% RH reduction (coil surface condensation = dehumidification)
@@ -409,6 +562,12 @@
 
   function setValue(key, value) {
     if (state.hasOwnProperty(key)) {
+      if (MOMENTARY_KEYS[key]) {
+        // One-shot: apply, let the sequence act on it and clear it, never latch.
+        state[key] = value;
+        recalculate();
+        return;
+      }
       if (!Object.prototype.hasOwnProperty.call(manualValues, key)) autoValues[key] = state[key];
       state[key] = value;
       modes[key] = 'Manual';
@@ -459,6 +618,12 @@
     // hold "winter" or "humid summer" steady while the rest of the model runs.
     if (modes.oaTemperature !== 'Manual') state.oaTemperature = weather.dryBulb;
     if (modes.oaEnthalpy !== 'Manual') state.oaEnthalpy = weather.enthalpy;
+    // Guarded: a weather row without relHumidity would otherwise write undefined
+    // and turn every downstream humidity reading into NaN.
+    if (modes.oaRelHumidity !== 'Manual' && typeof weather.relHumidity === 'number'
+        && isFinite(weather.relHumidity)) {
+      state.oaRelHumidity = weather.relHumidity;
+    }
     recalculate();
   }
 
@@ -470,12 +635,21 @@
     };
   }
 
+  // Per-unit seed values (AHU-4-3 runs the same sequences off its own numbers).
+  if (seed) {
+    for (var sk in seed) {
+      if (Object.prototype.hasOwnProperty.call(seed, sk) && state.hasOwnProperty(sk)) {
+        state[sk] = seed[sk];
+      }
+    }
+  }
+
   // Initial calculation
   recalculate();
 
   // ─── Expose ─────────────────────────────────────────────────────────────────
 
-  window.AHU44NewController = {
+  return {
     clearMode: clearMode,
     getState: getState,
     setValue: setValue,
@@ -493,5 +667,8 @@
       recalculate();
     },
   };
+}
 
-})();
+// AHU-4-4 keeps the exact global it always had.
+window.AHU44NewController = CTA_createAHU44Controller();
+window.CTA_createAHU44Controller = CTA_createAHU44Controller;

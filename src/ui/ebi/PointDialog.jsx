@@ -317,7 +317,7 @@ const PointDialog = (function () {
   function PointDialogComponent(props) {
     const BP = window.SymmetreBoardPoints;
     const { unitId, stateKey, state, modes, alarm, events, onSet, onClose } = props;
-    const m = BP.meta(stateKey) || { label: stateKey, kind: 'ai', unit: '' };
+    const m = BP.meta(stateKey, unitId) || { label: stateKey, kind: 'ai', unit: '' };
     const kind = m.kind;
     const isManual = (modes || {})[stateKey] === 'Manual';
     const raw = BP.valueOf(state, stateKey);
@@ -566,7 +566,9 @@ const PointDialog = (function () {
       onClick: onClose,
     },
       React.createElement('div', {
-        style: { width: '620px', maxWidth: 'calc(100vw - 24px)',
+        // Widened from 620px so the five tab labels sit on one line without
+        // crowding the pane beneath them.
+        style: { width: '720px', maxWidth: 'calc(100vw - 24px)',
                  maxHeight: 'calc(100vh - 24px)',
                  display: 'flex', flexDirection: 'column', minHeight: 0,
                  background: 'linear-gradient(180deg,#f6f8fc,#e9eef6)',
@@ -677,6 +679,10 @@ const PointDialog = (function () {
                            fontWeight: a ? 800 : 700, cursor: 'pointer', color: a ? '#12294f' : '#5a6f8e',
                            background: a ? '#fff' : '#dbe5f1', border: '1px solid #b9c9de',
                            borderBottom: 'none', marginBottom: a ? '-2px' : '0',
+                           // Tab labels stay on one line — "Command Priorities" and
+                           // "Recent Events" were wrapping to two, which made the row
+                           // twice as tall as it needed to be.
+                           whiteSpace: 'nowrap', flexShrink: 0,
                            position: 'relative', zIndex: a ? 1 : 0 },
                 }, t[1]);
               })

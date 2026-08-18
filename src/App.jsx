@@ -53,7 +53,8 @@ window.AlarmContext = AlarmContext;
 // legacy, pre-SymmetreBoard view that's no longer part of the product.
 // Normalizing here means every consumer of params.ahuId always gets a real,
 // known unit; that screen can no longer be reached at all.
-var KNOWN_AHU_IDS = { 'AHU-4-6': true, 'AHU-4-4': true, 'AHU-23-1': true, 'VAV-4-4-02': true };
+var KNOWN_AHU_IDS = { 'AHU-4-6': true, 'AHU-4-4': true, 'AHU-4-3': true, 'AHU-23-1': true,
+                      'VAV-4-4-02': true, 'VAV-02-03': true };
 
 function parseRoute(hash) {
   const cleaned = hash.replace(/^#\/?/, '');
@@ -123,12 +124,16 @@ function SymmetreScreen({ params }) {
             style: { width: '304px' }
           },
             (params.ahuId === 'AHU-4-4' && window.AHU44NewControlsSidebar)
-              ? React.createElement(window.AHU44NewControlsSidebar, null)
+              ? React.createElement(window.AHU44NewControlsSidebar, { controller: 'AHU44NewController', unitId: 'AHU-4-4' })
+              // AHU-4-3 shares AHU-4-4's panel, pointed at its own controller.
+              : (params.ahuId === 'AHU-4-3' && window.AHU44NewControlsSidebar)
+              ? React.createElement(window.AHU44NewControlsSidebar, { controller: 'AHU43Controller', unitId: 'AHU-4-3' })
               : (params.ahuId === 'AHU-23-1' && window.AHU23ControlsSidebar)
               ? React.createElement(window.AHU23ControlsSidebar, null)
               : (params.ahuId === 'AHU-4-6' && window.AHU46ControlsSidebar)
               ? React.createElement(window.AHU46ControlsSidebar, null)
-              : (params.ahuId === 'VAV-4-4-02' && window.VAVControlsSidebar)
+              // Every VAV tab uses the zone panel, keyed by its own zone id.
+              : (params.ahuId.indexOf('VAV') === 0 && window.VAVControlsSidebar)
               ? React.createElement(window.VAVControlsSidebar, { zoneId: params.ahuId })
               : (window.ControlsSidebar
                 ? React.createElement(window.ControlsSidebar, { ahuId: params.ahuId || 'AHU-4-4' })
@@ -162,7 +167,7 @@ function SymmetreScreen({ params }) {
                     React.createElement('p', { className: 'text-gray-400 mt-2' }, 'AHU: ' + (params.ahuId || 'AHU-4-4'))
                   )),
             (window.SimultaneousHeatCool &&
-           params.ahuId !== 'VAV-4-4-02' &&
+           params.ahuId.indexOf('VAV') !== 0 &&
            params.ahuId !== 'AHU-4-6')
               ? React.createElement(window.SimultaneousHeatCool, { ahuId: params.ahuId || 'AHU-4-4' })
               : null

@@ -119,7 +119,7 @@
 
   <g id="panelsBg" fill="#bcd6fb" fill-opacity="0.4" stroke="#eaf2fd" stroke-opacity="0.7" stroke-width="2">
     <rect x="236" y="215" width="82" height="110" rx="18"/><rect x="236" y="346" width="82" height="80" rx="18"/><rect x="345" y="346" width="132" height="80" rx="18"/><rect x="886" y="88" width="222" height="322" rx="18"/>
-    <rect x="1133" y="133" width="85" height="192" rx="18"/><rect x="1223" y="175" width="82" height="150" rx="18"/>
+    <rect x="1133" y="133" width="85" height="192" rx="18"/><rect x="1223" y="158" width="82" height="167" rx="18"/>
     <rect x="140" y="505" width="86" height="153" rx="16"/><rect x="240" y="505" width="75" height="153" rx="16"/><rect x="430" y="505" width="78" height="153" rx="16"/><rect x="518" y="505" width="82" height="153" rx="16"/><rect x="610" y="{{frzBoxY}}" width="82" height="{{frzBoxH}}" rx="16"/><rect x="707" y="505" width="78" height="153" rx="16"/><rect x="795" y="505" width="83" height="153" rx="16"/><rect x="886" y="416" width="222" height="324" rx="18"/><rect x="1138" y="478" width="80" height="180" rx="16"/><rect x="1315" y="505" width="80" height="153" rx="16"/><rect x="611" y="660" width="82" height="138" rx="16"/>
   </g>
 
@@ -590,10 +590,155 @@
     }
   };
 
+  var VAV = `<svg id="ahu-board" viewBox="0 0 1613 878" width="1613" height="878" xmlns="http://www.w3.org/2000/svg" font-family="'Barlow','Segoe UI',system-ui,sans-serif">
+  <defs>
+    {{bgGrad}}
+    <linearGradient id="v-ductFront" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.42" stop-color="#f2f4f7"/><stop offset="0.78" stop-color="#e0e3e9"/><stop offset="1" stop-color="#c6cbd4"/></linearGradient>
+    <linearGradient id="v-ductTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e6ea"/><stop offset="1" stop-color="#ccd0d7"/></linearGradient>
+    <linearGradient id="v-ductCap" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b3b8c2"/><stop offset="1" stop-color="#8e94a0"/></linearGradient>
+    <linearGradient id="v-mouthG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#272b33"/><stop offset="0.55" stop-color="#555b66"/><stop offset="1" stop-color="#8f959f"/></linearGradient>
+    <linearGradient id="v-boxG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#e8e8e8"/><stop offset="1" stop-color="#c7c7c8"/></linearGradient>
+    <!-- Same blade material as the AHU boards' damperH/damperV louvres, so the VAV
+         blade reads as the same family of device. -->
+    <linearGradient id="v-bladeG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="0.55" stop-color="#f4f5f7"/><stop offset="1" stop-color="#cdced3"/></linearGradient>
+    <linearGradient id="v-silverH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3f3f5"/><stop offset="0.55" stop-color="#b9b9be"/><stop offset="1" stop-color="#94949a"/></linearGradient>
+    <g id="v-sensorCube">
+      <polygon points="0,0 8,-8 40,-8 32,0" fill="#f2f3f5" stroke="#4a4a50" stroke-width="1.2"/>
+      <polygon points="32,0 40,-8 40,20 32,28" fill="#c6c9cf" stroke="#4a4a50" stroke-width="1.2"/>
+      <rect x="0" y="0" width="32" height="28" fill="#ffffff" stroke="#4a4a50" stroke-width="1.2"/>
+      <g stroke="#5a5d63" stroke-width="1.2"><line x1="4" y1="20" x2="4" y2="25"/><line x1="8" y1="20" x2="8" y2="25"/><line x1="12" y1="20" x2="12" y2="25"/><line x1="16" y1="20" x2="16" y2="25"/><line x1="20" y1="20" x2="20" y2="25"/><line x1="24" y1="20" x2="24" y2="25"/><line x1="28" y1="20" x2="28" y2="25"/></g>
+    </g>
+    <g id="v-arrow"><rect x="0" y="-2.6" width="34" height="5.2" fill="#4d4f52"/><polygon points="34,-8 50,0 34,8" fill="#4d4f52"/></g>
+  </defs>
+
+  <rect x="-200" y="-200" width="2200" height="1400" fill="url(#bgGrad)"/>
+
+  <g id="header">
+    <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">VAV-02-03</text>
+    <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: Meeting Room 214 &#183; Zone 3</text>
+    <text x="1606" y="98" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Location: Level 2 East</text>
+  </g>
+
+  <g id="panels" fill="#bcd6fb" fill-opacity="0.4" stroke="#eaf2fd" stroke-opacity="0.7" stroke-width="2">
+    <!-- Top edge sits 12px higher than the equipment needs, so the PRIMARY AIRFLOW
+         and DAMPER tags at y=272 clear the panel edge instead of crowding it. -->
+    <rect x="312" y="244" width="526" height="346" rx="20"/>
+    <rect x="1300" y="378" width="104" height="132" rx="16"/>
+    <rect x="1420" y="378" width="104" height="132" rx="16"/>
+  </g>
+
+  <g id="v-unit" shape-rendering="geometricPrecision" transform="translate(0,-16)">
+    <g id="v-inlet-stub" transform="translate(0,-14)">
+      <polygon points="336,456 346,445 384,445 374,456" fill="url(#v-ductTop)" stroke="#6c7280" stroke-width="1.3"/>
+      <polygon points="374,456 384,445 384,493 374,504" fill="url(#v-ductCap)" stroke="#6c7280" stroke-width="1.3"/>
+      <rect x="336" y="456" width="38" height="48" fill="url(#v-ductFront)" stroke="#6c7280" stroke-width="1.3"/>
+      <rect x="336" y="457.3" width="38" height="2" fill="#ffffff" opacity="0.95"/>
+    </g>
+
+    <g id="v-casing-back" fill="none" stroke="#9aa2ae" stroke-width="1.3" opacity="0.75">
+      <path d="M522,340 V516 M522,516 H802 M522,516 L470,568"/>
+    </g>
+    <g id="v-casing">
+      <polygon points="470,392 522,340 802,340 750,392" fill="#eef2f7" fill-opacity="0.82" stroke="#9aa2ae" stroke-width="1.5"/>
+      <polygon points="750,392 802,340 802,516 750,568" fill="#c9ced7" fill-opacity="0.86" stroke="#9aa2ae" stroke-width="1.5"/>
+      <rect x="470" y="392" width="280" height="176" fill="#ffffff" fill-opacity="0.46" stroke="#9aa2ae" stroke-width="1.5"/>
+      <path d="M472,394 H748" stroke="#ffffff" stroke-width="2.4" opacity="0.9" fill="none"/>
+      <path d="M494,410 Q552,472 508,560" fill="none" stroke="#ffffff" stroke-width="9" opacity="0.2"/>
+      <path d="M708,400 Q734,486 692,562" fill="none" stroke="#ffffff" stroke-width="6" opacity="0.15"/>
+    </g>
+
+    <g id="v-inlet-cyl" transform="translate(0,-14)">
+      <rect x="374" y="442" width="96" height="76" fill="url(#v-silverH)" stroke="#8f949e" stroke-width="1.2"/>
+      <rect x="374" y="443.4" width="96" height="2.4" fill="#ffffff" opacity="0.92"/>
+      <rect x="374" y="512" width="96" height="2" fill="#9ba1ac" opacity="0.68"/>
+      <ellipse cx="380" cy="480" rx="13" ry="45" fill="#5e646d" stroke="#3f444c" stroke-width="1.2"/>
+      <ellipse cx="383" cy="480" rx="12" ry="43" fill="url(#v-boxG)" stroke="#6c7280" stroke-width="1.1"/>
+      <ellipse cx="385" cy="480" rx="8.6" ry="35" fill="url(#v-silverH)" stroke="#9299a3" stroke-width="1"/>
+      <!-- The rim's far side is hidden so the tube reads as solid: only the near
+           (left) crescent shows, the way an opaque cylinder occludes its own
+           back edge. Clipped rather than redrawn as an arc so the dark fill
+           behind the mouth is preserved. -->
+      <clipPath id="v-inlet-rim-clip"><rect x="425" y="418" width="32" height="124"/></clipPath>
+      <ellipse cx="454" cy="480" rx="11" ry="44" fill="#5e646d" stroke="#3f444c" stroke-width="1.1" clip-path="url(#v-inlet-rim-clip)"/>
+      <ellipse cx="457" cy="480" rx="9.6" ry="40" fill="url(#v-boxG)" stroke="#8b9099" stroke-width="1"/>
+      <g id="v-af-probe">
+        <line x1="421" y1="453" x2="421" y2="507" stroke="#3f444c" stroke-width="4.6" stroke-linecap="round"/>
+        <line x1="419.9" y1="454" x2="419.9" y2="506" stroke="#c8ccd2" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="424.5" y1="475.5" x2="440.5" y2="459.5" stroke="#3f444c" stroke-width="4.6" stroke-linecap="round"/>
+        <line x1="425.6" y1="474.4" x2="439.4" y2="460.6" stroke="#c8ccd2" stroke-width="1.6" stroke-linecap="round"/>
+        <polygon points="411,476 418,469 431,469 424,476" fill="#ccd2d9" stroke="#3f444c" stroke-width="0.9"/>
+        <polygon points="424,476 431,469 431,482 424,489" fill="#6f757f" stroke="#3f444c" stroke-width="0.9"/>
+        <rect x="411" y="476" width="13" height="13" fill="url(#v-silverH)" stroke="#3f444c" stroke-width="0.9"/>
+        <line x1="412" y1="477.3" x2="423" y2="477.3" stroke="#ffffff" stroke-width="1.3" opacity="0.9"/>
+        <line x1="417.5" y1="482.5" x2="401.5" y2="498.5" stroke="#3f444c" stroke-width="4.6" stroke-linecap="round"/>
+        <line x1="416.4" y1="483.6" x2="402.6" y2="497.4" stroke="#c8ccd2" stroke-width="1.6" stroke-linecap="round"/>
+      </g>
+    </g>
+
+    <g id="v-damper-cyl" transform="translate(0,-14)">
+      <rect x="470" y="430" width="144" height="100" fill="url(#v-silverH)" stroke="#8f949e" stroke-width="1.2"/>
+      <rect x="470" y="431.6" width="144" height="3" fill="#ffffff" opacity="0.94"/>
+      <rect x="470" y="524" width="144" height="2.4" fill="#9ba1ac" opacity="0.72"/>
+      <ellipse cx="478" cy="480" rx="15" ry="55" fill="url(#v-boxG)" stroke="#5f656e" stroke-width="1.5"/>
+      <ellipse cx="481" cy="480" rx="12" ry="48" fill="url(#v-boxG)" stroke="#8b9099" stroke-width="1"/>
+      <ellipse cx="608" cy="480" rx="16" ry="55" fill="url(#v-boxG)" stroke="#5f656e" stroke-width="1.5"/>
+      <ellipse cx="610" cy="480" rx="12.5" ry="48" fill="url(#v-mouthG)" stroke="#6c7280" stroke-width="1.2"/>
+      <ellipse cx="612.5" cy="480" rx="10" ry="44" fill="#2f343b" opacity="0.28"/>
+      <line x1="610" y1="432" x2="610" y2="528" stroke="#565c65" stroke-width="3"/>
+      <g id="v-damper-disc" transform="rotate(-22 610 480)">
+        <ellipse cx="610" cy="483" rx="{{vavDiscRx}}" ry="44" fill="#5f656e" opacity="0.5" style="transition:rx 0.5s ease-out;"/>
+        <ellipse cx="610" cy="480" rx="{{vavDiscRx}}" ry="44" fill="url(#v-bladeG)" stroke="#1a1a1e" stroke-width="1.05" style="transition:rx 0.5s ease-out;"/>
+        <ellipse cx="608.6" cy="478.6" rx="{{vavDiscRx}}" ry="41" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.9" style="transition:rx 0.5s ease-out;"/>
+        <line x1="610" y1="440" x2="610" y2="520" stroke="#1a1a1e" stroke-width="1.05" opacity="0.55"/>
+      </g>
+      <g fill="#41464e" stroke="#2c3037" stroke-width="0.8"><circle cx="610" cy="432" r="3.2"/><circle cx="610" cy="528" r="3.2"/></g>
+    </g>
+
+    <g id="v-casing-front" fill="none">
+      <rect x="470" y="392" width="280" height="176" stroke="#9aa2ae" stroke-width="1.5"/>
+    </g>
+
+    <g id="v-disch-duct">
+      <polygon points="776,453 786,442 1056,442 1046,453" fill="url(#v-ductTop)" stroke="#6c7280" stroke-width="1.3"/>
+      <rect x="776" y="453" width="270" height="26" fill="url(#v-ductFront)" stroke="#6c7280" stroke-width="1.3"/>
+      <rect x="776" y="454.3" width="270" height="2" fill="#ffffff" opacity="0.95"/>
+      <polygon points="1046,453 1056,442 1056,468 1046,479" fill="url(#v-mouthG)" stroke="#6c7280" stroke-width="1.3"/>
+    </g>
+  </g>
+
+  <g id="v-airflow" transform="translate(0,-16)" stroke="#5a86c8" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="2 18" opacity="0.7" fill="none">
+    <path style="{{flowVav}}" d="M344,466 H366 M436,466 H460"/>
+    <path style="{{flowVav}}" d="M634,466 H770 M790,466 H1036"/>
+  </g>
+
+  <g id="v-leaders"><line x1="421" y1="328" x2="421" y2="412" stroke="#8c8f63" stroke-width="1.5"/></g>
+
+  <g id="deviceTags" font-size="15" font-weight="800" fill="#5a6b84" letter-spacing="0.4">
+    <text x="421" y="272" text-anchor="middle">PRIMARY AIRFLOW</text>
+    <text x="613" y="272" text-anchor="middle">DAMPER</text>
+    <text x="470" y="576" font-size="14">VAV-02-03 &#183; 10&#8221; INLET &#183; 1,200 CFM MAX</text>
+    <text x="1352" y="362" text-anchor="middle">ZONE TEMP</text>
+    <text x="1472" y="362" text-anchor="middle">ZONE CO&#8322;</text>
+  </g>
+
+  <g id="v-sensors">
+    <use href="#v-sensorCube" transform="translate(1336,452)"/>
+    <text x="1352" y="469" font-size="11" font-weight="800" fill="#16181d" text-anchor="middle">TS</text>
+    <use href="#v-sensorCube" transform="translate(1456,452)"/>
+    <text x="1472" y="469" font-size="9.5" font-weight="800" fill="#16181d" text-anchor="middle">CO&#8322;</text>
+  </g>
+
+  <g id="airLabels" font-weight="800" fill="#3f5170" font-size="15">
+    <text x="1074" y="438">SUPPLY AIR TO SPACE</text>
+    <use href="#v-arrow" transform="translate(1080,458)"/>
+  </g>
+</svg>`;
+
   window.SymmetreBoardArt = {
     BG_THEMES: BG_THEMES,
     MAIN: MAIN,
     U23: U23,
+    VAV: VAV,
     resolve: resolve,
 
     /* Per-unit artwork context. unitKey: 'AHU-4-3' | 'AHU-4-6' | 'AHU-4-4' */
@@ -628,6 +773,16 @@
         fanSpin: spin,
         flowSup: dash,
         flowRet: dash,
+        flowVav: dash,
+        // VAV damper blade seen at an angle. Fully closed reads as a full disc
+        // blocking the inlet; the blade turns edge-on quickly as it opens, so at
+        // normal operating positions it reads as the thin lens the reference
+        // artwork shows rather than a fat oval. Stylised (a real projection would
+        // barely narrow until half travel) to match the reference's proportions.
+        vavDiscRx: (function (d) {
+          var f = 1 - Math.max(0, Math.min(100, d || 0)) / 100;
+          return (4.5 + 27 * Math.pow(f, 4.5)).toFixed(1);
+        })(opts.damper),
         flowRis: opts.riserFlow ? dash : ''
       };
     }

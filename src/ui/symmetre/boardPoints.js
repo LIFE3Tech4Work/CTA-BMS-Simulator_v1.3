@@ -38,6 +38,22 @@
     co2Sensor:       { label: 'Return Air CO₂', unit: 'PPM', kind: 'ai', dec: 0, min: 0, max: 2000,
                        catalog: { 'AHU-4-6': 'AHU04_06RACO2', 'AHU-4-4': 'AHU04_04RACO2' }, bac: 'RACO2' },
     cfm:             { label: 'Supply Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'SAFlow' },
+
+    // ── Season / active-setpoint readouts (14 Aug review) ────────────────────
+    activeSetpoint:  { label: 'Active Supply Air Setpoint', unit: '°F', kind: 'ai', dec: 1, min: 45, max: 80, bac: 'ActiveSASP' },
+    activeSeason:    { label: 'Active Control Season', unit: '', kind: 'ai', dec: 0, bac: 'Season' },
+    controlMode:     { label: 'Control Mode', unit: '', kind: 'ao', dec: 0, bac: 'CtrlMode' },
+    zoneTempSetpoint: { label: 'Zone Temperature Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 60, max: 85, step: 0.5, bac: 'ZoneSP' },
+    zoneSetpointControl: { label: 'Zone Setpoint Control', unit: '', kind: 'bo', dec: 0, bac: 'ZoneSPCtrl' },
+
+    // ── VAV terminal box (VAVController state keys) ──────────────────────────
+    airflowCFM:      { label: 'Primary Airflow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 1200, bac: 'PriAirflow' },
+    damperPosition:  { label: 'Damper Position', unit: '%', kind: 'ao', dec: 0, min: 0, max: 100, step: 5, bac: 'Damper' },
+    spaceTemp:       { label: 'Zone Temperature', unit: '°F', kind: 'ai', dec: 1, min: 50, max: 95, bac: 'ZoneTemp' },
+    reheatValvePosition: { label: 'Reheat Valve', unit: '%', kind: 'ao', dec: 0, min: 0, max: 100, step: 5, bac: 'ReheatValve' },
+    leavingAirTemp:  { label: 'Leaving Air Temperature', unit: '°F', kind: 'ai', dec: 1, min: 40, max: 120, bac: 'LAT' },
+    spaceTempCoolingSetpoint: { label: 'Zone Cooling Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 65, max: 85, step: 0.5, bac: 'ZoneClgSP' },
+    spaceTempHeatingSetpoint: { label: 'Zone Heating Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 60, max: 80, step: 0.5, bac: 'ZoneHtgSP' },
     oaCFM:           { label: 'Outside Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'OAFlow' },
     returnFanCFM:    { label: 'Return Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'RAFlow' },
     returnCFM:       { label: 'Return Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'RAFlow' },
@@ -109,6 +125,7 @@
         ['returnAirRH',       'pill', 1211, 184, null, 'right', 13],
         ['returnAirTemp',     'pill', 1211, 212, null, 'right', 13],
         ['co2Sensor',         'pill', 1297, 212, null, 'right', 13],
+        ['spaceTemp',         'pill', 1297, 184, null, 'right', 13],
         ['supplyAirRH',       'pill', 1145, 506, null, 'left', 12.5],
         ['supplyAirTemp',     'pill', 1145, 532, null, 'left', 12.5],
         ['oaCFM',             'pill', 220,  530, null, 'right', 13],
@@ -128,6 +145,7 @@
         ['phtValvePosition',  'box',  623,  630, 42],
         ['chwValvePosition',  'box',  718,  630, 42],
         ['heatingCoilSetpoint', 'box', 807, 593, 42],
+        ['activeSetpoint',    'box',  930,  593, 46],
         ['fanSpeed',          'box',  1055, 593, 32],
         ['coolingCoilSetpoint', 'box', 1148, 593, 42],
         ['ductStaticPressureSetpoint', 'box', 1318, 593, 48],
@@ -146,6 +164,7 @@
       chips: [
         ['returnAirTemp',     'pill', 1211, 212, null, 'right', 13],
         ['co2Sensor',         'pill', 1297, 212, null, 'right', 13],
+        ['spaceTemp',         'pill', 1297, 184, null, 'right', 13],
         ['supplyStaticPressure', 'pill', 1145, 506, null, 'left', 12.5],
         ['supplyAirTemp',     'pill', 1145, 532, null, 'left', 12.5],
         ['oaCFM',             'pill', 220,  530, null, 'right', 13],
@@ -163,6 +182,48 @@
         ['phtValvePosition',  'box',  623,  630, 42],
         ['chwValvePosition',  'box',  718,  630, 42],
         ['heatingCoilSetpoint', 'box', 807, 593, 42],
+        ['activeSetpoint',    'box',  930,  593, 46],
+        ['fanSpeed',          'box',  1055, 593, 32],
+        ['coolingCoilSetpoint', 'box', 1148, 593, 42],
+        ['spillDamperPct',    'box',  1318, 593, 48],
+        ['commonDamperOpen',  'box',  152,  288, 56],
+      ],
+      fans: [
+        { key: 'returnFanStatus', cmdKey: 'runSchedule', interlockKey: 'interlockOn', x: 894, y: 318, pills: 'rf', pillY: 100 },
+        { key: 'supplyFanStatus', cmdKey: 'runSchedule', interlockKey: 'interlockOn', x: 894, y: 620, pills: 'sf', pillY: 424 },
+      ],
+      freeze: { key: 'freezePumpOn', x: 624, y: 752 },
+    },
+
+    // AHU-4-3 is AHU-4-4's paired mixing-box unit — same board, same chip set,
+    // its own controller instance. No AHU-4-3 fault engine exists, so alarms are
+    // left off rather than borrowing AHU-4-4's and mislabelling them.
+    'AHU-4-3': {
+      ahu: 'AHU-4-3', board: 'MAIN', controller: 'AHU43Controller', faultEngine: null,
+      dev: 'DEV4003', bacPrefix: 'AHU04_03',
+      art: { showCommon: true },
+      chips: [
+        ['returnAirTemp',     'pill', 1211, 212, null, 'right', 13],
+        ['co2Sensor',         'pill', 1297, 212, null, 'right', 13],
+        ['spaceTemp',         'pill', 1297, 184, null, 'right', 13],
+        ['supplyStaticPressure', 'pill', 1145, 506, null, 'left', 12.5],
+        ['supplyAirTemp',     'pill', 1145, 532, null, 'left', 12.5],
+        ['oaCFM',             'pill', 220,  530, null, 'right', 13],
+        ['returnCFM',         'pill', 892,  220, null, 'left', 13],
+        ['cfm',               'pill', 892,  528, null, 'left', 13],
+        ['mixedAirTemp',      'pill', 481,  530, null, 'right', 13],
+        ['preheatTemp',       'pill', 849,  530, null, 'right', 13],
+        ['exhaustDamperPct',  'box',  250,  288, 38],
+        ['returnAirDamperPct', 'box', 424, 400, 32],
+        ['economizerActive',  'box',  248,  370, 44],
+        ['co2Setpoint',       'box',  1227, 291, 46],
+        ['minOAAirflowSetpoint', 'box', 146, 593, 46],
+        ['oaDamperPosition',  'box',  251,  593, 38],
+        ['economizerTempControlSP', 'box', 439, 593, 42],
+        ['phtValvePosition',  'box',  623,  630, 42],
+        ['chwValvePosition',  'box',  718,  630, 42],
+        ['heatingCoilSetpoint', 'box', 807, 593, 42],
+        ['activeSetpoint',    'box',  930,  593, 46],
         ['fanSpeed',          'box',  1055, 593, 32],
         ['coolingCoilSetpoint', 'box', 1148, 593, 42],
         ['spillDamperPct',    'box',  1318, 593, 48],
@@ -208,11 +269,45 @@
       ],
       freeze: null,
     },
+
+    // Terminal box downstream of AHU-4-6. The controller is VAVController's
+    // single-zone facade for this zone, so the board's getState()/setValue()
+    // calls need no special casing. No fan block and no fault engine: a VAV box
+    // has neither in this model.
+    'VAV-02-03': {
+      ahu: 'VAV-02-03', board: 'VAV', controller: 'VAV0203Controller', faultEngine: null,
+      dev: 'DEV0203', bacPrefix: 'VAV02_03',
+      art: {},
+      chips: [
+        ['airflowCFM',     'pill', 379, 300, null, 'left', 16],
+        ['damperPosition', 'pill', 588, 300, null, 'left', 16],
+        // Zone pills nudged down 12px: they sat 2px above their container's top
+        // edge, and the larger type adds height that would overhang further.
+        ['spaceTemp',      'pill', 1322, 404, null, 'left', 15],
+        ['co2Sensor',      'pill', 1442, 404, null, 'left', 15],
+      ],
+      fans: [],
+    },
   };
 
-  var UNIT_ORDER = ['AHU-4-6', 'AHU-4-4', 'AHU-23-1'];
+  var UNIT_ORDER = ['AHU-4-6', 'AHU-4-4', 'AHU-4-3', 'AHU-23-1', 'VAV-02-03'];
 
-  function meta(key) { return META[key] || null; }
+  // A few state keys mean something different on a different unit: a VAV box's
+  // co2Sensor is a room sensor, not the AHU's return-air sensor. The key stays the
+  // controller's own, and only the operator-facing naming is unit-scoped.
+  var UNIT_META = {
+    'VAV-02-03': {
+      co2Sensor: { label: 'Zone CO₂', bac: 'ZoneCO2' },
+      co2Setpoint: { label: 'Zone CO₂ Setpoint', bac: 'ZoneCO2SP' }
+    }
+  };
+
+  function meta(key, unitId) {
+    var base = META[key] || null;
+    if (!base) return null;
+    var ov = unitId && UNIT_META[unitId] && UNIT_META[unitId][key];
+    return ov ? Object.assign({}, base, ov) : base;
+  }
 
   function controllerFor(unitId) {
     var u = UNITS[unitId];
@@ -220,15 +315,16 @@
   }
 
   /* Return-air enthalpy, BTU/lb dry air, from the unit's own return temp + RH.
-     Same psychrometric relation TMY3Projector uses for outside air. */
+     Uses the shared Psychrometrics helper, the same one the controllers and the
+     manual weather control use. */
   function returnEnthalpy(state) {
     var t = state.returnAirTemp;
     var rh = state.returnAirRH;
     if (typeof t !== 'number' || typeof rh !== 'number') return null;
-    var pws = 0.0886 * Math.exp(0.0546 * (t - 32) / 1.8 + 1.6);  // approx sat. pressure, psia
-    var pw = (rh / 100) * pws;
-    var w = 0.62198 * pw / Math.max(14.696 - pw, 0.01);
-    return 0.24 * t + w * (1061 + 0.444 * t);
+    var psy = (typeof window !== 'undefined') && window.Psychrometrics;
+    if (!psy) return null;
+    var h = psy.enthalpy(t, rh);
+    return isFinite(h) ? h : null;
   }
 
   window.SymmetreBoardPoints = {

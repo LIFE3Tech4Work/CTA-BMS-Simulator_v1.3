@@ -8,13 +8,26 @@ const BottomStatusBar = (function() {
   const { useContext, useMemo } = React;
 
   // ─── Timestamp Formatting ───────────────────────────────────────────────────
-  // Formats simulation time as: "May 1, 2026 14:30:00 EDT"
+  // Formats simulation time as: "Aug 17, 2025 14:30:00 EDT"
   function formatSimulationTimestamp(currentRow, interpolationFraction) {
-    // Simulation starts May 1, 2026 00:00 at row 1
-    // Each row = 1 hour, so row 1 = May 1 00:00, row 2 = May 1 01:00, etc.
-    const startDate = new Date(2026, 4, 1, 0, 0, 0); // May 1, 2026 00:00:00
-    const totalHours = (currentRow - 1) + (interpolationFraction || 0);
-    const simDate = new Date(startDate.getTime() + totalHours * 3600000);
+    // The engine owns the clock. This used to reconstruct the date from a
+    // hardcoded May 1 2026 base, which stamped August weather with a June date
+    // once the simulator moved to the full Jul 2025 – Jun 2026 fiscal year.
+    // getCurrentTimestamp() also resolves the seasonal opening row, which a
+    // context row of 1 does not reflect before the clock is started.
+    const eng = window.SimulationEngine;
+    let simDate;
+    if (eng && typeof eng.getCurrentTimestamp === 'function') {
+      // The engine is always at least as fresh as the context, which mirrors it
+      // through tick events and still reads row 1 before the clock is started.
+      simDate = eng.getCurrentTimestamp();
+    } else {
+      const startDate = (eng && eng.BASE_DATE)
+        ? new Date(eng.BASE_DATE.getTime())
+        : new Date('2025-07-01T00:00:00-04:00');
+      const totalHours = (currentRow - 1) + (interpolationFraction || 0);
+      simDate = new Date(startDate.getTime() + totalHours * 3600000);
+    }
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

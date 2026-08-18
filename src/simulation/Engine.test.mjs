@@ -27,8 +27,8 @@ describe('SimulationEngine', () => {
   });
 
   describe('Initial state', () => {
-    it('starts at row 1 with pause speed and 0 fraction', () => {
-      expect(engine.currentRow).toBe(1);
+    it('starts on the seasonally-current row with pause speed and 0 fraction', () => {
+      expect(engine.currentRow).toBe(engine.seasonalStartRow());
       expect(engine.speed).toBe('pause');
       expect(engine.interpolationFraction).toBe(0);
       expect(engine.running).toBe(false);
@@ -36,62 +36,62 @@ describe('SimulationEngine', () => {
     });
 
     it('exposes correct constants', () => {
-      expect(engine.TOTAL_ROWS).toBe(1017);
+      expect(engine.TOTAL_ROWS).toBe(8760);
       expect(engine.MS_PER_HOUR).toBe(3600000);
-      expect(engine.BASE_DATE.getTime()).toBe(new Date('2026-05-01T00:00:00-04:00').getTime());
+      expect(engine.BASE_DATE.getTime()).toBe(new Date('2025-07-01T00:00:00-04:00').getTime());
     });
   });
 
   describe('jumpToDate', () => {
-    it('returns false for dates before May 1 2026', () => {
-      const result = engine.jumpToDate(new Date('2026-04-30T23:59:59-04:00'));
+    it('returns false for dates before Jul 1 2025', () => {
+      const result = engine.jumpToDate(new Date('2025-06-30T23:59:59-04:00'));
       expect(result).toBe(false);
-      expect(engine.currentRow).toBe(1);
+      expect(engine.currentRow).toBe(engine.seasonalStartRow());
     });
 
-    it('returns false for dates after June 12 2026 08:00', () => {
-      const result = engine.jumpToDate(new Date('2026-06-12T09:00:00-04:00'));
+    it('returns false for dates after Jun 30 2026 23:00', () => {
+      const result = engine.jumpToDate(new Date('2026-07-01T00:00:00-04:00'));
       expect(result).toBe(false);
-      expect(engine.currentRow).toBe(1);
+      expect(engine.currentRow).toBe(engine.seasonalStartRow());
     });
 
     it('returns false for invalid dates', () => {
       expect(engine.jumpToDate(new Date('invalid'))).toBe(false);
       expect(engine.jumpToDate(null)).toBe(false);
-      expect(engine.jumpToDate('2026-05-01')).toBe(false);
+      expect(engine.jumpToDate('2025-07-01')).toBe(false);
     });
 
-    it('jumps to row 1 for May 1 2026 00:00', () => {
-      const result = engine.jumpToDate(new Date('2026-05-01T00:00:00-04:00'));
+    it('jumps to row 1 for Jul 1 2025 00:00', () => {
+      const result = engine.jumpToDate(new Date('2025-07-01T00:00:00-04:00'));
       expect(result).toBe(true);
       expect(engine.currentRow).toBe(1);
       expect(engine.interpolationFraction).toBe(0);
     });
 
-    it('jumps to row 2 for May 1 2026 01:00', () => {
-      const result = engine.jumpToDate(new Date('2026-05-01T01:00:00-04:00'));
+    it('jumps to row 2 for Jul 1 2025 01:00', () => {
+      const result = engine.jumpToDate(new Date('2025-07-01T01:00:00-04:00'));
       expect(result).toBe(true);
       expect(engine.currentRow).toBe(2);
       expect(engine.interpolationFraction).toBe(0);
     });
 
     it('jumps to correct row with fractional time', () => {
-      const result = engine.jumpToDate(new Date('2026-05-01T01:30:00-04:00'));
+      const result = engine.jumpToDate(new Date('2025-07-01T01:30:00-04:00'));
       expect(result).toBe(true);
       expect(engine.currentRow).toBe(2);
       expect(engine.interpolationFraction).toBeCloseTo(0.5, 5);
     });
 
-    it('jumps to row 1017 for the exact end date', () => {
-      const result = engine.jumpToDate(new Date('2026-06-12T08:00:00-04:00'));
+    it('jumps to row 8760 for the exact end date', () => {
+      const result = engine.jumpToDate(new Date('2026-06-30T23:00:00-04:00'));
       expect(result).toBe(true);
-      expect(engine.currentRow).toBe(1017);
+      expect(engine.currentRow).toBe(8760);
       expect(engine.interpolationFraction).toBe(0);
     });
 
     it('jumps to correct row for a mid-range date', () => {
-      // May 5, 12:00 → (4 days * 24 + 12) = 108 hours from base → row 109
-      const result = engine.jumpToDate(new Date('2026-05-05T12:00:00-04:00'));
+      // Jul 5, 12:00 → (4 days * 24 + 12) = 108 hours from base → row 109
+      const result = engine.jumpToDate(new Date('2025-07-05T12:00:00-04:00'));
       expect(result).toBe(true);
       expect(engine.currentRow).toBe(109);
       expect(engine.interpolationFraction).toBe(0);
@@ -100,7 +100,7 @@ describe('SimulationEngine', () => {
     it('notifies listeners when jumping', () => {
       const listener = vi.fn();
       engine.onTick(listener);
-      engine.jumpToDate(new Date('2026-05-03T00:00:00-04:00'));
+      engine.jumpToDate(new Date('2025-07-03T00:00:00-04:00'));
       expect(listener).toHaveBeenCalledTimes(1);
       expect(listener).toHaveBeenCalledWith(expect.objectContaining({
         rowIndex: 49,
@@ -111,20 +111,24 @@ describe('SimulationEngine', () => {
 
   describe('getCurrentTimestamp', () => {
     it('returns base date for row 1 fraction 0', () => {
+      // Jump explicitly rather than relying on the opening row: the clock now
+      // opens on the seasonally-current row, which is only row 1 because this
+      // suite loads Engine.js without TMY3Projector.
+      engine.jumpToDate(engine.BASE_DATE);
       const ts = engine.getCurrentTimestamp();
       expect(ts.getTime()).toBe(engine.BASE_DATE.getTime());
     });
 
     it('returns correct timestamp after jump', () => {
-      engine.jumpToDate(new Date('2026-05-10T06:00:00-04:00'));
+      engine.jumpToDate(new Date('2025-07-10T06:00:00-04:00'));
       const ts = engine.getCurrentTimestamp();
-      expect(ts.getTime()).toBe(new Date('2026-05-10T06:00:00-04:00').getTime());
+      expect(ts.getTime()).toBe(new Date('2025-07-10T06:00:00-04:00').getTime());
     });
   });
 
   describe('setSpeed', () => {
     it('changes speed without resetting position (Property 17)', () => {
-      engine.jumpToDate(new Date('2026-05-15T12:00:00-04:00'));
+      engine.jumpToDate(new Date('2025-07-15T12:00:00-04:00'));
       const rowBefore = engine.currentRow;
       const fracBefore = engine.interpolationFraction;
 
@@ -153,7 +157,7 @@ describe('SimulationEngine', () => {
     it('registers and calls a listener', () => {
       const listener = vi.fn();
       engine.onTick(listener);
-      engine.jumpToDate(new Date('2026-05-01T00:00:00-04:00'));
+      engine.jumpToDate(new Date('2025-07-01T00:00:00-04:00'));
       expect(listener).toHaveBeenCalled();
     });
 
@@ -161,7 +165,7 @@ describe('SimulationEngine', () => {
       const listener = vi.fn();
       engine.onTick(listener);
       engine.onTick(listener);
-      engine.jumpToDate(new Date('2026-05-01T00:00:00-04:00'));
+      engine.jumpToDate(new Date('2025-07-01T00:00:00-04:00'));
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
@@ -169,14 +173,14 @@ describe('SimulationEngine', () => {
       const listener = vi.fn();
       engine.onTick(listener);
       engine.offTick(listener);
-      engine.jumpToDate(new Date('2026-05-01T00:00:00-04:00'));
+      engine.jumpToDate(new Date('2025-07-01T00:00:00-04:00'));
       expect(listener).not.toHaveBeenCalled();
     });
 
     it('listener receives correct event shape', () => {
       const listener = vi.fn();
       engine.onTick(listener);
-      engine.jumpToDate(new Date('2026-05-02T06:30:00-04:00'));
+      engine.jumpToDate(new Date('2025-07-02T06:30:00-04:00'));
 
       const event = listener.mock.calls[0][0];
       expect(event).toHaveProperty('rowIndex');
@@ -208,11 +212,11 @@ describe('SimulationEngine', () => {
       engine.pause();
     });
 
-    it('start after end resets to row 1', () => {
+    it('start after end resets to the seasonally-current row', () => {
       engine.jumpToDate(engine.END_DATE);
       expect(engine.atEnd).toBe(true);
       engine.start();
-      expect(engine.currentRow).toBe(1);
+      expect(engine.currentRow).toBe(engine.seasonalStartRow());
       expect(engine.interpolationFraction).toBe(0);
       expect(engine.atEnd).toBe(false);
       engine.pause();

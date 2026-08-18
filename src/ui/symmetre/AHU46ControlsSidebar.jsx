@@ -371,6 +371,25 @@ const AHU46ControlsSidebar = (() => {
       // below directly, the default) or Automatic (BAS resets it from
       // Return Air %RH — see the Duct Static/Return Air readouts further
       // down). SCENARIO_TRACKING.md item #13.
+      // SEASON / ZONE SETPOINT — added after the 14 Aug review, which asked for
+      // the two things this panel could not answer: which setpoint has authority
+      // ("I don't understand which set point actually controls your unit") and a
+      // single zone setpoint that overrides both coil setpoints.
+      React.createElement(SectionHeader, { title: 'Control Mode' }),
+      React.createElement(ModeToggleRow, { label: 'Season Mode', stateKey: 'controlMode', options: ['Auto', 'Winter', 'Summer'] }),
+      React.createElement(ReadOnlyRow, { label: 'Active Season', stateKey: 'activeSeason', units: '' }),
+      React.createElement(ReadOnlyRow, { label: 'Setpoint In Control', stateKey: 'activeSetpointSource', units: '' }),
+      // A heating setpoint is a floor and a cooling setpoint is a ceiling, not a
+      // target the supply air is expected to sit on. The label says which, because
+      // "why doesn't supply match the active setpoint?" was the confusion that
+      // started this whole pass.
+      React.createElement(ReadOnlyRow, { label: 'Active SA SP (limit)', stateKey: 'activeSetpoint', units: '°F' }),
+
+      React.createElement(SectionHeader, { title: 'Zone (Space) Control' }),
+      React.createElement(ToggleRow, { label: 'Zone SP Overrides Coils', stateKey: 'zoneSetpointControl' }),
+      React.createElement(EditableRow, { label: 'Zone Temp Setpoint', stateKey: 'zoneTempSetpoint', units: '°F', min: 60, max: 85, step: 0.5 }),
+      React.createElement(ReadOnlyRow, { label: 'Zone Temperature', stateKey: 'spaceTemp', units: '°F' }),
+
       React.createElement(SectionHeader, { title: 'Supply Air Temp Control' }),
       React.createElement(ModeToggleRow, { label: 'Cooling SP Mode', stateKey: 'coolingSetpointMode', options: ['Manual', 'Automatic'] }),
       React.createElement(EditableRow, { label: 'Cooling Coil Active SP', stateKey: 'coolingCoilSetpoint', units: '°F', min: 45, max: 75, step: 0.5 }),

@@ -1,7 +1,8 @@
 /**
  * TMY3Projector — Weather data lookup by simulation hour.
  *
- * Maps simulation rows (1–1017, May 1 – June 12, 2026) to TMY3 hourly weather
+ * Maps simulation rows (1–8760, the fiscal year Jul 1 2025 – Jun 30 2026) to
+ * TMY3 hourly weather
  * data (8,760 rows for a typical year from Central Park Observatory).
  *
  * TMY3 data is available at window.TMY3_DATA (loaded from
@@ -23,8 +24,33 @@
    */
   const MAY1_HOUR_INDEX = (31 + 28 + 31 + 30) * 24; // 2880
 
-  /** Total simulation rows (May 1 00:00 through June 12 08:00) */
-  const TOTAL_SIM_ROWS = 1017;
+  /**
+   * TMY3 hour index for July 1, 00:00 — the fiscal-year start.
+   * Day-of-year for Jul 1 = 31+28+31+30+31+30 + 1 = 182
+   * Hour index (0-based) = (182 - 1) * 24 = 4344
+   */
+  const FY_START_HOUR_INDEX = (31 + 28 + 31 + 30 + 31 + 30) * 24; // 4344
+
+  /**
+   * Total simulation rows — a full fiscal year, Jul 1 2025 00:00 through
+   * Jun 30 2026 23:00. The simulator used to expose only the 1,017-hour
+   * May–June window, which meant a lesson could never reach winter or high
+   * summer even though the TMY3 file has always held all 8,760 hours.
+   */
+  const TOTAL_SIM_ROWS = 8760;
+
+  /**
+   * Fiscal-year row whose month/day/hour matches a given calendar moment, so
+   * the simulator can open on weather that matches the real time of year
+   * rather than always starting in spring. Year is ignored — only the position
+   * within the year matters, and TMY3 is a typical (not actual) year anyway.
+   */
+  function seasonalRowFor(date) {
+    var d = (date instanceof Date && !isNaN(date.getTime())) ? date : new Date();
+    var doy = MONTH_START_DAY[d.getMonth()] + d.getDate();       // 1-based
+    var tmy3Index = (doy - 1) * 24 + d.getHours();               // 0-based
+    return ((tmy3Index - FY_START_HOUR_INDEX + TOTAL_TMY3_HOURS) % TOTAL_TMY3_HOURS) + 1;
+  }
 
   /** Total TMY3 hours in a year */
   const TOTAL_TMY3_HOURS = 8760;
@@ -92,13 +118,13 @@
   }
 
   /**
-   * Get weather data for a simulation row (1–1017).
+   * Get weather data for a simulation row (1–8760).
    *
-   * Row 1 = May 1, 00:00 → TMY3 index 2880
-   * Row 2 = May 1, 01:00 → TMY3 index 2881
-   * Row 1017 = June 12, 08:00 → TMY3 index 3896
+   * Row 1    = Jul 1,  00:00 → TMY3 index 4344
+   * Row 4417 = Jan 1,  00:00 → TMY3 index 0 (wraps)
+   * Row 8760 = Jun 30, 23:00 → TMY3 index 4343
    *
-   * @param {number} simulationRow - Simulation row number (1-based, 1–1017)
+   * @param {number} simulationRow - Simulation row number (1-based, 1–8760)
    * @returns {Object|null} TMY3 row or null if out of range
    */
   function getWeatherForRow(simulationRow) {
@@ -107,8 +133,10 @@
     var data = getTMY3Data();
     if (!data || data.length === 0) return null;
 
-    // Row 1 maps to TMY3 index MAY1_HOUR_INDEX (2880)
-    var tmy3Index = MAY1_HOUR_INDEX + (simulationRow - 1);
+    // Row 1 maps to TMY3 index FY_START_HOUR_INDEX (4344 = Jul 1 00:00).
+    // Wraps at the calendar year boundary: FY rows 1–4416 are Jul–Dec, rows
+    // 4417–8760 are Jan–Jun of the following calendar year.
+    var tmy3Index = (FY_START_HOUR_INDEX + (simulationRow - 1)) % TOTAL_TMY3_HOURS;
 
     if (tmy3Index < 0 || tmy3Index >= data.length) return null;
 
@@ -120,7 +148,7 @@
    *
    * Provides smooth transitions between hourly TMY3 data points.
    *
-   * @param {number} simulationRow - Simulation row number (1-based, 1–1017)
+   * @param {number} simulationRow - Simulation row number (1-based, 1–8760)
    * @param {number} fraction - Interpolation fraction between current and next hour (0.0–1.0)
    * @returns {Object|null} Interpolated weather object or null if out of range
    */
@@ -132,13 +160,14 @@
     var data = getTMY3Data();
     if (!data || data.length === 0) return null;
 
-    var tmy3Index = MAY1_HOUR_INDEX + (simulationRow - 1);
+    var tmy3Index = (FY_START_HOUR_INDEX + (simulationRow - 1)) % TOTAL_TMY3_HOURS;
     if (tmy3Index < 0 || tmy3Index >= data.length) return null;
 
     var currentRow = data[tmy3Index];
 
     // If fraction is 0 or we're at the last row, just return current
-    if (fraction === 0 || tmy3Index + 1 >= data.length) {
+    var nextIndex = (tmy3Index + 1) % TOTAL_TMY3_HOURS;
+    if (fraction === 0 || nextIndex >= data.length) {
       return {
         hour: currentRow.hour,
         dryBulb: currentRow.dryBulb,
@@ -149,7 +178,7 @@
       };
     }
 
-    var nextRow = data[tmy3Index + 1];
+    var nextRow = data[nextIndex];
 
     // Linear interpolation: value = current + fraction * (next - current)
     return {
@@ -171,7 +200,9 @@
     interpolateWeather: interpolateWeather,
 
     // Constants (exposed for testing / consumers)
+    seasonalRowFor: seasonalRowFor,
     MAY1_HOUR_INDEX: MAY1_HOUR_INDEX,
+    FY_START_HOUR_INDEX: FY_START_HOUR_INDEX,
     TOTAL_SIM_ROWS: TOTAL_SIM_ROWS,
     TOTAL_TMY3_HOURS: TOTAL_TMY3_HOURS,
     MONTH_START_DAY: MONTH_START_DAY

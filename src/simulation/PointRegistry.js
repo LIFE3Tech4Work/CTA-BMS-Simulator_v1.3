@@ -228,7 +228,13 @@ const PointRegistry = (() => {
       let newValue;
 
       // rowIndex is 1-based: row 1 = data[0], row 2 = data[1], etc.
-      const idx = rowIndex - 1; // Convert to 0-based index
+      //
+      // The real BMS exports are 1,017 hourly readings (~42 days) while the
+      // clock now runs a full 8,760-hour year. Clamping to the last sample
+      // would flatline every real point for 88% of the year, so the recorded
+      // window repeats instead — the same trace played back on a loop.
+      let idx = rowIndex - 1; // Convert to 0-based index
+      if (data.length > 1 && idx >= data.length) idx = idx % data.length;
 
       if (idx <= 0) {
         // At or before the first row, use first value

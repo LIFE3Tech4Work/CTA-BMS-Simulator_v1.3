@@ -35,6 +35,20 @@
   var DESIGN_CFM = 16500;          // Rated max airflow at 100% fan speed
   var RETURN_AIR_TEMP = 72;        // Assumed return air temperature (°F)
   var OA_DAMPER_FLOOR = 20;        // Minimum damper position (%) per ASHRAE 62.1
+  // Coil capacity, same figures as AHU-4-6 / 4-4 / 4-3. Valves are sized to REACH
+  // the setpoint rather than driven by a proportional gain: the old law used a
+  // fixed gain (5%/°F heating, 8%/°F cooling) that pinned the valve at 100% on any
+  // sizeable error, and its discharge formula added a hardcoded +20 °F so the coil
+  // overshot its own setpoint.
+  var MAX_COIL_RISE = 30;          // °F — preheat coil capacity at 100% open
+  var MAX_COIL_DROP = 30;          // °F — chilled water coil capacity at 100% open
+  // Humidity model, same form and constants as AHU-4-6 and AHU-4-4/4-3 so all
+  // units read alike. This unit previously had no humidity behaviour at all:
+  // outdoor humidity was not received, and no return or supply %RH was computed.
+  var OA_RH_WEIGHT = 0.4;          // fraction of the OA-RH gap reaching return air at full ventilation
+  var DEHUMID_RH_WEIGHT = 8;       // %RH pulled down at fully-open chwValvePosition
+  var RETURN_AIR_RH_MIN = 30;      // %
+  var RETURN_AIR_RH_MAX = 70;      // %
 
   // ─── Shared State Object ────────────────────────────────────────────────────
   // This is THE single source of truth. The Controls Sidebar writes inputs,
@@ -50,6 +64,8 @@
     plenumMinSetpoint: 40.0,       // °F — freeze protection threshold
     oaTemperature: 83.4,           // °F — outside air temperature
     oaEnthalpy: 32.0,             // BTU/lb — outside air enthalpy
+    oaRelHumidity: 60,             // % — TMY3-driven; operator-overridable. This unit
+                                   // received no humidity reading at all before.
     lowOATLockout: false,          // Low OAT lockout active
     enthalpyOKForEconomizer: false, // Enthalpy permits economizer (OAT + Enthalpy OK)
     economizerMinPosition: 20,     // % — OA damper floor (minimum position)
@@ -76,6 +92,12 @@
     mixedAirTemp: 72.0,            // °F — mixed air before coils
     phtValveStatus: 'OFF',         // V-1 valve label
     chwValveStatus: 'OFF',         // V-2 valve label
+    returnAirRH: 50.0,             // %RH — computed each pass: outdoor humidity brought in
+                                   // through the OA damper pulls it off the 50% design
+                                   // target, the cooling coil's condensation pulls it back.
+    supplyAirRH: 55.0,             // %RH — mixed-air humidity moved by whichever coil is
+                                   // active: a wet cooling coil drives it toward
+                                   // saturation, an active preheat coil dries it out.
   };
 
   // Expose shared state object on window for read access by overlay
@@ -94,6 +116,13 @@
   // Off #1) whatever the operator commanded — so the override yields while the
   // condition is active and resumes when it clears. The Manual flag is kept
   // throughout, so the point still reads as overridden.
+  // Momentary points: a button press, not a sustained override. The override
+  // latch would re-assert the pressed value after every pass, so the sequence's
+  // own self-clear could never take effect — pressing ALARM RESET left
+  // resetPressed stuck true forever, and the reset it was meant to perform
+  // could not complete. These are written straight through, unlatched.
+  var MOMENTARY_KEYS = { resetPressed: true };
+
   var SAFETY_DRIVEN_KEYS = {
     oaDamperPosition: true, oaCFM: true, cfm: true, fanSpeed: true,
     returnFanCFM: true, returnCFM: true, economizerActive: true,
@@ -120,6 +149,7 @@
     for (var mk in manualValues) {
       if (!Object.prototype.hasOwnProperty.call(manualValues, mk)) continue;
       if (!state.hasOwnProperty(mk)) continue;
+      if (MOMENTARY_KEYS[mk]) continue;
       if (safety && SAFETY_DRIVEN_KEYS[mk]) continue;
       if (state[mk] !== manualValues[mk]) { state[mk] = manualValues[mk]; overrode = true; }
     }
@@ -188,30 +218,39 @@
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 3. HEATING LOGIC: Heating Coil Active Setpoint → modulates PHT valve %
-    //    PHT valve opens proportionally when OAT is below heating setpoint
+    // 3. HEATING LOGIC: preheat coil on the outside-air stream, modulating to
+    //    bring OA up to the heating coil setpoint. Sized by coil capacity, so
+    //    the valve settles at the opening that reaches setpoint and stops there
+    //    instead of pinning at 100% and overshooting by a fixed +20 °F.
     // ──────────────────────────────────────────────────────────────────────────
     if (state.fanRunning) {
       if (state.oaTemperature < state.heatingCoilSetpoint) {
-        // Error = how far below setpoint the OA temp is
-        var heatError = state.heatingCoilSetpoint - state.oaTemperature;
-        // Proportional gain: 5% valve per 1°F below setpoint
-        state.phtValvePosition = Math.min(100, Math.round(heatError * 5));
-        state.phtValveStatus = 'ON';
-        // Preheat coil raises air temp toward setpoint
-        state.preheatTemp = state.oaTemperature +
-          (state.phtValvePosition / 100) * (state.heatingCoilSetpoint - state.oaTemperature + 20);
+        var neededRise = state.heatingCoilSetpoint - state.oaTemperature;
+        state.phtValvePosition = Math.max(0, Math.min(100,
+          Math.round((neededRise / MAX_COIL_RISE) * 100)));
+        state.phtValveStatus = state.phtValvePosition > 0 ? 'ON' : 'OFF';
+        // Discharge never exceeds the setpoint the coil is chasing; when the coil
+        // is saturated it lands short, which is the honest reading.
+        state.preheatTemp = Math.min(
+          state.heatingCoilSetpoint,
+          state.oaTemperature + (state.phtValvePosition / 100) * MAX_COIL_RISE
+        );
       } else {
         state.phtValvePosition = 0;
         state.phtValveStatus = 'OFF';
         state.preheatTemp = state.oaTemperature;
       }
 
-      // Freeze protection: if preheat discharge < plenum min, force valve open
+      // Freeze protection overrides the comfort call: drive the valve open to hold
+      // the plenum minimum. Capped by coil capacity rather than asserting the
+      // setpoint is always reachable.
       if (state.preheatTemp < state.plenumMinSetpoint) {
         state.phtValvePosition = 100;
         state.phtValveStatus = 'ON';
-        state.preheatTemp = state.plenumMinSetpoint;
+        state.preheatTemp = Math.min(
+          state.plenumMinSetpoint,
+          state.oaTemperature + MAX_COIL_RISE
+        );
       }
     } else {
       state.phtValvePosition = 0;
@@ -220,8 +259,9 @@
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 4. COOLING LOGIC: Cooling Coil Active Setpoint → modulates CHW valve %
-    //    CHW valve opens to maintain Supply Air Temp at cooling setpoint
+    // 4. COOLING LOGIC: chilled water coil modulating to hold the mixed air at
+    //    the cooling coil setpoint. Sized by capacity for the same reason as the
+    //    preheat coil above.
     // ──────────────────────────────────────────────────────────────────────────
     if (state.fanRunning) {
       // Calculate mixed air temperature (OA + Return air blend)
@@ -231,14 +271,14 @@
       ) / 10;
 
       if (state.mixedAirTemp > state.coolingCoilSetpoint) {
-        // Need cooling: modulate CHW valve proportional to error
-        var coolError = state.mixedAirTemp - state.coolingCoilSetpoint;
-        // Gain: 8% valve per 1°F above cooling setpoint
-        state.chwValvePosition = Math.min(100, Math.round(coolError * 8));
-        state.chwValveStatus = 'ON';
-        // SAT = mixed air temp reduced by cooling coil effect
-        state.supplyAirTemp = state.mixedAirTemp -
-          (state.chwValvePosition / 100) * (state.mixedAirTemp - state.coolingCoilSetpoint);
+        var neededDrop = state.mixedAirTemp - state.coolingCoilSetpoint;
+        state.chwValvePosition = Math.max(0, Math.min(100,
+          Math.round((neededDrop / MAX_COIL_DROP) * 100)));
+        state.chwValveStatus = state.chwValvePosition > 0 ? 'ON' : 'OFF';
+        state.supplyAirTemp = Math.max(
+          state.coolingCoilSetpoint,
+          state.mixedAirTemp - (state.chwValvePosition / 100) * MAX_COIL_DROP
+        );
       } else {
         // No cooling needed: valve closed, SAT = mixed air temp
         state.chwValvePosition = 0;
@@ -256,6 +296,26 @@
     state.supplyAirTemp = Math.round(state.supplyAirTemp * 10) / 10;
     state.preheatTemp = Math.round(state.preheatTemp * 10) / 10;
     state.mixedAirTemp = Math.round(state.mixedAirTemp * 10) / 10;
+
+    // ── Humidity model ───────────────────────────────────────────────────────
+    // Same two-stage form as the other units: return air drifts off its 50%
+    // target with outdoor humidity and is dried by the cooling coil, then supply
+    // air starts from the mixed-air humidity and is moved by whichever coil is
+    // conditioning it.
+    var oaFractionRH = state.oaDamperPosition / 100;
+    var returnAirRHRaw = 50
+      + OA_RH_WEIGHT * (state.oaRelHumidity - 50) * oaFractionRH
+      - DEHUMID_RH_WEIGHT * (state.chwValvePosition / 100);
+    state.returnAirRH = Math.round(
+      Math.max(RETURN_AIR_RH_MIN, Math.min(RETURN_AIR_RH_MAX, returnAirRHRaw)) * 10
+    ) / 10;
+
+    var oaFracRH = state.fanRunning ? oaFractionRH : 0;
+    var mixRH = state.oaRelHumidity * oaFracRH + state.returnAirRH * (1 - oaFracRH);
+    var saRH = mixRH
+      + (state.chwValvePosition / 100) * (95 - mixRH)
+      - (state.phtValvePosition / 100) * (mixRH - 20);
+    state.supplyAirRH = Math.round(Math.max(5, Math.min(100, saRH)) * 10) / 10;
 
     // Notify all subscribers (overlay, sidebar read-only rows, etc.)
     notifySubscribers();
@@ -298,6 +358,12 @@
 
   function setValue(key, value) {
     if (state.hasOwnProperty(key)) {
+      if (MOMENTARY_KEYS[key]) {
+        // One-shot: apply, let the sequence act on it and clear it, never latch.
+        state[key] = value;
+        recalculate();
+        return;
+      }
       if (!Object.prototype.hasOwnProperty.call(manualValues, key)) autoValues[key] = state[key];
       state[key] = value;
       modes[key] = 'Manual';
@@ -350,6 +416,12 @@
 
     if (modes.oaTemperature !== 'Manual') state.oaTemperature = weather.dryBulb;
     if (modes.oaEnthalpy !== 'Manual') state.oaEnthalpy = weather.enthalpy;
+    // Guarded: a weather row without relHumidity would otherwise write undefined
+    // and turn every downstream humidity reading into NaN.
+    if (modes.oaRelHumidity !== 'Manual' && typeof weather.relHumidity === 'number'
+        && isFinite(weather.relHumidity)) {
+      state.oaRelHumidity = weather.relHumidity;
+    }
     recalculate();
   }
 

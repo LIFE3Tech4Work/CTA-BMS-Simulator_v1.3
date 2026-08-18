@@ -208,7 +208,10 @@ const SymmetreAppChrome = (function() {
       } else if (id === 'reload') {
         // Full simulation reset: jump to row 1 and reset all Manual points to Auto
         if (window.SimulationEngine) {
-          window.SimulationEngine.jumpToDate(window.SimulationEngine.BASE_DATE);
+          // Reset to the seasonally-current moment rather than the fiscal-year
+          // start, so a reset does not silently jump the class to July.
+          window.SimulationEngine.jumpToDate(
+            window.SimulationEngine.SEASONAL_START_DATE || window.SimulationEngine.BASE_DATE);
           window.SimulationEngine.pause();
         }
         // Reset PointRegistry-driven points to Auto mode

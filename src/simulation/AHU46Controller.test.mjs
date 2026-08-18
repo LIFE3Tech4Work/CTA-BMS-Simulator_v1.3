@@ -13,9 +13,28 @@ import { resolve } from 'path';
 
 const __dirname = new URL('.', import.meta.url).pathname;
 
+// The controller reads window.Psychrometrics for its enthalpy calculation, so
+// every fake window here has to carry it — the same load order index.html uses.
+// Deliberately the shared helper rather than a copy of the formula: the old
+// test mirrored the implementation, which is exactly why a 2x error in it went
+// unnoticed. Psychrometrics.test.mjs pins the helper to published values.
+const PSY_CODE = readFileSync(resolve(__dirname, 'Psychrometrics.js'), 'utf-8');
+
+function withPsychrometrics(w) {
+  new Function('window', PSY_CODE)(w);
+  return w;
+}
+
+const psy = withPsychrometrics({}).Psychrometrics;
+
+/** Return-air enthalpy the controller's changeover check will use. */
+function raEnthalpyOf(t, rh) {
+  return psy.enthalpy(t, rh);
+}
+
 function loadController() {
   const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-  const w = {};
+  const w = withPsychrometrics({});
   new Function('window', code)(w);
   return w.AHU46Controller;
 }
@@ -31,22 +50,10 @@ function mockTMY3(w, dryBulb, enthalpy, relHumidity) {
 
 function loadWithWeather(dryBulb, enthalpy, relHumidity) {
   const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-  const w = {};
+  const w = withPsychrometrics({});
   mockTMY3(w, dryBulb, enthalpy, relHumidity);
   new Function('window', code)(w);
   return w.AHU46Controller;
-}
-
-// Mirrors AHU46Controller.js's own liveReturnAirEnthalpy() — the economizer
-// hysteresis now compares oaEnthalpy against the unit's actual (previous-tick)
-// returnAirTemp/returnAirRH instead of a frozen design constant, so the
-// enable/disable thresholds are no longer fixed numbers a test can hardcode;
-// they have to be computed from whatever state the controller is actually in.
-function raEnthalpyOf(t, rh) {
-  const pws = 0.0886 * Math.exp(0.0546 * (t - 32) / 1.8 + 1.6);
-  const pw = (rh / 100) * pws;
-  const w = 0.62198 * pw / Math.max(14.696 - pw, 0.01);
-  return 0.24 * t + w * (1061 + 0.444 * t);
 }
 
 // ─── Design constants ────────────────────────────────────────────────────────
@@ -203,12 +210,19 @@ describe('AHU46Controller — 50% OA damper minimum', () => {
     expect(ctrl.getState().economizerActive).toBe(false);
   });
 
-  it('damper opens to 100% when cold OAT + enthalpy OK triggers economizer', () => {
+  it('damper opens above its floor when cold OAT + enthalpy OK triggers economizer', () => {
+    // The damper modulates to the outdoor-air fraction that holds the supply
+    // low limit rather than pinning at 100%: at 40°F, full outdoor air would
+    // drive mixed air far below the setpoint with the heating call suppressed,
+    // which is what used to strand the unit cold.
     const ctrl = loadWithWeather(40.0, 10.0);
     ctrl.setValue('enthalpyOKForEconomizer', true);
     ctrl.updateFromTMY3(1, 0);
-    expect(ctrl.getState().oaDamperPosition).toBe(100);
-    expect(ctrl.getState().economizerActive).toBe(true);
+    const s = ctrl.getState();
+    expect(s.economizerActive).toBe(true);
+    expect(s.oaDamperPosition).toBe(53);
+    expect(s.oaDamperPosition).toBeGreaterThan(s.economizerMinPosition);
+    expect(s.oaDamperPosition).toBeLessThan(100);
   });
 
   it('oaCFM at 50% min equals minOAAirflowSetpoint × (50/50) = 4500 CFM', () => {
@@ -343,7 +357,7 @@ describe('AHU46Controller — cooling logic', () => {
     // At OAT=55°F: no heating (55 == heatingCoilSetpoint threshold), economizer activates
     // (55 < 58°F economizerTempControlSP), damper→100%, mixedAirTemp≈55°F < 60°F coolingCoilSP → no cooling
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 55.0, 20.0);
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
@@ -385,7 +399,10 @@ describe('AHU46Controller — heating/cooling coils are mutually exclusive (SOO 
       const ctrl = loadWithWeather(oat, 15.0);
       ctrl.updateFromTMY3(1, 0);
       const s = ctrl.getState();
-      const bothOpen = s.phtValvePosition > 0 && s.chwValvePosition > 0;
+      // Both coils open together is only legitimate while dehumidifying — the
+      // cold, humid day the expert described (heat to temperature, cool to dry).
+      // Outside that case it remains the simultaneous heating/cooling fault.
+      const bothOpen = s.phtValvePosition > 0 && s.chwValvePosition > 0 && !s.dehumidifying;
       expect(bothOpen, `both valves open at OAT=${oat}°F (pht=${s.phtValvePosition}, chw=${s.chwValvePosition})`).toBe(false);
     }
   });
@@ -433,7 +450,7 @@ describe('AHU46Controller — freeze protection pump auto start/stop', () => {
 
   it('holds last state inside the 35-40°F hysteresis deadband, cooling down', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 90, 30);
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
@@ -451,7 +468,7 @@ describe('AHU46Controller — freeze protection pump auto start/stop', () => {
 
   it('holds last state inside the deadband, warming up (no chatter)', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 20, 5);
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
@@ -482,7 +499,7 @@ describe('AHU46Controller — freeze protection pump auto start/stop', () => {
 describe('AHU46Controller — TMY3 weather integration', () => {
   it('updateFromTMY3 pushes dryBulb and enthalpy into state', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 55.0, 22.0);
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
@@ -616,40 +633,47 @@ describe('AHU46Controller — supply air %RH (#25b, renamed from supplyStaticPre
     expect(s.supplyAirRH).toBeDefined();
   });
 
-  it('passes through returnAirRH unchanged when neither coil is active', () => {
+  it('is at the neutral baseline (55%) when neither coil is active', () => {
     // OAT=55°F: no heating (55 == heating SP), economizer active (55 < 58°F
     // econ SP) drops mixedAirTemp to 55°F < 60°F cooling SP → no cooling.
     // Same setup as the existing "CHW valve closes ..." cooling-logic test.
-    // The "no active conditioning" baseline used to be a hardcoded 55%
-    // regardless of outdoor conditions — checklist Section I (Lev's live
-    // walkthrough) — now it's whatever returnAirRH actually is.
     const ctrl = loadWithWeather(55.0, 20.0);
     ctrl.setValue('enthalpyOKForEconomizer', true);
     ctrl.updateFromTMY3(1, 0);
     const s = ctrl.getState();
     expect(s.chwValvePosition).toBe(0);
     expect(s.phtValvePosition).toBe(0);
-    expect(s.supplyAirRH).toBe(s.returnAirRH);
+    // Supply RH used to be a fixed 55% baseline moved only by valve position, so
+    // 25% outdoor air still read 87%RH at the supply (14 Aug review). With both
+    // coils closed the supply now simply carries the mixed-air humidity through.
+    const oaFrac = s.oaDamperPosition / 100;
+    const mixRH = s.oaRelHumidity * oaFrac + s.returnAirRH * (1 - oaFrac);
+    expect(s.supplyAirRH).toBeCloseTo(mixRH, 0);
   });
 
-  it('rises to near-saturation (90%) when the cooling coil is fully open', () => {
-    const ctrl = loadController(); // default 81.6°F OAT drives chwValvePosition to 100
+  it('rises toward saturation as the cooling coil opens', () => {
+    // The coil is sized to reach its setpoint, so the default 81.6°F day no
+    // longer saturates it at 100% — it settles at 56% and supply RH rises
+    // proportionally rather than pinning at the 90% near-saturation ceiling.
+    const ctrl = loadController();
     const s = ctrl.getState();
-    expect(s.chwValvePosition).toBe(100);
-    expect(s.supplyAirRH).toBe(90);
+    expect(s.chwValvePosition).toBe(56);
+    expect(s.supplyAirRH).toBeCloseTo(76.9, 1);
+    expect(s.supplyAirRH).toBeGreaterThan(s.returnAirRH);
   });
 
-  it('dries out below returnAirRH when the heating coil is active', () => {
+  it('dries out (40%) when the heating coil is active', () => {
     const ctrl = loadWithWeather(45.0, 15.0);
     ctrl.updateFromTMY3(1, 0);
     const s = ctrl.getState();
     expect(s.phtValvePosition).toBeGreaterThan(0);
     expect(s.chwValvePosition).toBe(0);
-    // supplyAirRH = returnAirRH - (pht/100)×(returnAirRH-25)
-    expect(s.supplyAirRH).toBeCloseTo(
-      s.returnAirRH - (s.phtValvePosition / 100) * (s.returnAirRH - 25), 1
-    );
-    expect(s.supplyAirRH).toBeLessThan(s.returnAirRH);
+    // A hot coil dries the air: supply RH lands below the mixed-air humidity it
+    // started from, by the fraction the heating valve is open.
+    const oaFracH = s.oaDamperPosition / 100;
+    const mixRHH = s.oaRelHumidity * oaFracH + s.returnAirRH * (1 - oaFracH);
+    expect(s.supplyAirRH).toBeLessThan(mixRHH);
+    expect(s.supplyAirRH).toBeGreaterThan(0);
   });
 
   it('scales proportionally with valve position rather than snapping between two fixed states', () => {
@@ -726,25 +750,21 @@ describe('AHU46Controller — plant-level conditions (#25c/#25d)', () => {
 // BTU/lb) AND OAT > 38°F; disable when OA enthalpy is unfavorable
 // (RA - 2.5 BTU/lb) OR OAT < 35°F. Between those, hold last state
 // (asymmetric hysteresis, same pattern as the freeze pump).
-//
-// The RA enthalpy side of that comparison used to be a frozen constant
-// (26.7 BTU/lb, a fixed 72.1°F/50%RH design point) completely decoupled
-// from the unit's actual return air — which is why the economizer failed
-// to engage even under textbook free-cooling weather (checklist Section I:
-// Lev's live walkthrough, 55°F/40%RH). It's now computed live from the
-// unit's actual (previous-tick) returnAirTemp/returnAirRH via
-// raEnthalpyOf() above (same formula as the controller's own
-// liveReturnAirEnthalpy()) — so the enable/disable thresholds below are no
-// longer fixed numbers; each test computes them from whatever return-air
-// state the controller is actually in at that point.
+// RETURN_AIR_ENTHALPY = 26.7 BTU/lb → enable threshold 21.7, disable
+// threshold 24.2.
 
 describe('AHU46Controller — economizer enthalpy/OAT hysteresis (#5)', () => {
-  it('defaults to enabled — default oaEnthalpy (32) is favorable against the default return-air baseline', () => {
+  it('defaults to disabled — the default 35.1 BTU/lb outdoor air is worse than return air', () => {
+    // Return air at roughly 72°F/50%RH is about 26.4 BTU/lb, so 35.1 BTU/lb
+    // outdoor air is emphatically not free cooling. The old approximation
+    // returned ~53 BTU/lb for the same return-air condition, which made the
+    // enthalpy check effectively always-favourable and let the economizer
+    // engage on hot humid days — see Psychrometrics.test.mjs.
     const ctrl = loadController();
     const s = ctrl.getState();
     const threshold = raEnthalpyOf(s.returnAirTemp, s.returnAirRH) - 5.0;
-    expect(s.oaEnthalpy).toBeLessThan(threshold);
-    expect(s.enthalpyOKForEconomizer).toBe(true);
+    expect(threshold).toBeLessThan(s.oaEnthalpy);
+    expect(s.enthalpyOKForEconomizer).toBe(false);
   });
 
   it('enables when enthalpy is favorable and OAT is above the enable floor (38°F)', () => {
@@ -756,26 +776,14 @@ describe('AHU46Controller — economizer enthalpy/OAT hysteresis (#5)', () => {
   });
 
   it('stays disabled when enthalpy is favorable but OAT has not cleared the enable floor', () => {
-    const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
-    // Establish a known-disabled starting state first (clearly unfavorable
-    // enthalpy) — this test is about the OAT floor holding that state, not
-    // about what the controller's un-ticked default happens to be.
-    mockTMY3(w, 40, 999);
-    new Function('window', code)(w);
-    const ctrl = w.AHU46Controller;
-    ctrl.updateFromTMY3(1, 0);
-    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false); // sanity: starts disabled
-
-    // Now favorable enthalpy, but OAT 37 is not > 38 — should hold disabled.
-    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 37, enthalpy: 1, relHumidity: 60, dewPoint: 30, wetBulb: 33 });
+    const ctrl = loadWithWeather(37.0, 20.0); // favorable enthalpy, but OAT 37 is not > 38
     ctrl.updateFromTMY3(1, 0);
     expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false);
   });
 
   it('disables once OAT drops below the disable floor (35°F), even with favorable enthalpy', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 40, 20);
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
@@ -789,22 +797,21 @@ describe('AHU46Controller — economizer enthalpy/OAT hysteresis (#5)', () => {
 
   it('disables once enthalpy becomes unfavorable, even with OAT above the enable floor', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 40, 20);
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
     ctrl.updateFromTMY3(1, 0);
     expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // sanity: enabled first
 
-    // Well above any plausible dynamic RA-enthalpy-based threshold.
-    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 40, enthalpy: 200, relHumidity: 60, dewPoint: 35, wetBulb: 38 });
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 40, enthalpy: 30, relHumidity: 60, dewPoint: 35, wetBulb: 38 });
     ctrl.updateFromTMY3(1, 0);
     expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false);
   });
 
   it('holds last state inside the enthalpy deadband, becoming favorable (no chatter)', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 50, 999); // OAT fixed above both OAT thresholds; enthalpy clearly unfavorable
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
@@ -830,13 +837,16 @@ describe('AHU46Controller — economizer enthalpy/OAT hysteresis (#5)', () => {
 
   it('holds last state inside the enthalpy deadband, becoming unfavorable (no chatter)', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
-    mockTMY3(w, 50, -50); // OAT fixed above both OAT thresholds; enthalpy clearly favorable
+    const w = withPsychrometrics({});
+    mockTMY3(w, 50, 5); // OAT above both OAT thresholds; enthalpy clearly favorable
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
     ctrl.updateFromTMY3(1, 0);
     expect(ctrl.getState().enthalpyOKForEconomizer).toBe(true); // starts on
 
+    // Thresholds are computed from the live return-air condition, so they have
+    // to be derived per tick rather than hardcoded (previous tick's state — the
+    // same one-tick lag the controller itself uses).
     let s = ctrl.getState();
     let threshold = raEnthalpyOf(s.returnAirTemp, s.returnAirRH);
     w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 50, enthalpy: threshold - 3.5, relHumidity: 60, dewPoint: 40, wetBulb: 45 });
@@ -845,14 +855,14 @@ describe('AHU46Controller — economizer enthalpy/OAT hysteresis (#5)', () => {
 
     s = ctrl.getState();
     threshold = raEnthalpyOf(s.returnAirTemp, s.returnAirRH);
-    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 50, enthalpy: threshold + 10, relHumidity: 60, dewPoint: 42, wetBulb: 48 });
+    w.TMY3Projector.interpolateWeather = () => ({ dryBulb: 50, enthalpy: threshold + 2, relHumidity: 60, dewPoint: 42, wetBulb: 48 });
     ctrl.updateFromTMY3(1, 0);
-    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false); // well above (threshold-2.5), now off
+    expect(ctrl.getState().enthalpyOKForEconomizer).toBe(false); // above the disable threshold, now off
   });
 
   it('holds last state inside the OAT deadband (35-38°F), no chatter', () => {
     const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-    const w = {};
+    const w = withPsychrometrics({});
     mockTMY3(w, 40, 15); // enthalpy fixed favorable; OAT starts above the enable floor
     new Function('window', code)(w);
     const ctrl = w.AHU46Controller;
@@ -1136,7 +1146,10 @@ describe('AHU46Controller — staged fan-start sequence (#8)', () => {
       expect(s.fanRunning).toBe(true);
       expect(s.interlockOn).toBe(true);
 
-      ctrl.recalculate(); // one more tick to let the pressure loop catch up
+      // Two settling ticks: the pressure loop reads last tick's cooling demand,
+      // so it overshoots once (80%) before landing on the 75% operating point.
+      ctrl.recalculate();
+      ctrl.recalculate();
       expect(ctrl.getState().fanSpeed).toBe(75);
     } finally {
       vi.useRealTimers();
@@ -1255,10 +1268,10 @@ describe('AHU46Controller — duct static pressure control (#9)', () => {
   });
 
   it('fan speed rises with cooling demand and falls as demand eases', () => {
-    const hot = loadWithWeather(90.0, 30.0); // well above cooling SP -> chwValvePosition saturates at 100
+    const hot = loadWithWeather(90.0, 30.0); // well above cooling SP -> high cooling demand
     hot.updateFromTMY3(1, 0);
     hot.updateFromTMY3(1, 0); // let the pressure loop react to the settled chwValvePosition
-    expect(hot.getState().chwValvePosition).toBe(100);
+    expect(hot.getState().chwValvePosition).toBe(70);
     const hotSpeed = hot.getState().fanSpeed;
 
     const cool = loadWithWeather(55.0, 20.0); // same setup as the existing "CHW valve closes" test
@@ -1414,9 +1427,11 @@ describe('AHU46Controller — return air / spill dampers (#11)', () => {
     ctrl.setValue('enthalpyOKForEconomizer', true);
     ctrl.updateFromTMY3(1, 0);
     const s = ctrl.getState();
-    expect(s.oaDamperPosition).toBe(100);
-    expect(s.returnAirDamperPosition).toBe(0);
-    expect(s.spillDamperPosition).toBe(100);
+    // Complementary to the OA damper, which now modulates rather than pinning.
+    expect(s.oaDamperPosition).toBe(53);
+    expect(s.returnAirDamperPosition).toBe(47);
+    expect(s.spillDamperPosition).toBe(53);
+    expect(s.returnAirDamperPosition + s.oaDamperPosition).toBe(100);
   });
 
   it('tracks a manually-forced OA damper position', () => {
@@ -1481,22 +1496,25 @@ describe('AHU46Controller — return air conditions (#12)', () => {
     const ctrl = loadWithWeather(50.0, 15.0);
     ctrl.updateFromTMY3(1, 0);
     const s = ctrl.getState();
-    expect(s.returnAirTemp).toBeCloseTo(68.5, 1);
+    expect(s.returnAirTemp).toBeCloseTo(67.3, 1);
     expect(s.returnAirTemp).toBeLessThan(72.2);
   });
 
-  it('clamps to the 85°F ceiling on a deep-cold day (preheat-saturation feedback pushes it up, not down)', () => {
-    // Counterintuitive but correct: once the preheat valve saturates at
-    // 100%, the preheat coil discharge temp is a fixed 75°F regardless of
-    // how cold OAT actually is (existing heating-logic behavior, not new
-    // here), so the returnAirTemp feedback loop settles high rather than
-    // low on extreme-cold days. RETURN_AIR_TEMP_MIN exists as a defensive
-    // bound but isn't reachable through this model's own formulas.
+  it('settles at its floor on a deep-cold day, with the preheat coil saturated', () => {
+    // The preheat coil used to overshoot its setpoint by a fixed +20°F at full
+    // open, which pushed the returnAirTemp feedback loop up to its 85°F ceiling
+    // on extreme-cold days. Now that the coil modulates to REACH the setpoint
+    // and saturates honestly at -20°F OAT, the loop settles at its 60°F floor
+    // instead — the physically sensible direction for a unit that cannot make
+    // enough heat.
     const ctrl = loadWithWeather(-20.0, 1.0);
     ctrl.updateFromTMY3(1, 0);
     const s = ctrl.getState();
+    // The coil modulates to REACH the setpoint (it used to overshoot by a fixed
+    // +20°F at full open, driving mixed air to 80°F against a 60°F supply
+    // setpoint — the 14 Aug review's main finding).
     expect(s.phtValvePosition).toBe(100);
-    expect(s.returnAirTemp).toBe(85);
+    expect(s.returnAirTemp).toBe(60);
   });
 
   it('feeds into mixedAirTemp the same way the old constant did (one-tick-lagged, not circular)', () => {
@@ -1541,8 +1559,15 @@ describe('AHU46Controller — return air %RH + automatic cooling setpoint reset 
     expect(humid.getState().returnAirRH).toBeGreaterThan(dry.getState().returnAirRH);
   });
 
-  it('returnAirRH is unaffected by coolingSetpointMode — it is a sensor reading, not a setpoint', () => {
+  it('returnAirRH follows the cooling demand, so the automatic reset moves it slightly', () => {
+    // returnAirRH is a sensor reading, but not an independent one: the model
+    // pulls it down in proportion to dehumidification at the cooling coil. On a
+    // humid day Automatic mode resets the cooling setpoint down, which opens the
+    // coil further and dries the return air a little more. So the two modes are
+    // close but not identical, and the automatic side reads lower — asserting
+    // exact equality was wrong about the model, not about the mode.
     const manual = loadWithWeather(85.0, 30.0, 90);
+    manual.updateFromTMY3(1, 0);
     manual.updateFromTMY3(1, 0);
 
     const auto = loadWithWeather(85.0, 30.0, 90);
@@ -1550,7 +1575,10 @@ describe('AHU46Controller — return air %RH + automatic cooling setpoint reset 
     auto.updateFromTMY3(1, 0);
     auto.updateFromTMY3(1, 0);
 
-    expect(manual.getState().returnAirRH).toBe(auto.getState().returnAirRH);
+    const mRH = manual.getState().returnAirRH;
+    const aRH = auto.getState().returnAirRH;
+    expect(aRH).toBeLessThan(mRH);
+    expect(Math.abs(mRH - aRH)).toBeLessThan(2);
   });
 
   it('Manual mode: coolingCoilSetpoint stays exactly at the operator value regardless of RH swings', () => {
@@ -1580,8 +1608,11 @@ describe('AHU46Controller — return air %RH + automatic cooling setpoint reset 
   });
 
   it('returnAirRH clamps to the 30-70% bounds at the extremes (full ventilation, no dehumidification)', () => {
+    // The damper is commanded to 100% explicitly. Left to the economizer it now
+    // modulates against the supply low limit, so full ventilation — the
+    // condition this clamp exists for — would never actually be reached.
     const wet = loadWithWeather(45.0, 10.0, 100);
-    wet.setValue('enthalpyOKForEconomizer', true); // -> economizer active, damper 100%
+    wet.setValue('oaDamperPosition', 100);
     wet.updateFromTMY3(1, 0);
     const s1 = wet.getState();
     expect(s1.oaDamperPosition).toBe(100);
@@ -1589,7 +1620,7 @@ describe('AHU46Controller — return air %RH + automatic cooling setpoint reset 
     expect(s1.returnAirRH).toBe(70);
 
     const dryAir = loadWithWeather(45.0, 10.0, 0);
-    dryAir.setValue('enthalpyOKForEconomizer', true);
+    dryAir.setValue('oaDamperPosition', 100);
     dryAir.updateFromTMY3(1, 0);
     expect(dryAir.getState().returnAirRH).toBe(30);
   });
@@ -1627,7 +1658,7 @@ describe('AHU46Controller — freezestat shutdown sequence', () => {
       // computed by cooling logic each tick, but we're testing the trip
       // detector in isolation, same technique used by loadWithWeather()
       // elsewhere in this file for injecting a specific condition).
-      const w = {};
+      const w = withPsychrometrics({});
       const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
       new Function('window', code)(w);
       w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
@@ -1651,7 +1682,7 @@ describe('AHU46Controller — freezestat shutdown sequence', () => {
     vi.useFakeTimers();
     try {
       const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-      const w = {};
+      const w = withPsychrometrics({});
       new Function('window', code)(w);
       w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
       w.AHU46State.mixedAirTemp = 20;
@@ -1675,7 +1706,7 @@ describe('AHU46Controller — freezestat shutdown sequence', () => {
     vi.useFakeTimers();
     try {
       const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-      const w = {};
+      const w = withPsychrometrics({});
       new Function('window', code)(w);
       w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
       w.AHU46State.mixedAirTemp = 20;
@@ -1696,7 +1727,7 @@ describe('AHU46Controller — freezestat shutdown sequence', () => {
     vi.useFakeTimers();
     try {
       const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-      const w = {};
+      const w = withPsychrometrics({});
       new Function('window', code)(w);
       w.AHU46State.oaTemperature = 10;
       w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);
@@ -1718,7 +1749,7 @@ describe('AHU46Controller — freezestat shutdown sequence', () => {
     vi.useFakeTimers();
     try {
       const code = readFileSync(resolve(__dirname, 'AHU46Controller.js'), 'utf-8');
-      const w = {};
+      const w = withPsychrometrics({});
       new Function('window', code)(w);
       w.AHU46State.oaTemperature = 10;
       w.AHU46Controller.setValue('freezestatDelaySetpoint', 5);

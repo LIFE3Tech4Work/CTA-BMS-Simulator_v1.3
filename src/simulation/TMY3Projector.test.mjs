@@ -41,8 +41,13 @@ describe('TMY3Projector', () => {
       expect(projector.MAY1_HOUR_INDEX).toBe(2880);
     });
 
-    it('TOTAL_SIM_ROWS is 1017', () => {
-      expect(projector.TOTAL_SIM_ROWS).toBe(1017);
+    it('TOTAL_SIM_ROWS is 8760 — a full fiscal year', () => {
+      expect(projector.TOTAL_SIM_ROWS).toBe(8760);
+    });
+
+    it('FY_START_HOUR_INDEX is 4344 (Jul 1, 00:00)', () => {
+      // (31+28+31+30+31+30) * 24 = 181 * 24 = 4344
+      expect(projector.FY_START_HOUR_INDEX).toBe(4344);
     });
 
     it('TOTAL_TMY3_HOURS is 8760', () => {
@@ -82,30 +87,48 @@ describe('TMY3Projector', () => {
       expect(result).toEqual(mockTMY3[8759]);
     });
   });
+  describe('seasonalRowFor', () => {
+    it('maps Jul 1 00:00 to row 1', () => {
+      expect(projector.seasonalRowFor(new Date(2030, 6, 1, 0))).toBe(1);
+    });
+    it('maps Jan 1 00:00 to row 4417 — the wrap point', () => {
+      expect(projector.seasonalRowFor(new Date(2030, 0, 1, 0))).toBe(4417);
+    });
+    it('ignores the year, using only the position within it', () => {
+      expect(projector.seasonalRowFor(new Date(2025, 7, 17, 9)))
+        .toBe(projector.seasonalRowFor(new Date(2031, 7, 17, 9)));
+    });
+  });
+
 
   describe('getWeatherForRow', () => {
-    it('returns correct weather for row 1 (May 1, 00:00)', () => {
+    it('returns correct weather for row 1 (Jul 1, 00:00)', () => {
       const result = projector.getWeatherForRow(1);
-      expect(result).toEqual(mockTMY3[2880]);
+      expect(result).toEqual(mockTMY3[4344]);
     });
 
-    it('returns correct weather for row 2 (May 1, 01:00)', () => {
+    it('returns correct weather for row 2 (Jul 1, 01:00)', () => {
       const result = projector.getWeatherForRow(2);
-      expect(result).toEqual(mockTMY3[2881]);
+      expect(result).toEqual(mockTMY3[4345]);
     });
 
-    it('returns correct weather for row 1017 (June 12, 08:00)', () => {
-      const result = projector.getWeatherForRow(1017);
-      // TMY3 index = 2880 + 1016 = 3896
-      expect(result).toEqual(mockTMY3[3896]);
+    it('wraps past New Year — row 4417 is Jan 1, 00:00', () => {
+      // 4344 + 4416 = 8760 → wraps to index 0
+      const result = projector.getWeatherForRow(4417);
+      expect(result).toEqual(mockTMY3[0]);
     });
 
     it('returns null for row 0 (below range)', () => {
       expect(projector.getWeatherForRow(0)).toBeNull();
     });
 
-    it('returns null for row 1018 (above range)', () => {
-      expect(projector.getWeatherForRow(1018)).toBeNull();
+    it('returns the last hour of the fiscal year for row 8760 (Jun 30, 23:00)', () => {
+      // 4344 + 8759 = 13103 mod 8760 = 4343 — the hour before Jul 1
+      expect(projector.getWeatherForRow(8760)).toEqual(mockTMY3[4343]);
+    });
+
+    it('returns null for row 8761 (above range)', () => {
+      expect(projector.getWeatherForRow(8761)).toBeNull();
     });
 
     it('returns null for negative row', () => {
@@ -116,17 +139,17 @@ describe('TMY3Projector', () => {
   describe('interpolateWeather', () => {
     it('returns exact values at fraction 0', () => {
       const result = projector.interpolateWeather(1, 0);
-      expect(result.dryBulb).toBe(mockTMY3[2880].dryBulb);
-      expect(result.dewPoint).toBe(mockTMY3[2880].dewPoint);
-      expect(result.relHumidity).toBe(mockTMY3[2880].relHumidity);
-      expect(result.wetBulb).toBe(mockTMY3[2880].wetBulb);
-      expect(result.enthalpy).toBe(mockTMY3[2880].enthalpy);
+      expect(result.dryBulb).toBe(mockTMY3[4344].dryBulb);
+      expect(result.dewPoint).toBe(mockTMY3[4344].dewPoint);
+      expect(result.relHumidity).toBe(mockTMY3[4344].relHumidity);
+      expect(result.wetBulb).toBe(mockTMY3[4344].wetBulb);
+      expect(result.enthalpy).toBe(mockTMY3[4344].enthalpy);
     });
 
     it('returns interpolated values at fraction 0.5', () => {
       const result = projector.interpolateWeather(1, 0.5);
-      const current = mockTMY3[2880];
-      const next = mockTMY3[2881];
+      const current = mockTMY3[4344];
+      const next = mockTMY3[4345];
 
       expect(result.dryBulb).toBeCloseTo(current.dryBulb + 0.5 * (next.dryBulb - current.dryBulb), 5);
       expect(result.dewPoint).toBeCloseTo(current.dewPoint + 0.5 * (next.dewPoint - current.dewPoint), 5);
@@ -135,8 +158,7 @@ describe('TMY3Projector', () => {
 
     it('returns next row values at fraction 1.0', () => {
       const result = projector.interpolateWeather(1, 1.0);
-      const current = mockTMY3[2880];
-      const next = mockTMY3[2881];
+      const next = mockTMY3[4345];
 
       // At fraction 1.0, result = current + 1.0 * (next - current) = next
       expect(result.dryBulb).toBeCloseTo(next.dryBulb, 5);
@@ -144,26 +166,26 @@ describe('TMY3Projector', () => {
 
     it('returns null for out-of-range row', () => {
       expect(projector.interpolateWeather(0, 0.5)).toBeNull();
-      expect(projector.interpolateWeather(1018, 0.5)).toBeNull();
+      expect(projector.interpolateWeather(8761, 0.5)).toBeNull();
     });
 
     it('clamps negative fraction to 0', () => {
       const result = projector.interpolateWeather(1, -0.5);
-      expect(result.dryBulb).toBe(mockTMY3[2880].dryBulb);
+      expect(result.dryBulb).toBe(mockTMY3[4344].dryBulb);
     });
 
     it('clamps fraction above 1 to 1', () => {
       const result = projector.interpolateWeather(1, 1.5);
-      const next = mockTMY3[2881];
+      const next = mockTMY3[4345];
       expect(result.dryBulb).toBeCloseTo(next.dryBulb, 5);
     });
 
-    it('returns current values for the last row (no next row to interpolate to)', () => {
-      const result = projector.interpolateWeather(1017, 0.5);
-      // TMY3 index 3896 — but we need to check if 3897 exists (it does for mock data up to 8760)
-      // Since 3897 < 8760, interpolation should work. Let's verify it.
-      const current = mockTMY3[3896];
-      const next = mockTMY3[3897];
+    it('interpolates across the fiscal-year end, wrapping to the first hour', () => {
+      // Row 8760 = Jun 30 23:00 → index (4344 + 8759) % 8760 = 4343.
+      // The next hour wraps forward to 4344, Jul 1 00:00.
+      const result = projector.interpolateWeather(8760, 0.5);
+      const current = mockTMY3[4343];
+      const next = mockTMY3[4344];
       expect(result.dryBulb).toBeCloseTo(current.dryBulb + 0.5 * (next.dryBulb - current.dryBulb), 5);
     });
   });

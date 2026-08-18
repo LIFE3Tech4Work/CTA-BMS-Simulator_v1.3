@@ -32,8 +32,10 @@
     { value: '3600x', label: '3600×', icon: '⏭' }
   ];
 
-  /** Base date for row-to-date conversion (May 1, 2026 00:00 EDT) */
-  var BASE_DATE_MS = new Date('2026-05-01T00:00:00-04:00').getTime();
+  /** Base date for row-to-date conversion — fiscal-year start, from the engine. */
+  var BASE_DATE_MS = (window.SimulationEngine && window.SimulationEngine.BASE_DATE)
+    ? window.SimulationEngine.BASE_DATE.getTime()
+    : new Date('2025-07-01T00:00:00-04:00').getTime();
   var MS_PER_HOUR = 3600000;
 
   // ─── Helper Functions ───────────────────────────────────────────────────────

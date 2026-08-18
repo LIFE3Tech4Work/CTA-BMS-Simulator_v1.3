@@ -13,6 +13,14 @@
 const AHU44NewControlsSidebar = (() => {
   'use strict';
 
+  // AHU-4-3 and AHU-4-4 are the paired mixing-box units and share this panel,
+  // each driving its own controller instance. The rows below read their
+  // controller at render time, so the active global is held here and set from the
+  // panel's `controller` prop before its children render. Exactly one panel is
+  // mounted at a time (App.jsx renders the tab's sidebar only), so there is no
+  // ambiguity about which unit the rows belong to.
+  var ACTIVE_CTRL = 'AHU44NewController';
+
   const { useState, useEffect } = React;
 
   // Section header (blue bar)
@@ -25,7 +33,7 @@ const AHU44NewControlsSidebar = (() => {
 
   // Editable numeric row
   function EditableRow({ label, stateKey, units, min, max, step }) {
-    var ctrl = window.AHU44NewController;
+    var ctrl = window[ACTIVE_CTRL];
     var currentState = ctrl ? ctrl.getState() : {};
     var [value, setValue] = useState(currentState[stateKey] || 0);
     var [editing, setEditing] = useState(false);
@@ -94,7 +102,7 @@ const AHU44NewControlsSidebar = (() => {
     // box, a boolean toggles, a two-state string switches between its states,
     // and anything else gets a text box. While overridden the value reads in
     // the manual colour and ⟲ releases it back to Auto.
-    var ctrl = window.AHU44NewController;
+    var ctrl = window[ACTIVE_CTRL];
     var currentState = ctrl ? ctrl.getState() : {};
     var [value, setValue] = useState(currentState[stateKey] !== undefined ? currentState[stateKey] : 0);
     var [manual, setManual] = useState(false);
@@ -117,6 +125,7 @@ const AHU44NewControlsSidebar = (() => {
     // list is edited as free text rather than cycled into a state the control
     // sequences have never heard of.
     var STATE_PAIRS = [
+      ['Auto', 'Winter', 'Summer'],
       ['Manual', 'Automatic'], ['ON', 'OFF'], ['On', 'Off'],
       ['Open', 'Closed'], ['Running', 'Stopped']
     ];
@@ -212,7 +221,7 @@ const AHU44NewControlsSidebar = (() => {
 
   // Toggle row (On/Off)
   function ToggleRow({ label, stateKey }) {
-    var ctrl = window.AHU44NewController;
+    var ctrl = window[ACTIVE_CTRL];
     var currentState = ctrl ? ctrl.getState() : {};
     var [value, setValue] = useState(currentState[stateKey] || false);
 
@@ -240,7 +249,7 @@ const AHU44NewControlsSidebar = (() => {
 
   // NORM toggle row (for Fire Alarm)
   function NormToggleRow({ label, stateKey }) {
-    var ctrl = window.AHU44NewController;
+    var ctrl = window[ACTIVE_CTRL];
     var currentState = ctrl ? ctrl.getState() : {};
     var [value, setValue] = useState(currentState[stateKey] || false);
 
@@ -268,7 +277,9 @@ const AHU44NewControlsSidebar = (() => {
 
   // ─── Main Component ─────────────────────────────────────────────────────────
 
-  function AHU44NewControlsSidebarComponent() {
+  function AHU44NewControlsSidebarComponent(props) {
+    ACTIVE_CTRL = (props && props.controller) || 'AHU44NewController';
+    var unitLabel = (props && props.unitId) || 'AHU-4-4';
     var [collapsed, setCollapsed] = useState(false);
 
     if (collapsed) {
@@ -291,7 +302,7 @@ const AHU44NewControlsSidebar = (() => {
         className: 'flex items-center justify-between px-2 py-1 border-b border-gray-400',
         style: { background: (window.CTAPanel || {}).head || '#243247' }
       },
-        React.createElement('span', { className: 'text-[11px] font-bold cta-head-title' }, 'Controls — AHU-4-4'),
+        React.createElement('span', { className: 'text-[11px] font-bold cta-head-title' }, 'Controls — ' + unitLabel),
         React.createElement('button', {
           className: 'text-xs text-gray-600 hover:text-black', onClick: function() { setCollapsed(true); }
         }, '◀')
@@ -333,6 +344,20 @@ const AHU44NewControlsSidebar = (() => {
       React.createElement(ToggleRow, { label: 'System Starting', stateKey: 'systemStarting' }),
       React.createElement(EditableRow, { label: 'Starting Time Setpoint', stateKey: 'startingTimeSetpoint', units: 'SEC', min: 0, max: 600 }),
       React.createElement(ReadOnlyRow, { label: 'Starting Time Left', stateKey: 'startingTimeLeft', units: 'SEC' }),
+
+      // CONTROL MODE / ZONE SETPOINT — same pair added to AHU-4-6 after the
+      // 14 Aug review: which setpoint has coil authority, and one zone setpoint
+      // that can override both.
+      React.createElement(SectionHeader, { title: 'Control Mode' }),
+      React.createElement(ReadOnlyRow, { label: 'Season Mode', stateKey: 'controlMode', units: '' }),
+      React.createElement(ReadOnlyRow, { label: 'Active Season', stateKey: 'activeSeason', units: '' }),
+      React.createElement(ReadOnlyRow, { label: 'Setpoint In Control', stateKey: 'activeSetpointSource', units: '' }),
+      React.createElement(ReadOnlyRow, { label: 'Active SA SP (limit)', stateKey: 'activeSetpoint', units: '°F' }),
+
+      React.createElement(SectionHeader, { title: 'Zone (Space) Control' }),
+      React.createElement(ToggleRow, { label: 'Zone SP Overrides Coils', stateKey: 'zoneSetpointControl' }),
+      React.createElement(EditableRow, { label: 'Zone Temp Setpoint', stateKey: 'zoneTempSetpoint', units: '°F', min: 60, max: 85, step: 0.5 }),
+      React.createElement(ReadOnlyRow, { label: 'Zone Temperature', stateKey: 'spaceTemp', units: '°F' }),
 
       // SUPPLY AIR TEMPERATURE CONTROL
       React.createElement(SectionHeader, { title: 'Supply Air Temp Control  ·  Setpoints' }),
@@ -416,7 +441,7 @@ const AHU44NewControlsSidebar = (() => {
           className: 'w-full px-3 py-1 text-[10px] bg-amber-100 border border-amber-500 rounded hover:bg-amber-200 text-amber-900 font-bold',
           title: 'Clear all manual overrides and restore default setpoints',
           onClick: function() {
-            var ctrl = window.AHU44NewController;
+            var ctrl = window[ACTIVE_CTRL];
             if (!ctrl) return;
             // Restore every editable setpoint to its starting value
             var defaults = {

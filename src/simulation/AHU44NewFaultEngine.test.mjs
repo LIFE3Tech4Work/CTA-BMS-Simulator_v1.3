@@ -66,11 +66,18 @@ describe('AHU44NewFaultEngine', () => {
     });
   });
 
-  describe('alarms carry subsystem: AHU-4-4_NEW', () => {
-    it('every generated alarm is tagged with subsystem AHU-4-4_NEW', () => {
+  describe('alarms carry subsystem: AHU-4-4', () => {
+    it('every generated alarm is tagged with subsystem AHU-4-4', () => {
+      // The unit's subsystem identifier is 'AHU-4-4' — that is what the BMS
+      // point export uses (src/data/points/index.js) and what the Alarm
+      // Summary's node tree filters on. 'AHU-4-4_NEW' is a controller
+      // FILENAME artifact (AHU44NewController.js) and the VAV's servedBy
+      // controller reference; it is not a subsystem name. Tagging alarms with
+      // it would stop them grouping under the unit in the Alarm Summary, so
+      // the engine is right here and this expectation was wrong.
       const alarms = engine.evaluate(baseState({ co2Sensor: 1200 }));
       expect(alarms.length).toBeGreaterThan(0);
-      alarms.forEach(a => expect(a.subsystem).toBe('AHU-4-4_NEW'));
+      alarms.forEach(a => expect(a.subsystem).toBe('AHU-4-4'));
     });
   });
 
