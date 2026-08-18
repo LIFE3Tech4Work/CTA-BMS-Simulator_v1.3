@@ -42,6 +42,8 @@
     // ── Season / active-setpoint readouts (14 Aug review) ────────────────────
     activeSetpoint:  { label: 'Active Supply Air Setpoint', unit: '°F', kind: 'ai', dec: 1, min: 45, max: 80, bac: 'ActiveSASP' },
     activeSeason:    { label: 'Active Control Season', unit: '', kind: 'ai', dec: 0, bac: 'Season' },
+    oaResetEnabled:  { label: 'OA Reset Schedule', unit: '', kind: 'bo', dec: 0, bac: 'OAReset' },
+    heatingResetTarget: { label: 'Heating Reset Target', unit: '°F', kind: 'ai', dec: 1, min: 40, max: 90, bac: 'HeatResetTgt' },
     controlMode:     { label: 'Control Mode', unit: '', kind: 'ao', dec: 0, bac: 'CtrlMode' },
     zoneTempSetpoint: { label: 'Zone Temperature Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 60, max: 85, step: 0.5, bac: 'ZoneSP' },
     zoneSetpointControl: { label: 'Zone Setpoint Control', unit: '', kind: 'bo', dec: 0, bac: 'ZoneSPCtrl' },
@@ -52,6 +54,8 @@
     spaceTemp:       { label: 'Zone Temperature', unit: '°F', kind: 'ai', dec: 1, min: 50, max: 95, bac: 'ZoneTemp' },
     reheatValvePosition: { label: 'Reheat Valve', unit: '%', kind: 'ao', dec: 0, min: 0, max: 100, step: 5, bac: 'ReheatValve' },
     leavingAirTemp:  { label: 'Leaving Air Temperature', unit: '°F', kind: 'ai', dec: 1, min: 40, max: 120, bac: 'LAT' },
+    dischargeAirTemp: { label: 'Discharge Air Temperature', unit: '°F', kind: 'ai', dec: 1, min: 40, max: 120, bac: 'DAT' },
+    reheatValveStatus: { label: 'Reheat Valve Status', unit: '', kind: 'bi', dec: 0, bac: 'ReheatSts' },
     spaceTempCoolingSetpoint: { label: 'Zone Cooling Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 65, max: 85, step: 0.5, bac: 'ZoneClgSP' },
     spaceTempHeatingSetpoint: { label: 'Zone Heating Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 60, max: 80, step: 0.5, bac: 'ZoneHtgSP' },
     oaCFM:           { label: 'Outside Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'OAFlow' },
@@ -277,7 +281,14 @@
     'VAV-02-03': {
       ahu: 'VAV-02-03', board: 'VAV', controller: 'VAV0203Controller', faultEngine: null,
       dev: 'DEV0203', bacPrefix: 'VAV02_03',
-      art: {},
+      // Cooling-only box: no reheat coil, so that group drops out of the artwork.
+      art: {
+        vavTag: 'VAV-02-03',
+        vavService: 'Meeting Room 214 \u00b7 Zone 3',
+        vavLocation: 'Level 2 East',
+        vavBoxLabel: 'VAV-02-03 \u00b7 10\u201d INLET \u00b7 1,200 CFM MAX',
+        vavReheat: false,
+      },
       chips: [
         ['airflowCFM',     'pill', 379, 300, null, 'left', 16],
         ['damperPosition', 'pill', 588, 300, null, 'left', 16],
@@ -288,15 +299,49 @@
       ],
       fans: [],
     },
+
+    // Ballroom box downstream of AHU-4-4. This one HAS a hot-water reheat coil —
+    // the model has always carried reheatValvePosition / reheatValveStatus /
+    // leavingAirTemp for it, but the old legacy graphic showed none of it, so the
+    // reheat sequence was invisible. Same board as VAV-02-03 with the reheat group
+    // switched on.
+    'VAV-4-4-02': {
+      ahu: 'VAV-4-4-02', board: 'VAV', controller: 'VAV4402Controller', faultEngine: null,
+      dev: 'DEV4402', bacPrefix: 'VAV04_4002',
+      art: {
+        vavTag: 'VAV-4-4-02',
+        vavService: 'Ballroom \u00b7 Zone 2',
+        vavLocation: 'Level 4 \u00b7 served by AHU-4-4',
+        vavBoxLabel: 'VAV-4-4-02 \u00b7 14\u201d INLET \u00b7 REHEAT',
+        vavReheat: true,
+      },
+      chips: [
+        ['airflowCFM',          'pill', 379,  300, null, 'left', 16],
+        ['damperPosition',      'pill', 588,  300, null, 'left', 16],
+        // Reheat group: what arrives from the AHU, what the coil is doing, and
+        // what actually reaches the room.
+        ['dischargeAirTemp',    'pill', 800,  300, null, 'left', 16],
+        ['reheatValvePosition', 'pill', 896,  300, null, 'center', 16],
+        ['leavingAirTemp',      'pill', 1000, 300, null, 'center', 16],
+        ['reheatValveStatus',   'pill', 896,  601, null, 'center', 14],
+        ['spaceTemp',           'pill', 1322, 404, null, 'left', 16],
+        ['co2Sensor',           'pill', 1442, 404, null, 'left', 16],
+      ],
+      fans: [],
+    },
   };
 
-  var UNIT_ORDER = ['AHU-4-6', 'AHU-4-4', 'AHU-4-3', 'AHU-23-1', 'VAV-02-03'];
+  var UNIT_ORDER = ['AHU-4-6', 'AHU-4-4', 'AHU-4-3', 'AHU-23-1', 'VAV-02-03', 'VAV-4-4-02'];
 
   // A few state keys mean something different on a different unit: a VAV box's
   // co2Sensor is a room sensor, not the AHU's return-air sensor. The key stays the
   // controller's own, and only the operator-facing naming is unit-scoped.
   var UNIT_META = {
     'VAV-02-03': {
+      co2Sensor: { label: 'Zone CO₂', bac: 'ZoneCO2' },
+      co2Setpoint: { label: 'Zone CO₂ Setpoint', bac: 'ZoneCO2SP' }
+    },
+    'VAV-4-4-02': {
       co2Sensor: { label: 'Zone CO₂', bac: 'ZoneCO2' },
       co2Setpoint: { label: 'Zone CO₂ Setpoint', bac: 'ZoneCO2SP' }
     }

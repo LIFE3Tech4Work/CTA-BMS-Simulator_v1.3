@@ -105,6 +105,22 @@
       subsystem: 'AHU-4-4'
     },
     {
+      // Acknowledged AND returned to normal — the finished state. Seeded on
+      // AHU-4-3 so its tree node has something to filter to.
+      id: 'preload-F02-3',
+      timestamp: new Date('2026-05-15T14:42:00'),
+      source: 'AI301@DEV4003',
+      condition: 'F-02',
+      priority: 'high',
+      description: 'Supply air temperature deviation cleared after coil valve reset',
+      value: 55.4,
+      lifecycle: 'inactive',
+      acknowledged: true,
+      operator: 'cta_instructor',
+      action: 'Solved',
+      subsystem: 'AHU-4-3'
+    },
+    {
       id: 'preload-F03-1',
       timestamp: new Date('2026-05-18T02:00:00'),
       source: 'BI601@DEV4004',
@@ -164,11 +180,18 @@
 
   // ─── Location/Filter Tree (Requirement 13.1, Property 15) ─────────────────────
 
+  // One node per station tab. AHU-4-3 and VAV-02-03 were missing, so their alarms
+  // could only ever be seen under All Alarms — filtering to a unit silently
+  // excluded them.
   var TREE_NODES = [
     { id: 'all', label: 'All Alarms', parent: null },
-    { id: 'AHU-4-4', label: 'AHU-4-4', parent: 'all' },
     { id: 'AHU-4-6', label: 'AHU-4-6', parent: 'all' },
+    { id: 'AHU-4-4', label: 'AHU-4-4', parent: 'all' },
+    { id: 'AHU-4-3', label: 'AHU-4-3', parent: 'all' },
+    { id: 'AHU-23-1', label: 'AHU-23-1', parent: 'all' },
     { id: 'VAV-4-4-02', label: 'VAV-4-4-02 (Ballroom)', parent: 'all' },
+    // VAV-02-03 is hidden from the station tab bar, so it has no node here either
+    // — an empty filter for a unit the operator cannot open is just clutter.
     { id: 'Outdoor', label: 'Outdoor', parent: 'all' }
   ];
 
@@ -177,6 +200,10 @@
     if (!source) return 'all';
     if (source.indexOf('DEV4004') !== -1) return 'AHU-4-4';
     if (source.indexOf('DEV4006') !== -1) return 'AHU-4-6';
+    if (source.indexOf('DEV4003') !== -1) return 'AHU-4-3';
+    if (source.indexOf('DEV2301') !== -1) return 'AHU-23-1';
+    if (source.indexOf('DEV4402') !== -1) return 'VAV-4-4-02';
+    if (source.indexOf('DEV0203') !== -1) return 'VAV-02-03';
     if (source.indexOf('DEV5000') !== -1) return 'Outdoor';
     return 'all';
   }
@@ -248,7 +275,6 @@
     { key: 'select', label: '', sortable: false, width: '' },
     { key: 'action', label: 'Action', sortable: true, width: 'w-24' },
     { key: 'icon', label: '', sortable: false, width: 'w-10' },
-    { key: 'timestamp', label: 'Date/Time', sortable: true, width: 'w-40' },
     { key: 'source', label: 'Source', sortable: true, width: 'w-36' },
     { key: 'condition', label: 'Condition', sortable: true, width: 'w-24' },
     { key: 'operator', label: 'Operator', sortable: true, width: 'w-28' },
@@ -266,7 +292,13 @@
   function compareAlarms(a, b, sortColumn, sortDirection) {
     var valA, valB;
 
+    var ACTION_RANK = { awaiting: 0, acked: 1, solved: 2 };
+
     switch (sortColumn) {
+      case 'action':
+        valA = ACTION_RANK[actionStateFor(a)];
+        valB = ACTION_RANK[actionStateFor(b)];
+        break;
       case 'timestamp':
         valA = a.timestamp ? a.timestamp.getTime() : 0;
         valB = b.timestamp ? b.timestamp.getTime() : 0;
@@ -292,6 +324,28 @@
 
     return sortDirection === 'desc' ? -result : result;
   }
+
+  // ─── Action column ───────────────────────────────────────────────────────────
+  // Three states, because acknowledging is not the same as fixing: an alarm that
+  // has been acknowledged AND has returned to normal is done with, one that is
+  // acknowledged but still active is seen-but-unresolved, and one that is neither
+  // is still waiting on the operator.
+  function actionStateFor(alarm) {
+    if (!alarm.acknowledged) return 'awaiting';
+    return alarm.lifecycle === 'inactive' ? 'solved' : 'acked';
+  }
+
+  var ACTION_LABELS = { awaiting: 'Awaiting', acked: 'Acknowledged', solved: 'Solved' };
+  var ACTION_COLORS = { awaiting: '#e6a23c', acked: '#6ee7a8', solved: '#5b9bd5' };
+  var ACTION_TITLES = {
+    awaiting: 'Awaiting acknowledgment',
+    acked: 'Acknowledged — condition still active',
+    solved: 'Solved — acknowledged and returned to normal'
+  };
+
+  function actionLabelFor(alarm) { return ACTION_LABELS[actionStateFor(alarm)]; }
+  function actionTitleFor(alarm) { return ACTION_TITLES[actionStateFor(alarm)]; }
+  function actionColorFor(alarm) { return ACTION_COLORS[actionStateFor(alarm)]; }
 
   // ─── Format timestamp for display ────────────────────────────────────────────
 
@@ -380,10 +434,10 @@
       // Action (leftmost data column)
       React.createElement('div', {
         className: 'w-24 py-1.5 truncate',
-        style: { padding: '6px ' + CELL_PAD_X + 'px', color: acked ? '#6ee7a8' : '#e6a23c',
+        style: { padding: '6px ' + CELL_PAD_X + 'px', color: actionColorFor(alarm),
                  fontWeight: 700 },
-        title: alarm.action || 'Awaiting acknowledgment'
-      }, alarm.action || 'Awaiting'),
+        title: actionTitleFor(alarm)
+      }, actionLabelFor(alarm)),
       // Icon column
       React.createElement('div', { className: 'w-10 px-2 py-1.5 flex items-center justify-center' },
         React.createElement(AlarmIcon, {
@@ -391,10 +445,6 @@
           lifecycle: alarm.lifecycle,
           acknowledged: alarm.acknowledged
         })
-      ),
-      // Date/Time
-      React.createElement('div', { className: 'w-40 px-2 py-1.5 truncate' },
-        formatTimestamp(alarm.timestamp)
       ),
       // Source (clickable — navigates to EBI Point Detail)
       React.createElement('div', {
@@ -529,8 +579,10 @@
     var [selectedNode, setSelectedNode] = useState('all');
 
     // Sort state (Property 14)
-    var [sortColumn, setSortColumn] = useState('timestamp');
-    var [sortDirection, setSortDirection] = useState('desc');
+    // Date/Time is no longer a column, so the list opens sorted by the state an
+    // operator acts on: everything awaiting acknowledgment first.
+    var [sortColumn, setSortColumn] = useState('action');
+    var [sortDirection, setSortDirection] = useState('asc');
 
     // Context menu state
     var [contextMenu, setContextMenu] = useState(null);

@@ -173,6 +173,22 @@
   var PLENUM_RESET_MIN = 40;        // °F
   var PLENUM_RESET_MAX = 50;        // °F
 
+  // ─── Heating setpoint OA reset schedule ─────────────────────────────────────
+  // Standard practice, and the same shape as the plenum-minimum reset above: as
+  // outdoor air falls, the supply-air heating setpoint rises, so the unit delivers
+  // warmer air on a colder day instead of holding one number all year. Clamped at
+  // both ends per General Automatic Control Sequences #6.
+  //
+  // Ranking, highest first: a Manual hold on the setpoint, then zone setpoint
+  // control, then this schedule. Cooling is deliberately NOT reset off outdoor
+  // air — a cooling supply setpoint is normally held constant, and relaxing it on
+  // a mild day would fight the dehumidification call, telling the coil to back off
+  // exactly when it needs to dry the air.
+  var HEAT_RESET_OAT_HIGH = 60;     // °F — setpoint pins to HEAT_RESET_MIN at or above
+  var HEAT_RESET_OAT_LOW = 20;      // °F — setpoint pins to HEAT_RESET_MAX at or below
+  var HEAT_RESET_MIN = 55;          // °F — the flat value this schedule replaced
+  var HEAT_RESET_MAX = 65;          // °F
+
   // CO2 sensor simulation (SCENARIO_TRACKING.md #25a) — steady-state
   // ventilation dilution, computed instantaneously each recalculate() the
   // same way every other reading in this file is (no time-integrated
@@ -322,6 +338,11 @@
     // heating/cooling setpoints to zoneTempSetpoint ± half the deadband.
     zoneTempSetpoint: 72.0,         // °F
     zoneSetpointControl: false,
+    // Outdoor-air reset of the heating setpoint. On by default — it is how the
+    // real sequence behaves — but switchable so the flat-setpoint case can be
+    // demonstrated side by side.
+    oaResetEnabled: true,
+    heatingResetTarget: 55.0,       // °F — what the reset schedule is asking for
     fanSpeedSetpoint: 75,             // % — Manual-able; auto-modulated by the duct static
                                        // pressure loop otherwise (SCENARIO_TRACKING.md item #9)
     ductStaticPressureSetpoint: 1.0,  // in w.c. — SOO Closed Loop Controller #5
@@ -438,6 +459,9 @@
   // command captured the zone-derived value as the "Auto" one — so releasing to
   // Auto restored the wrong number.
   var preZoneSetpoints = null;
+  // The configured heating setpoint the OA reset schedule borrowed, restored when
+  // the schedule is switched off.
+  var preResetHeatingSetpoint = null;
 
   // Staged fan-start bookkeeping (SCENARIO_TRACKING.md #8). wasRunCommanded
   // starts true to match the default state's runSchedule=true/
@@ -953,6 +977,33 @@
       }
     }
 
+    // Heating setpoint OA reset. The target is always computed so the panel can
+    // show what the schedule is asking for even when it is switched off.
+    var heatReset = HEAT_RESET_MIN +
+      (HEAT_RESET_OAT_HIGH - state.oaTemperature) / (HEAT_RESET_OAT_HIGH - HEAT_RESET_OAT_LOW) *
+      (HEAT_RESET_MAX - HEAT_RESET_MIN);
+    state.heatingResetTarget = Math.round(
+      Math.max(HEAT_RESET_MIN, Math.min(HEAT_RESET_MAX, heatReset)) * 10
+    ) / 10;
+    if (state.oaResetEnabled && !state.zoneSetpointControl &&
+        modes.heatingCoilSetpoint !== 'Manual') {
+      // Borrow the setpoint the way zone control does, so switching the schedule
+      // off hands back the configured value instead of stranding the setpoint at
+      // whatever the schedule last wrote.
+      if (preResetHeatingSetpoint === null) {
+        preResetHeatingSetpoint = state.heatingCoilSetpoint;
+      }
+      state.heatingCoilSetpoint = state.heatingResetTarget;
+      // A scheduled value is computed, not commanded, so it must never seed the
+      // release-to-Auto snapshot.
+      delete autoValues.heatingCoilSetpoint;
+    } else if (preResetHeatingSetpoint !== null) {
+      if (modes.heatingCoilSetpoint !== 'Manual' && !state.zoneSetpointControl) {
+        state.heatingCoilSetpoint = preResetHeatingSetpoint;
+      }
+      preResetHeatingSetpoint = null;
+    }
+
     // One zone setpoint resets both coil setpoints around its deadband. The two
     // coil setpoints are borrowed while this is on and handed back when it is
     // switched off — a zone-derived setpoint is a computed value, not something
@@ -1322,6 +1373,19 @@
 
   window.AHU46Controller = {
     clearMode: clearMode,
+    // Release EVERY override at once, restoring each point's pre-override value.
+    // Needed so an exercise starts from a clean unit rather than inheriting
+    // whatever the previous student left overridden; only AHU-4-4 had this, so
+    // ExerciseStore.applySetup silently skipped the reset on the other units.
+    clearModes: function () {
+      for (var ak in autoValues) {
+        if (Object.prototype.hasOwnProperty.call(autoValues, ak) && state.hasOwnProperty(ak)) {
+          state[ak] = autoValues[ak];
+        }
+      }
+      modes = {}; manualValues = {}; autoValues = {};
+      recalculate();
+    },
     getState: getState,
     setValue: setValue,
     subscribe: subscribe,

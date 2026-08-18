@@ -80,6 +80,9 @@ function parseRoute(hash) {
   if (parts[0] === 'instructor') {
     return { screen: 'instructor', params: {} };
   }
+  if (parts[0] === 'exercises') {
+    return { screen: 'exercises', params: {} };
+  }
   return { screen: 'auth', params: {} };
 }
 
@@ -379,6 +382,10 @@ function Router() {
       return React.createElement(ReportsScreen, null);
     case 'instructor':
       return React.createElement(InstructorScreen, null);
+    case 'exercises':
+      return window.ExerciseList
+        ? React.createElement(window.ExerciseList, null)
+        : React.createElement('div', { className: 'p-6 text-gray-300' }, 'Exercises unavailable.');
     case 'auth':
     default:
       return React.createElement(AuthScreen, null);
@@ -432,6 +439,9 @@ function App() {
   });
 
   // Expose state setters on window for other scripts to use
+  // Plain-JS modules (the exercise store, the board's action log) need the signed-in
+  // operator but sit outside React's context, so the current name is mirrored here.
+  window.CTAAuthOperator = (authState && authState.operator) || null;
   window.setAuthState = setAuthState;
   window.setModeState = setModeState;
   window.setSimulationState = setSimulationState;
@@ -474,15 +484,11 @@ function App() {
       // Reheat" a real, connected fault rather than an isolated number —
       // see VAVController.js's header), then evaluate each zone's fault
       // rules against its freshly-recalculated state.
-      if (window.VAVController && window.AHU44NewController &&
-          typeof window.VAVController.updateDischargeAirTemp === 'function') {
-        var ahuSupplyAirTemp = window.AHU44NewController.getState().supplyAirTemp;
-        window.VAVController.getZoneIds().forEach(function (zoneId) {
-          window.VAVController.updateDischargeAirTemp(zoneId, ahuSupplyAirTemp);
-          if (window.VAVFaultEngine && typeof window.VAVFaultEngine.evaluate === 'function') {
-            window.VAVFaultEngine.evaluate(zoneId, window.VAVController.getState(zoneId));
-          }
-        });
+      // Each zone pulls from its own upstream AHU — VAV-4-4-02 from AHU-4-4,
+      // VAV-02-03 from AHU-4-6. This used to push AHU-4-4's supply air into every
+      // zone, which was right when there was one zone and wrong once there were two.
+      if (window.VAVController && typeof window.VAVController.syncFromUpstream === 'function') {
+        window.VAVController.syncFromUpstream();
       }
 
       // Push TMY3 weather into every unit controller on each tick. AHU-4-4's

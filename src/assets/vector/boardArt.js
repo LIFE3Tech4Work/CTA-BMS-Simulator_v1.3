@@ -441,8 +441,8 @@
   </g>
 
   <g id="airLabels" font-weight="800" fill="#5a6b84" font-size="14" letter-spacing="0.4">
-    <text x="340" y="454" text-anchor="end">OUTDOOR AIR</text>
-    <use href="#arrow" transform="translate(272,474)"/>
+    <text x="292" y="454">OUTDOOR AIR</text>
+    <use href="#arrow" transform="translate(296,474)"/>
     <text x="1317" y="454">SUPPLY AIR</text>
     <use href="#arrow" transform="translate(1324,476)"/>
   </g>
@@ -614,10 +614,21 @@
   <rect x="-200" y="-200" width="2200" height="1400" fill="url(#bgGrad)"/>
 
   <g id="header">
-    <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">VAV-02-03</text>
-    <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: Meeting Room 214 &#183; Zone 3</text>
-    <text x="1606" y="98" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Location: Level 2 East</text>
+    <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">{{vavTag}}</text>
+    <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: {{vavService}}</text>
+    <text x="1606" y="98" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Location: {{vavLocation}}</text>
   </g>
+
+  <defs>
+    <linearGradient id="v-coilFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8836a"/><stop offset="0.45" stop-color="#c9553a"/>
+      <stop offset="1" stop-color="#9c3a24"/>
+    </linearGradient>
+    <linearGradient id="v-pipeR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8d3520"/><stop offset="0.35" stop-color="#d1745c"/>
+      <stop offset="1" stop-color="#7a2f1d"/>
+    </linearGradient>
+  </defs>
 
   <g id="panels" fill="#bcd6fb" fill-opacity="0.4" stroke="#eaf2fd" stroke-opacity="0.7" stroke-width="2">
     <!-- Top edge sits 12px higher than the equipment needs, so the PRIMARY AIRFLOW
@@ -704,21 +715,64 @@
       <rect x="776" y="454.3" width="270" height="2" fill="#ffffff" opacity="0.95"/>
       <polygon points="1046,453 1056,442 1056,468 1046,479" fill="url(#v-mouthG)" stroke="#6c7280" stroke-width="1.3"/>
     </g>
+
+    <!--IF:vavReheat-->
+      <g id="v-reheat">
+        <!-- Hot-water coil in the discharge duct. Drawn on the duct's own
+             faces so it reads as sitting inside the run, not floating over it. -->
+        <polygon points="856,453 866,442 946,442 936,453" fill="#c96a52" stroke="#7a2f1d" stroke-width="1.2"/>
+        <rect x="856" y="453" width="80" height="26" fill="url(#v-coilFace)" stroke="#7a2f1d" stroke-width="1.2"/>
+        <g stroke="#8d3520" stroke-width="1.6" opacity="0.85">
+          <path d="M862,455 V477 M872,455 V477 M882,455 V477 M892,455 V477 M902,455 V477 M912,455 V477 M922,455 V477 M932,455 V477" fill="none"/>
+        </g>
+        <rect x="856" y="454.2" width="80" height="1.8" fill="#ffd9cd" opacity="0.85"/>
+
+        <!-- Two-way control valve below the coil, on its supply leg. -->
+        <rect x="892" y="479" width="8" height="42" fill="url(#v-pipeR)" stroke="#5c2417" stroke-width="0.8"/>
+        <g id="v-rh-valve">
+          <polygon points="878,521 916,521 916,547 878,547" fill="url(#v-silverH)" stroke="#4b5058" stroke-width="1.3"/>
+          <polygon points="878,521 897,534 878,547" fill="#b9c0ca" stroke="#4b5058" stroke-width="1.1"/>
+          <polygon points="916,521 897,534 916,547" fill="#98a0ab" stroke="#4b5058" stroke-width="1.1"/>
+          <rect x="893" y="505" width="6" height="18" fill="#6c737d" stroke="#41464e" stroke-width="0.8"/>
+          <rect x="880" y="497" width="32" height="10" rx="3" fill="url(#v-boxG)" stroke="#41464e" stroke-width="1"/>
+        </g>
+
+        <!-- Leaving-air sensor downstream of the coil: the reading that shows
+             what the coil actually did to the air. -->
+        <g id="v-lat-probe">
+          <line x1="1000" y1="442" x2="1000" y2="477" stroke="#3f444c" stroke-width="4" stroke-linecap="round"/>
+          <line x1="999" y1="444" x2="999" y2="475" stroke="#c8ccd2" stroke-width="1.4" stroke-linecap="round"/>
+        </g>
+      </g>
+    <!--/IF-->
   </g>
 
   <g id="v-airflow" transform="translate(0,-16)" stroke="#5a86c8" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="2 18" opacity="0.7" fill="none">
     <path style="{{flowVav}}" d="M344,466 H366 M436,466 H460"/>
-    <path style="{{flowVav}}" d="M634,466 H770 M790,466 H1036"/>
+    <path style="{{flowVav}}" d="M634,466 H770 M790,466 H{{vavFlowMid}}"/>
+    <!--IF:vavReheat-->
+      <path style="{{flowVav}}" d="M950,466 H1036"/>
+    <!--/IF-->
   </g>
 
-  <g id="v-leaders"><line x1="421" y1="328" x2="421" y2="412" stroke="#8c8f63" stroke-width="1.5"/></g>
+  <g id="v-leaders"><line x1="421" y1="328" x2="421" y2="412" stroke="#8c8f63" stroke-width="1.5"/>
+    <!--IF:vavReheat-->
+      <line x1="896" y1="328" x2="896" y2="420" stroke="#8c8f63" stroke-width="1.5"/>
+      <line x1="1000" y1="328" x2="1000" y2="420" stroke="#8c8f63" stroke-width="1.5"/>
+    <!--/IF-->
+  </g>
 
   <g id="deviceTags" font-size="15" font-weight="800" fill="#5a6b84" letter-spacing="0.4">
     <text x="421" y="272" text-anchor="middle">PRIMARY AIRFLOW</text>
     <text x="613" y="272" text-anchor="middle">DAMPER</text>
-    <text x="470" y="576" font-size="14">VAV-02-03 &#183; 10&#8221; INLET &#183; 1,200 CFM MAX</text>
+    <text x="470" y="576" font-size="14">{{vavBoxLabel}}</text>
     <text x="1352" y="362" text-anchor="middle">ZONE TEMP</text>
     <text x="1472" y="362" text-anchor="middle">ZONE CO&#8322;</text>
+    <!--IF:vavReheat-->
+      <text x="896" y="272" text-anchor="middle">REHEAT COIL</text>
+      <text x="1000" y="272" text-anchor="middle">LEAVING AIR</text>
+      <text x="896" y="573" text-anchor="middle" font-size="13">RH VALVE</text>
+    <!--/IF-->
   </g>
 
   <g id="v-sensors">
@@ -779,6 +833,17 @@
         // normal operating positions it reads as the thin lens the reference
         // artwork shows rather than a fat oval. Stylised (a real projection would
         // barely narrow until half travel) to match the reference's proportions.
+        // VAV identity and the reheat group. A cooling-only box passes
+        // vavReheat false and the coil, valve, sensor, tags and leader lines all
+        // drop out — no coordinates change either way.
+        vavTag: opts.vavTag || 'VAV-02-03',
+        vavService: opts.vavService || 'Meeting Room 214 \u00b7 Zone 3',
+        vavLocation: opts.vavLocation || 'Level 2 East',
+        vavBoxLabel: opts.vavBoxLabel || 'VAV-02-03 \u00b7 10\u201d INLET \u00b7 1,200 CFM MAX',
+        vavReheat: !!opts.vavReheat,
+        // Discharge dashes stop short of the coil on a reheat box and run the
+        // full length otherwise.
+        vavFlowMid: opts.vavReheat ? 846 : 1036,
         vavDiscRx: (function (d) {
           var f = 1 - Math.max(0, Math.min(100, d || 0)) / 100;
           return (4.5 + 27 * Math.pow(f, 4.5)).toFixed(1);

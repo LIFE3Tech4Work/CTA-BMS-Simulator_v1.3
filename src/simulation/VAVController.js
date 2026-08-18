@@ -281,6 +281,48 @@
    * @param {string} zoneId
    * @param {number} dischargeAirTemp - °F, from AHU44NewController.getState().supplyAirTemp
    */
+  // Maps a zone's servedBy label to the controller that actually holds that
+  // unit's state. Adding a zone means adding its AHU here, not editing callers.
+  var UPSTREAM_CONTROLLERS = {
+    'AHU-4-4_NEW': 'AHU44NewController',
+    'AHU-4-4': 'AHU44NewController',
+    'AHU-4-6': 'AHU46Controller',
+    'AHU-4-3': 'AHU43Controller',
+    'AHU-23-1': 'AHU23Controller'
+  };
+
+  /** The controller feeding this zone, or null if it isn't loaded. */
+  function upstreamFor(zoneId) {
+    var z = null;
+    for (var i = 0; i < ZONES.length; i++) { if (ZONES[i].id === zoneId) { z = ZONES[i]; break; } }
+    if (!z) return null;
+    var name = UPSTREAM_CONTROLLERS[z.servedBy];
+    return (name && window[name]) ? window[name] : null;
+  }
+
+  /**
+   * Pull each zone's discharge air from ITS OWN upstream AHU. Both the tick driver
+   * and the weather override previously kept their own copy of this and both
+   * hardcoded AHU44NewController, so VAV-02-03 — served by AHU-4-6 — was shown
+   * AHU-4-4's supply air, which also fed its Excessive Reheat check.
+   *
+   * Call after the AHU controllers recalculate for the tick, or after any action
+   * that moves an AHU's supply air, so the zone screens don't wait for a tick that
+   * never arrives while the simulation is paused.
+   */
+  function syncFromUpstream() {
+    ZONES.forEach(function (z) {
+      var ahu = upstreamFor(z.id);
+      if (!ahu || typeof ahu.getState !== 'function') return;
+      var sat = ahu.getState().supplyAirTemp;
+      if (typeof sat !== 'number') return;
+      updateDischargeAirTemp(z.id, sat);
+      if (window.VAVFaultEngine && typeof window.VAVFaultEngine.evaluate === 'function') {
+        try { window.VAVFaultEngine.evaluate(z.id, getState(z.id)); } catch (e) {}
+      }
+    });
+  }
+
   function updateDischargeAirTemp(zoneId, dischargeAirTemp) {
     var state = zoneStates[zoneId];
     if (!state || typeof dischargeAirTemp !== 'number') return;
@@ -346,6 +388,9 @@
     subscribe: subscribe,
     recalculate: recalculate,
     updateDischargeAirTemp: updateDischargeAirTemp,
+    syncFromUpstream: syncFromUpstream,
+    subscribeToUpstream: subscribeToUpstream,
+    upstreamFor: upstreamFor,
     getModes: getModes,
     getZoneIds: getZoneIds,
     getZoneInfo: getZoneInfo,
@@ -353,7 +398,42 @@
     REHEAT_MAX_RISE: REHEAT_MAX_RISE
   };
 
-  // Board-facing single-zone handle for the VAV-02-03 station tab.
+  // Follow each upstream AHU rather than waiting to be told. A zone's discharge
+  // air is the AHU's supply air, so ANY change to that AHU — a tick, a weather
+  // override, a setpoint command, a manual coil override — has to reach the zone.
+  // Callers used to have to remember to push it, and only the tick driver and the
+  // weather override did, so commanding a setpoint on a paused simulation left the
+  // zone screens reporting the previous discharge temperature indefinitely.
+  function subscribeToUpstream() {
+    var seen = {};
+    ZONES.forEach(function (z) {
+      var name = UPSTREAM_CONTROLLERS[z.servedBy];
+      if (!name || seen[name]) return;
+      var ahu = window[name];
+      if (!ahu || typeof ahu.subscribe !== 'function') return;
+      seen[name] = true;
+      ahu.subscribe(function (ahuState) {
+        if (typeof ahuState.supplyAirTemp !== 'number') return;
+        ZONES.forEach(function (zz) {
+          if (UPSTREAM_CONTROLLERS[zz.servedBy] !== name) return;
+          if (zoneStates[zz.id].dischargeAirTemp === ahuState.supplyAirTemp) return;
+          updateDischargeAirTemp(zz.id, ahuState.supplyAirTemp);
+          if (window.VAVFaultEngine && typeof window.VAVFaultEngine.evaluate === 'function') {
+            try { window.VAVFaultEngine.evaluate(zz.id, getState(zz.id)); } catch (e) {}
+          }
+        });
+      });
+    });
+  }
+
+  // The AHU controllers load before this file (see index.html), so they are
+  // already on window; deferred anyway so load order can change without breaking
+  // the link silently.
+  if (typeof window.setTimeout === 'function') window.setTimeout(subscribeToUpstream, 0);
+  else subscribeToUpstream();
+
+  // Board-facing single-zone handles, one per station tab.
   window.VAV0203Controller = zoneFacade('VAV-02-03');
+  window.VAV4402Controller = zoneFacade('VAV-4-4-02');
 
 })();

@@ -5,11 +5,11 @@
  */
 
 const BottomStatusBar = (function() {
-  const { useContext, useMemo } = React;
+  const { useContext, useMemo, useState, useEffect } = React;
 
   // ─── Timestamp Formatting ───────────────────────────────────────────────────
   // Formats simulation time as: "Aug 17, 2025 14:30:00 EDT"
-  function formatSimulationTimestamp(currentRow, interpolationFraction) {
+  function formatSimulationTimestamp(currentRow, interpolationFraction, overrideDate) {
     // The engine owns the clock. This used to reconstruct the date from a
     // hardcoded May 1 2026 base, which stamped August weather with a June date
     // once the simulator moved to the full Jul 2025 – Jun 2026 fiscal year.
@@ -17,7 +17,12 @@ const BottomStatusBar = (function() {
     // context row of 1 does not reflect before the clock is started.
     const eng = window.SimulationEngine;
     let simDate;
-    if (eng && typeof eng.getCurrentTimestamp === 'function') {
+    // A season preset holds a real recorded reading from a specific day, so the
+    // clock shows THAT day — otherwise picking Winter left the clock on the live
+    // summer date while every reading beside it said January.
+    if (overrideDate) {
+      simDate = overrideDate;
+    } else if (eng && typeof eng.getCurrentTimestamp === 'function') {
       // The engine is always at least as fresh as the context, which mirrors it
       // through tick events and still reads row 1 before the clock is started.
       simDate = eng.getCurrentTimestamp();
@@ -46,13 +51,25 @@ const BottomStatusBar = (function() {
     const simulation = useContext(window.SimulationContext);
     const pointRegistry = useContext(window.PointRegistryContext);
 
+    // Weather override state, so the clock can follow a season selection.
+    const [ovr, setOvr] = useState(function () {
+      return window.WeatherOverride ? window.WeatherOverride.getState() : { active: false };
+    });
+    useEffect(function () {
+      if (!window.WeatherOverride) return;
+      return window.WeatherOverride.subscribe(setOvr);
+    }, []);
+
+    const overrideDate = (ovr && ovr.active && ovr.date) ? ovr.date : null;
+
     // Format the current simulation timestamp
     const timestamp = useMemo(function() {
       return formatSimulationTimestamp(
         simulation.currentRow || 1,
-        simulation.interpolationFraction || 0
+        simulation.interpolationFraction || 0,
+        overrideDate
       );
-    }, [simulation.currentRow, simulation.interpolationFraction]);
+    }, [simulation.currentRow, simulation.interpolationFraction, overrideDate]);
 
     // Get selected point BACnet path (if any)
     const selectedPointPath = useMemo(function() {
@@ -72,8 +89,16 @@ const BottomStatusBar = (function() {
         className: 'flex items-center gap-2 text-gray-300',
         'aria-label': 'Simulation time'
       },
-        React.createElement('span', { className: 'text-green-400' }, '●'),
-        React.createElement('span', null, timestamp)
+        React.createElement('span', {
+          className: (ovr && ovr.active) ? '' : 'text-green-400',
+          style: (ovr && ovr.active) ? { color: '#ff9bec' } : null
+        }, '●'),
+        React.createElement('span', null, timestamp),
+        // Says why the clock is not advancing, rather than leaving a frozen
+        // timestamp looking like a stalled app.
+        (ovr && ovr.active) ? React.createElement('span', {
+          style: { color: '#ff9bec', fontWeight: 700, letterSpacing: '.3px' }
+        }, overrideDate ? 'HELD — weather override' : 'HELD — custom weather') : null
       ),
       // Center: Selected point BACnet path
       React.createElement('div', {

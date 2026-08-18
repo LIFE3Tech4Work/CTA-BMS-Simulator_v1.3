@@ -363,6 +363,12 @@ const AHU44NewControlsSidebar = (() => {
       React.createElement(SectionHeader, { title: 'Supply Air Temp Control  ·  Setpoints' }),
       React.createElement(EditableRow, { label: 'Cooling Coil Active SP', stateKey: 'coolingCoilSetpoint', units: '°F', min: 45, max: 75, step: 0.5 }),
       React.createElement(EditableRow, { label: 'Heating Coil Active SP', stateKey: 'heatingCoilSetpoint', units: '°F', min: 40, max: 70, step: 0.5 }),
+      // The heating setpoint is reset off outdoor air (55 °F at 60 °F OAT rising to
+      // 65 °F at 20 °F), so it is not a number that sits still all year. Switchable
+      // so the flat-setpoint case can be shown next to it; a Manual hold on the
+      // setpoint above, or zone setpoint control, both outrank the schedule.
+      React.createElement(ToggleRow, { label: 'OA Reset Schedule', stateKey: 'oaResetEnabled' }),
+      React.createElement(ReadOnlyRow, { label: 'Heating Reset Target', stateKey: 'heatingResetTarget', units: '°F' }),
 
       // PLENUM AIR TEMPERATURE CONTROL
       React.createElement(SectionHeader, { title: 'Plenum Air Temp Control' }),
