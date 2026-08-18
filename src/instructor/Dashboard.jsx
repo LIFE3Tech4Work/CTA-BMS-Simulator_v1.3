@@ -60,7 +60,7 @@
       },
         React.createElement('div', { className: 'text-center' },
           React.createElement('h1', { className: 'text-2xl font-bold text-red-400' }, 'Access Denied'),
-          React.createElement('p', { className: 'text-gray-400 mt-2' }, 'You must be authenticated to access the Instructor Dashboard.'),
+          React.createElement('p', { className: 'text-gray-400 mt-2' }, 'You must be authenticated to access the Exercise Report.'),
           React.createElement('button', {
             className: 'mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500',
             onClick: function() { window.location.hash = '#/auth'; }
@@ -80,7 +80,7 @@
       },
         React.createElement('div', { className: 'text-center' },
           React.createElement('h1', { className: 'text-2xl font-bold text-red-400' }, 'Insufficient Privileges'),
-          React.createElement('p', { className: 'text-gray-400 mt-2' }, 'Instructor Dashboard requires Engr or higher security level.'),
+          React.createElement('p', { className: 'text-gray-400 mt-2' }, 'The Exercise Report requires Engr or higher security level.'),
           React.createElement('p', { className: 'text-gray-500 text-sm mt-1' }, 'Current level: ' + auth.securityLevel),
           React.createElement('button', {
             className: 'mt-4 px-4 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600',
@@ -163,25 +163,40 @@
           className: 'px-6 py-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between'
         },
           React.createElement('div', null,
-            React.createElement('h1', { className: 'text-xl font-bold text-white' }, 'Instructor Dashboard'),
+            // Back sits at the left edge before the heading, the same place and
+            // treatment as Alarm Summary, so leaving a secondary screen is one
+            // habit rather than a per-screen hunt.
+            React.createElement('button', {
+              type: 'button',
+              style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                       borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                       background: '#1b2230', border: '1px solid #38445c', color: '#c3cfdd',
+                       fontFamily: 'inherit', flexShrink: 0, marginBottom: '10px' },
+              onClick: function () { window.location.hash = '#/symmetre'; },
+              title: 'Return to SymmetrE Station'
+            }, '\u2190 Back'),
+            React.createElement('h1', { className: 'text-xl font-bold text-white' }, 'Exercise Report'),
+            // The count that matters here is student progress on exercises; capstone
+            // submissions are a second section further down, not the headline.
             React.createElement('p', { className: 'text-gray-400 text-sm mt-1' },
-              submissionsList.length + ' submission' + (submissionsList.length !== 1 ? 's' : '') + ' received'
+              'Exercises you have published, and how every student is doing on them'
             )
           ),
           React.createElement('div', { className: 'flex items-center gap-3' },
             // UnlockCapstone inline
             window.UnlockCapstone
               ? React.createElement(window.UnlockCapstone, null)
-              : null,
-            React.createElement('button', {
-              className: 'px-3 py-2 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600 hover:text-white',
-              onClick: function() { window.location.hash = '#/symmetre'; }
-            }, '← Back to Station')
+              : null
           )
         ),
 
         // Submissions list
         React.createElement('div', { className: 'flex-1 overflow-auto p-6' },
+          // Exercises first: they are the instructor's own authored work and the
+          // thing they came here to check, where capstone submissions arrive on
+          // their own schedule.
+          window.ExerciseResults ? React.createElement(window.ExerciseResults, null) : null,
+          React.createElement('div', { className: 'text-sm font-bold text-white mb-3' }, 'Capstone Submissions'),
           submissionsList.length === 0
             ? React.createElement('div', { className: 'text-center py-12' },
                 React.createElement('p', { className: 'text-gray-500 text-lg' }, 'No submissions yet.'),

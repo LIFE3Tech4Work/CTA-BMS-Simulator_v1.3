@@ -75,26 +75,57 @@
     }
 
     if (unlocked) {
+      // Unlocked reads as a status, not another button competing for attention:
+      // a lit dot and a quiet label, with Lock as the only action.
       return React.createElement('div', { className: 'flex items-center gap-2' },
         React.createElement('span', {
-          className: 'inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-green-900 text-green-300'
+          style: { display: 'inline-flex', alignItems: 'center', gap: '7px',
+                   padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
+                   fontWeight: 700, letterSpacing: '.2px', fontFamily: 'inherit',
+                   background: 'rgba(63,143,90,.16)', border: '1px solid #2f7a52',
+                   color: '#8ff0b5' }
         },
-          React.createElement('span', { className: 'w-2 h-2 rounded-full bg-green-400 inline-block' }),
+          React.createElement('span', {
+            style: { width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+                     background: '#6ee7a8', boxShadow: '0 0 6px #6ee7a8' }
+          }),
           'Capstone Unlocked'
         ),
         React.createElement('button', {
-          className: 'px-2 py-1 text-xs bg-red-900 text-red-300 rounded hover:bg-red-800 hover:text-red-200',
+          type: 'button',
+          style: { padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
+                   fontWeight: 700, letterSpacing: '.2px', cursor: 'pointer',
+                   fontFamily: 'inherit', background: '#1b2230',
+                   border: '1px solid #38445c', color: '#c3cfdd' },
+          onMouseEnter: function (e) { e.currentTarget.style.background = '#232c3d'; },
+          onMouseLeave: function (e) { e.currentTarget.style.background = '#1b2230'; },
           onClick: handleLock,
           title: 'Lock capstone access for students'
         }, 'Lock')
       );
     }
 
+    // Was a bright green Tailwind button with a padlock emoji, which shouted
+    // louder than anything else on the dashboard and did not belong to the
+    // station's palette. Same restrained treatment as the other chrome controls.
     return React.createElement('button', {
-      className: 'px-3 py-2 text-sm bg-green-700 text-white rounded hover:bg-green-600 font-medium',
+      type: 'button',
+      style: { display: 'inline-flex', alignItems: 'center', gap: '7px',
+               padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
+               fontWeight: 700, letterSpacing: '.2px', cursor: 'pointer',
+               fontFamily: 'inherit', background: '#1b2230',
+               border: '1px solid #38445c', color: '#c3cfdd' },
+      onMouseEnter: function (e) { e.currentTarget.style.background = '#232c3d'; },
+      onMouseLeave: function (e) { e.currentTarget.style.background = '#1b2230'; },
       onClick: handleUnlock,
       title: 'Unlock capstone mode for all students'
-    }, '🔓 Unlock Capstone');
+    },
+      React.createElement('span', {
+        style: { width: '7px', height: '7px', borderRadius: '50%',
+                 background: '#5d6b83', flexShrink: 0 }
+      }),
+      'Unlock Capstone'
+    );
   }
 
   // Expose on window

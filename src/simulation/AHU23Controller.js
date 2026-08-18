@@ -435,6 +435,19 @@
     setValue: setValue,
     getModes: getModes,
     clearMode: clearMode,
+    // Release EVERY override at once, restoring each point's pre-override value.
+    // Needed so an exercise starts from a clean unit rather than inheriting
+    // whatever the previous student left overridden; only AHU-4-4 had this, so
+    // ExerciseStore.applySetup silently skipped the reset on the other units.
+    clearModes: function () {
+      for (var ak in autoValues) {
+        if (Object.prototype.hasOwnProperty.call(autoValues, ak) && state.hasOwnProperty(ak)) {
+          state[ak] = autoValues[ak];
+        }
+      }
+      modes = {}; manualValues = {}; autoValues = {};
+      recalculate();
+    },
     subscribe: subscribe,
     recalculate: recalculate,
     updateFromTMY3: updateFromTMY3,

@@ -178,16 +178,22 @@
     },
       // Title bar
       React.createElement('div', {
-        className: 'flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700'
+        className: 'flex items-center gap-3 px-4 py-2 bg-gray-800 border-b border-gray-700'
       },
-        React.createElement('h1', { className: 'text-sm font-semibold text-gray-200' },
-          '🔍 Find Manual Overrides — Point Attribute Report'
-        ),
+        // Back at the left edge before the heading, matching Alarm Summary, so
+        // leaving a secondary screen is the same gesture everywhere.
         React.createElement('button', {
-          className: 'px-3 py-1 text-xs rounded border border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white',
+          type: 'button',
+          style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                   borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                   background: '#1b2230', border: '1px solid #38445c', color: '#c3cfdd',
+                   fontFamily: 'inherit', flexShrink: 0 },
           onClick: function () { window.location.hash = '#/symmetre'; },
           title: 'Return to SymmetrE Station'
-        }, '← Back')
+        }, '\u2190 Back'),
+        React.createElement('h1', { className: 'text-sm font-semibold text-gray-200' },
+          '🔍 Find Manual Overrides — Point Attribute Report'
+        )
       ),
 
       // Filter panel

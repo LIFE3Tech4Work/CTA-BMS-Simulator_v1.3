@@ -97,7 +97,8 @@ const OutsideAirStrip = (function () {
       Cell('Wetbulb',    fmt(weather && weather.wetBulb),      '°F'),
       Cell('Enthalpy',   fmt(weather && weather.enthalpy),     'BTU/lb'),
       React.createElement('div', { style: { flex: 1 } }),
-      window.WeatherControl ? React.createElement(window.WeatherControl, null) : null
+      window.WeatherControl ? React.createElement(window.WeatherControl, null) : null,
+      window.ExerciseAuthorButton ? React.createElement(window.ExerciseAuthorButton, null) : null
     );
   }
 
@@ -117,7 +118,9 @@ const ZoneTabs = (function () {
   // terminal box first, then the small single-coil unit, then the two large
   // mixing-box units. AHU-4-3 sits beside AHU-4-4, its paired twin.
   const ZONE_TABS = [
-    { id: 'VAV-02-03',  label: 'VAV-02-03 (Mtg Rm 214)', icon: '🌬️', route: '#/symmetre/VAV-02-03',  isZone: false },
+    // VAV-02-03 is built and reachable by URL, but hidden from the tab bar until
+    // its content is ready to put in front of students.
+    { id: 'VAV-02-03',  label: 'VAV-02-03 (Mtg Rm 214)', icon: '🌬️', route: '#/symmetre/VAV-02-03',  isZone: false, hidden: true },
     { id: 'VAV-4-4-02', label: 'VAV-4-4-02 (Ballroom)', icon: '🌬️', route: '#/symmetre/VAV-4-4-02', isZone: false },
     { id: 'AHU-23-1',   label: 'AHU-23-1',              icon: '🌀', route: '#/symmetre/AHU-23-1',   isZone: false },
     { id: 'AHU-4-6',    label: 'AHU-4-6',               icon: '🌀', route: '#/symmetre/AHU-4-6',    isZone: false },
@@ -171,7 +174,7 @@ const ZoneTabs = (function () {
         style: { height: '34px', background: '#26334a', display: 'flex', alignItems: 'flex-end',
                  gap: '3px', padding: '0 12px', overflowX: 'auto' },
       },
-        ZONE_TABS.map(function (tab) {
+        ZONE_TABS.filter(function (t) { return !t.hidden; }).map(function (tab) {
           var isActive = tab.id === activeTab;
           return React.createElement('button', {
             key: tab.id,

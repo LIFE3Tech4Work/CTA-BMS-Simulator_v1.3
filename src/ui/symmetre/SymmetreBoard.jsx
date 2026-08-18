@@ -148,7 +148,9 @@ const SymmetreBoard = (function () {
              border: '1px solid ' + (alarm ? '#ff5a49' : '#1c2636'),
              boxShadow: '0 1px 2px rgba(0,0,0,.28)', cursor: 'pointer', whiteSpace: 'nowrap',
              lineHeight: 1, zIndex: 5, animation: alarm ? 'bms-ring 1.1s infinite' : 'none' };
-      if (align === 'right') st.right = (BOARD_W - x) + 'px'; else st.left = x + 'px';
+      if (align === 'right') st.right = (BOARD_W - x) + 'px';
+      else if (align === 'center') { st.left = x + 'px'; st.transform = 'translateX(-50%)'; }
+      else st.left = x + 'px';
       vst = { fontSize: fs + 'px', fontWeight: 800, color: alarm ? '#fff' : (manual ? '#ff9bec' : '#eef3fb') };
       ust = { fontSize: '10px', fontWeight: 800, color: alarm ? '#ffd0c9' : '#9db0c8' };
     }
@@ -392,6 +394,13 @@ const SymmetreBoard = (function () {
         showCommon: !!(cfg.art && cfg.art.showCommon),
         bg: bg,
         damper: state.damperPosition,
+        // VAV identity and equipment, straight from the unit's own config so one
+        // board serves every terminal box.
+        vavTag: cfg.art && cfg.art.vavTag,
+        vavService: cfg.art && cfg.art.vavService,
+        vavLocation: cfg.art && cfg.art.vavLocation,
+        vavBoxLabel: cfg.art && cfg.art.vavBoxLabel,
+        vavReheat: !!(cfg.art && cfg.art.vavReheat),
       }),
       { airStyle: state.fanRunning ? 'display:block' : 'display:none' }
     );
@@ -416,6 +425,18 @@ const SymmetreBoard = (function () {
                            val: BP.format(key, value) + (m.unit ? ' ' + m.unit : '') });
       }
       if (eventLog.length > 120) eventLog.length = 120;
+      // An exercise attempt records what the student actually changed, so the
+      // instructor can see the route taken to the answer and not just whether it
+      // was reached. Every command on this board already funnels through here.
+      if (window.ExerciseStore && window.CTAAuthOperator) {
+        try {
+          window.ExerciseStore.logAction(
+            window.CTAAuthOperator, unitId, m.label || key,
+            prev + (m.unit ? ' ' + m.unit : ''),
+            mode === 'auto' ? 'Auto' : BP.format(key, value) + (m.unit ? ' ' + m.unit : '')
+          );
+        } catch (e) {}
+      }
       if (c.getModes) setModes(c.getModes());
       setState(Object.assign({}, c.getState()));
       bump(function (n) { return n + 1; });

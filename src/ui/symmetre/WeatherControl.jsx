@@ -29,8 +29,26 @@ const WeatherControl = (function () {
     });
     var [customT, setCustomT] = useState('70');
     var [customRH, setCustomRH] = useState('50');
+    // True once the operator types in either field, so a preset's values stay in
+    // the boxes as a starting point without silently overwriting hand-entered
+    // numbers on a later re-render.
+    var [customEdited, setCustomEdited] = useState(false);
     var btnRef = useRef(null);
     var popRef = useRef(null);
+
+    // A preset applies a real recorded TMY reading; mirroring that reading into
+    // the OAT/RH boxes shows what was actually applied and gives a starting point
+    // to nudge from, rather than leaving stale numbers next to an active preset.
+    useEffect(function () {
+      if (!ovr.active || !ovr.presetKey || !ovr.weather) return;
+      if (typeof ovr.weather.dryBulb === 'number') {
+        setCustomT(String(Math.round(ovr.weather.dryBulb * 10) / 10));
+      }
+      if (typeof ovr.weather.relHumidity === 'number') {
+        setCustomRH(String(Math.round(ovr.weather.relHumidity)));
+      }
+      setCustomEdited(false);
+    }, [ovr.presetKey, ovr.active, ovr.weather && ovr.weather.dryBulb, ovr.weather && ovr.weather.relHumidity]);
 
     useEffect(function () {
       if (!window.WeatherOverride) return;
@@ -75,8 +93,12 @@ const WeatherControl = (function () {
       if (window.WeatherOverride) window.WeatherOverride.release();
     }
 
+    // A dated condition names its day here too, so the button, the Outside Air
+    // strip and the station clock all report the same thing.
     var statusLabel = ovr.active
-      ? ('OVERRIDE — ' + (ovr.presetKey ? PRESETS[ovr.presetKey].label + ' (' + ovr.dateLabel + ')' : 'Custom'))
+      ? ('OVERRIDE — ' + (ovr.presetKey
+            ? PRESETS[ovr.presetKey].label + ' (' + ovr.dateLabel + ')'
+            : (ovr.dateLabel || 'Custom')))
       : (isPaused ? 'FROZEN — sim paused' : 'LIVE — following TMY');
     var statusColor = ovr.active ? '#c81fae' : (isPaused ? '#e6a23c' : '#6ee7a8');
 
@@ -84,7 +106,7 @@ const WeatherControl = (function () {
         ref: popRef,
         style: {
           position: 'fixed', top: anchor.top + 'px', right: anchor.right + 'px',
-          width: '260px', zIndex: 500,
+          width: '280px', zIndex: 500,
           background: '#1b2536', border: '1px solid #46536b', borderRadius: '8px',
           boxShadow: '0 18px 44px rgba(6,10,20,.62)', padding: '10px', color: '#e8edf6',
           fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif"
@@ -126,13 +148,14 @@ const WeatherControl = (function () {
           })
         ),
 
-        // Custom
-        React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'flex-end', marginBottom: '8px' } },
+        // Custom — seeded from whichever preset was applied, so the values can be
+        // nudged from a real reading instead of typed from scratch.
+        React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'flex-end', marginBottom: '4px' } },
           React.createElement('label', { style: { flex: 1, fontSize: '9.5px', color: '#9db0c8' } },
             'OAT °F',
             React.createElement('input', {
               type: 'number', value: customT,
-              onChange: function (e) { setCustomT(e.target.value); },
+              onChange: function (e) { setCustomT(e.target.value); setCustomEdited(true); },
               style: { width: '100%', marginTop: '2px', padding: '3px 5px', fontSize: '11px',
                        fontFamily: 'monospace', background: '#0e1420', border: '1px solid #3a4560',
                        borderRadius: '4px', color: '#e8edf6' }
@@ -142,7 +165,7 @@ const WeatherControl = (function () {
             'RH %',
             React.createElement('input', {
               type: 'number', value: customRH, min: 1, max: 100,
-              onChange: function (e) { setCustomRH(e.target.value); },
+              onChange: function (e) { setCustomRH(e.target.value); setCustomEdited(true); },
               style: { width: '100%', marginTop: '2px', padding: '3px 5px', fontSize: '11px',
                        fontFamily: 'monospace', background: '#0e1420', border: '1px solid #3a4560',
                        borderRadius: '4px', color: '#e8edf6' }
@@ -156,6 +179,17 @@ const WeatherControl = (function () {
                      background: 'linear-gradient(180deg,#3f8f5a,#2d7346)', color: '#fff' }
           }, 'Set')
         ),
+
+        React.createElement('div', {
+          style: { fontSize: '9px', lineHeight: 1.35, marginBottom: '8px',
+                   color: customEdited ? '#e6a23c' : '#6f7f97' }
+        }, ovr.active && ovr.presetKey
+            ? (customEdited
+                ? 'Edited — press Set to apply these values instead of the preset.'
+                : 'From ' + PRESETS[ovr.presetKey].label + ' (' + ovr.dateLabel + '). Adjust and press Set.')
+            : (customEdited
+                ? 'Press Set to apply.'
+                : 'Pick a condition above, or dial in your own and press Set.')),
 
         React.createElement('button', {
           type: 'button',

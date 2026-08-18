@@ -66,6 +66,8 @@ const SymmetreAppChrome = (function() {
   function MenuBar() {
     const [activeMenu, setActiveMenu] = useState(null);
     const auth = useContext(window.AuthContext);
+    const isInstructorOp = !!(auth && auth.securityLevel && window.AuthHelpers &&
+      window.AuthHelpers.hasPrivilege(auth.securityLevel, 'Engr'));
 
     // Menu items with their dropdown options
     const MENU_DROPDOWNS = {
@@ -77,9 +79,15 @@ const SymmetreAppChrome = (function() {
       ],
       'View': [
         { label: 'Alarm Summary', action: function() { window.location.hash = '#/alarms'; } },
+        // Student-facing: their own assignment list. Hidden from instructors, who
+        // are never assigned exercises and would land on an empty screen.
+        isInstructorOp ? null : { label: 'My Exercises', action: function() { window.location.hash = '#/exercises'; } },
         { label: 'Point Attribute Report', action: function() { window.location.hash = '#/reports'; } },
-        { label: 'Instructor Dashboard', action: function() { window.location.hash = '#/instructor'; } },
-      ],
+        // Instructor-facing: the exercises they authored plus every student's
+        // progress. Named alongside "Point Attribute Report" rather than
+        // "Dashboard", which said nothing about what is in it.
+        isInstructorOp ? { label: 'Exercise Report', action: function() { window.location.hash = '#/instructor'; } } : null,
+      ].filter(Boolean),
       'Action': [
         { label: 'Start Simulation', action: function() { if (window.SimulationEngine) window.SimulationEngine.start(); } },
         { label: 'Pause Simulation', action: function() { if (window.SimulationEngine) window.SimulationEngine.pause(); } },
@@ -332,7 +340,16 @@ const SymmetreAppChrome = (function() {
   }
 
   // ─── Main AppChrome Component ───────────────────────────────────────────────
-  function AppChrome({ children }) {
+  // Which unit the station is showing. Read from the route rather than passed in,
+// because this shell is shared by every screen and only the station screens have
+// a unit at all.
+function unitFromHash() {
+  var h = window.location.hash || '';
+  var m = h.match(/#\/symmetre\/([^/?]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function AppChrome({ children }) {
     const auth = useContext(window.AuthContext);
     const operatorName = auth.operator || 'operator';
 
@@ -350,6 +367,10 @@ const SymmetreAppChrome = (function() {
       // data-station-content marks the region the Companion / Capstone side
       // panels dock into, so they overlay the diagram without covering the
       // title bar, menu bar or toolbar above it (ModeController.js measures it).
+      window.ExerciseAuthorBanner
+        ? React.createElement(window.ExerciseAuthorBanner, { unitId: unitFromHash() })
+        : null,
+      window.ExerciseRunBanner ? React.createElement(window.ExerciseRunBanner, null) : null,
       React.createElement('div', {
         className: 'flex-1 overflow-hidden relative',
         'data-station-content': 'true'

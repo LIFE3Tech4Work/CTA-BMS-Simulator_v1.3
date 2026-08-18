@@ -84,6 +84,20 @@ function CTA_createAHU44Controller(seed) {
   var RETURN_AIR_RH_MAX = 70;      // %
   var MAX_COIL_RISE = 30;          // °F — preheat coil capacity at 100% open
   var MAX_COIL_DROP = 30;          // °F — chilled water coil capacity at 100% open
+
+  // ─── Heating setpoint OA reset schedule ─────────────────────────────────────
+  // As outdoor air falls, the supply-air heating setpoint rises, so the unit
+  // delivers warmer air on a colder day instead of holding one number all year.
+  // Clamped at both ends per General Automatic Control Sequences #6. Same figures
+  // as AHU-4-6, so the paired units behave alike (AHU-4-3 shares this model).
+  //
+  // Ranking, highest first: a Manual hold on the setpoint, then zone setpoint
+  // control, then this schedule. Cooling is deliberately NOT reset off outdoor
+  // air — relaxing it on a mild day would fight the dehumidification call.
+  var HEAT_RESET_OAT_HIGH = 60;    // °F — setpoint pins to HEAT_RESET_MIN at or above
+  var HEAT_RESET_OAT_LOW = 20;     // °F — setpoint pins to HEAT_RESET_MAX at or below
+  var HEAT_RESET_MIN = 55;         // °F — the flat value this schedule replaced
+  var HEAT_RESET_MAX = 65;         // °F
   var ZONE_DEADBAND = 4;           // °F — the deadband taught in the curriculum (68/72)
 
   // ─── Shared State Object ────────────────────────────────────────────────────
@@ -111,6 +125,11 @@ function CTA_createAHU44Controller(seed) {
     controlMode: 'Auto',            // 'Auto' | 'Winter' | 'Summer'
     zoneTempSetpoint: 72.0,         // °F — one setpoint that can override both coils
     zoneSetpointControl: false,
+    // Outdoor-air reset of the heating setpoint. On by default — it is how the
+    // real sequence behaves — but switchable so the flat-setpoint case can be
+    // demonstrated side by side.
+    oaResetEnabled: true,
+    heatingResetTarget: 55.0,      // °F — what the reset schedule is asking for
     activeSeason: 'Summer',
     activeSetpoint: 60.0,
     activeSetpointSource: 'Cooling (maximum)',
@@ -192,6 +211,9 @@ function CTA_createAHU44Controller(seed) {
   // The coil setpoints as the operator left them before zone setpoint control
   // borrowed them; handed back when it is switched off.
   var preZoneSetpoints = null;
+  // The configured heating setpoint the OA reset schedule borrowed, restored when
+  // the schedule is switched off.
+  var preResetHeatingSetpoint = null;
 
   // ─── Engineering Calculations ───────────────────────────────────────────────
 
@@ -384,6 +406,33 @@ function CTA_createAHU44Controller(seed) {
     } else {
       state.activeSeason = (state.oaTemperature < SEASON_CHANGEOVER_OAT - SEASON_CHANGEOVER_DB)
         ? 'Winter' : 'Summer';
+    }
+
+    // Heating setpoint OA reset. The target is always computed so the panel can
+    // show what the schedule is asking for even when it is switched off.
+    var heatReset = HEAT_RESET_MIN +
+      (HEAT_RESET_OAT_HIGH - state.oaTemperature) / (HEAT_RESET_OAT_HIGH - HEAT_RESET_OAT_LOW) *
+      (HEAT_RESET_MAX - HEAT_RESET_MIN);
+    state.heatingResetTarget = Math.round(
+      Math.max(HEAT_RESET_MIN, Math.min(HEAT_RESET_MAX, heatReset)) * 10
+    ) / 10;
+    if (state.oaResetEnabled && !state.zoneSetpointControl &&
+        modes.heatingCoilSetpoint !== 'Manual') {
+      // Borrow the setpoint the way zone control does, so switching the schedule
+      // off hands back the configured value instead of stranding the setpoint at
+      // whatever the schedule last wrote.
+      if (preResetHeatingSetpoint === null) {
+        preResetHeatingSetpoint = state.heatingCoilSetpoint;
+      }
+      state.heatingCoilSetpoint = state.heatingResetTarget;
+      // A scheduled value is computed, not commanded, so it must never seed the
+      // release-to-Auto snapshot.
+      delete autoValues.heatingCoilSetpoint;
+    } else if (preResetHeatingSetpoint !== null) {
+      if (modes.heatingCoilSetpoint !== 'Manual' && !state.zoneSetpointControl) {
+        state.heatingCoilSetpoint = preResetHeatingSetpoint;
+      }
+      preResetHeatingSetpoint = null;
     }
 
     // One zone setpoint resets both coil setpoints around its deadband. A
