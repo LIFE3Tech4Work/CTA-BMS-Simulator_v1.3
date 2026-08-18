@@ -32,7 +32,7 @@ window.React = {
   createElement: vi.fn((...args) => args)
 };
 
-// Mock TMY3 data (create enough rows to cover May 1 – June 12)
+// Mock TMY3 data — a full year, since the projector maps the whole fiscal year
 const mockTMY3 = [];
 for (let i = 0; i < 8760; i++) {
   mockTMY3.push({
@@ -102,7 +102,7 @@ describe('TMY3Projector.interpolateWeather integration', () => {
 
   it('returns null for out-of-range rows', () => {
     expect(window.TMY3Projector.interpolateWeather(0, 0)).toBeNull();
-    expect(window.TMY3Projector.interpolateWeather(1018, 0)).toBeNull();
+    expect(window.TMY3Projector.interpolateWeather(8761, 0)).toBeNull();
     expect(window.TMY3Projector.interpolateWeather(-1, 0)).toBeNull();
   });
 

@@ -13,6 +13,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
+// These are ESM (.mjs) files, so Node does not provide __dirname — it has to be
+// derived from import.meta.url. Without it every readFileSync(resolve(__dirname,
+// ...)) in this suite throws ReferenceError before a single assertion runs.
+const __dirname = new URL('.', import.meta.url).pathname;
+
 function loadController() {
   const code = readFileSync(resolve(__dirname, 'AHU44NewController.js'), 'utf-8');
   const window = {};
@@ -47,11 +52,12 @@ describe('Scenario 1 — cold load matches the screenshot baseline, unmodified',
     // field, so this correction doesn't affect their validity.
     expect(s.returnAirTemp).toBe(62.0);
     // supplyAirTemp cascades from returnAirTemp/fanSpeed via mixedAirTemp and
-    // the CHW valve's cooling response — no longer the screenshot's 60.0°F
-    // now that the upstream baseline is corrected; 63.2°F is this
-    // controller's own live recalculation from the new inputs, not a second
-    // independently-chosen number.
-    expect(s.supplyAirTemp).toBe(63.2);
+    // the CHW valve's cooling response. This read 63.2°F while the cooling
+    // coil was a proportional controller with permanent droop — it parked
+    // above its setpoint instead of reaching it. The coil is now sized by
+    // capacity, so the air lands on the 60.0°F cooling setpoint, which is
+    // both the screenshot's own reading and the correct sequence behaviour.
+    expect(s.supplyAirTemp).toBe(60.0);
     // NOTE: the 72.9°F seeded in the source literal is a pre-recalculate
     // seed value only. getState() reflects the live recalculated value —
     // since OAT (83.4°F) is above the 55°F heating setpoint, the preheat
@@ -83,11 +89,11 @@ describe('Scenario 1 — cold load matches the screenshot baseline, unmodified',
 });
 
 describe('FINDING — the unmodified default state already trips N-01, before any student interaction', () => {
-  it('supplyAirTemp defaults to 63.2°F (recalculated from the corrected returnAirTemp/fanSpeed baseline) — still outside N-01\'s design band', () => {
+  it('supplyAirTemp defaults to 60.0°F (on setpoint, once coil droop is removed) — still outside N-01\'s design band', () => {
     const ctrl = loadController();
     const s = ctrl.getState();
     expect(s.coolingCoilSetpoint).toBe(60.0);
-    expect(s.supplyAirTemp).toBe(63.2);
+    expect(s.supplyAirTemp).toBe(60.0);
   });
 
   it('so the fault engine flags N-01 on cold load, with zero user interaction — the tab\'s own calibrated "healthy" default state is self-inconsistent with its own fault rule', () => {
@@ -97,8 +103,8 @@ describe('FINDING — the unmodified default state already trips N-01, before an
     const n01 = alarms.find(a => a.condition === 'N-01');
     // This SHOULD arguably be undefined for a screen calibrated to represent
     // a real, presumably-intended operating point. It isn't — supplyAirTemp
-    // (63.2°F, itself now a real-data-corrected recalculation, not a second
-    // invented number) still falls outside N-01's 52-58°F band. Either that
+    // (60.0°F — now exactly the cooling setpoint) still falls outside
+    // N-01's 52-58°F band. Either that
     // band needs revisiting against the real design setpoint, or the default
     // coolingCoilSetpoint doesn't actually reflect a "no active fault"
     // baseline. Documenting the current (buggy) behavior here so it isn't

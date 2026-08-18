@@ -1,8 +1,10 @@
 /**
  * SimulationEngine — Clock and tick loop for BMS data playback.
  *
- * Drives the entire simulation by advancing through 1,017 hourly rows
- * (May 1, 2026 00:00 EDT through June 12, 2026 08:00 EDT) at variable speed.
+ * Drives the entire simulation by advancing through 8,760 hourly rows — the
+ * fiscal year Jul 1 2025 00:00 EDT through Jun 30 2026 23:00 EDT — at variable
+ * speed. The clock opens on the row matching the real time of year, so the
+ * weather on screen is seasonally plausible the moment the app loads.
  *
  * Attached to window.SimulationEngine (no import/export — Babel standalone).
  */
@@ -12,16 +14,22 @@
 
   // ─── Constants ──────────────────────────────────────────────────────────────
 
-  /** Base date: May 1, 2026 00:00 EDT (UTC-4) */
-  const BASE_DATE = new Date('2026-05-01T00:00:00-04:00');
+  /**
+   * Base date: July 1, 2025 00:00 EDT (UTC-4) — the fiscal-year start.
+   * The clock previously covered only May 1 – Jun 12 2026, so a lesson could
+   * never reach a winter or high-summer condition without hand-setting the
+   * weather. Row 1 is the first hour of the fiscal year; the app opens further
+   * along it, at whatever row matches today (see seasonalStartRow).
+   */
+  const BASE_DATE = new Date('2025-07-01T00:00:00-04:00');
 
   /** Total hourly rows in the dataset */
-  const TOTAL_ROWS = 1017;
+  const TOTAL_ROWS = 8760;
 
   /** Milliseconds per hour */
   const MS_PER_HOUR = 3600000;
 
-  /** End date: June 12, 2026 08:00 EDT — row 1017 */
+  /** End date: June 30, 2026 23:00 EDT — row 8760 */
   const END_DATE = new Date(BASE_DATE.getTime() + (TOTAL_ROWS - 1) * MS_PER_HOUR);
 
   /**
@@ -40,7 +48,44 @@
 
   // ─── Engine State ───────────────────────────────────────────────────────────
 
+    /**
+ * The row whose month/day/hour matches the real clock, so the simulator opens
+ * on weather that matches the actual time of year instead of always starting
+ * in July. Falls back to row 1 if the projector has not loaded yet.
+ */
+function seasonalStartRow() {
+  const proj = (typeof window !== 'undefined') && window.TMY3Projector;
+  if (proj && typeof proj.seasonalRowFor === 'function') {
+    const r = proj.seasonalRowFor(new Date());
+    if (r >= 1 && r <= TOTAL_ROWS) return r;
+  }
+  return 1;
+}
+
+/** Date corresponding to a 1-based row. */
+function dateForRow(row) {
+  return new Date(BASE_DATE.getTime() + (row - 1) * MS_PER_HOUR);
+}
+
+  // Resolved lazily: TMY3Projector is loaded after this file, so the seasonal
+  // row cannot be computed at module-evaluation time.
   let currentRow = 1;
+  let openingRowResolved = false;
+
+  function resolveOpeningRow() {
+    if (openingRowResolved) return currentRow;
+    // TMY3Projector is loaded after this file and the app may autostart before
+    // it lands, so this retries — on the getter, on start(), and on the first
+    // tick — until the projector is actually there. Latching early pinned the
+    // whole session to Jul 1 because seasonalStartRow() fell back to row 1.
+    const proj = (typeof window !== 'undefined') && window.TMY3Projector;
+    if (proj && typeof proj.seasonalRowFor === 'function') {
+      const r = seasonalStartRow();
+      if (r >= 1 && r <= TOTAL_ROWS) currentRow = r;
+      openingRowResolved = true;
+    }
+    return currentRow;
+  }
   let speed = 'pause';
   let interpolationFraction = 0;
   let running = false;
@@ -54,6 +99,7 @@
   // ─── Tick Loop ──────────────────────────────────────────────────────────────
 
   function tick(timestamp) {
+    if (!openingRowResolved) resolveOpeningRow();
     if (!running) return;
 
     if (lastFrameTime === null) {
@@ -126,7 +172,9 @@
 
     if (atEnd) {
       // Reset to beginning if we were at the end
-      currentRow = 1;
+      openingRowResolved = false;
+    currentRow = 1;
+    resolveOpeningRow();
       interpolationFraction = 0;
       atEnd = false;
     }
@@ -211,7 +259,7 @@
   function getCurrentTimestamp() {
     // Row 1 = BASE_DATE, each row = 1 hour
     // Timestamp = BASE_DATE + ((currentRow - 1) + interpolationFraction) * MS_PER_HOUR
-    const totalHours = (currentRow - 1) + interpolationFraction;
+    const totalHours = (resolveOpeningRow() - 1) + interpolationFraction;
     return new Date(BASE_DATE.getTime() + totalHours * MS_PER_HOUR);
   }
 
@@ -240,7 +288,7 @@
 
   window.SimulationEngine = {
     // Read-only state accessors (use getters for live values)
-    get currentRow() { return currentRow; },
+    get currentRow() { return resolveOpeningRow(); },
     get speed() { return speed; },
     get interpolationFraction() { return interpolationFraction; },
     get running() { return running; },
@@ -248,6 +296,9 @@
 
     // Constants (exposed for testing / consumers)
     BASE_DATE: BASE_DATE,
+    seasonalStartRow: seasonalStartRow,
+    dateForRow: dateForRow,
+    get SEASONAL_START_DATE() { return dateForRow(seasonalStartRow()); },
     TOTAL_ROWS: TOTAL_ROWS,
     MS_PER_HOUR: MS_PER_HOUR,
     END_DATE: END_DATE,
@@ -265,7 +316,9 @@
     // Testing helpers — allow resetting state
     _reset: function () {
       pause();
-      currentRow = 1;
+      openingRowResolved = false;
+    currentRow = 1;
+    resolveOpeningRow();
       speed = 'pause';
       interpolationFraction = 0;
       atEnd = false;

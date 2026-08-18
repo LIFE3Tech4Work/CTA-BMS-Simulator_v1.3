@@ -65,7 +65,13 @@
   var DEFAULT_DISCHARGE_AIR_TEMP = 55.0; // °F — used before the AHU pushes a live value
 
   var ZONES = [
-    { id: 'VAV-4-4-02', label: 'Ballroom', servedBy: 'AHU-4-4_NEW' }
+    { id: 'VAV-4-4-02', label: 'Ballroom', servedBy: 'AHU-4-4_NEW' },
+    // Meeting-room box downstream of AHU-4-6. `defaults` lets a zone start from
+    // its own box schedule (this one is a 10" inlet rated 1,200 CFM) instead of
+    // every zone sharing one set of numbers.
+    { id: 'VAV-02-03', label: 'Meeting Room 214', servedBy: 'AHU-4-6',
+      defaults: { maxAirflowSetpoint: 1200, minAirflowSetpoint: 240,
+                  spaceTemp: 74.3, co2Sensor: 531 } }
   ];
 
   function defaultState() {
@@ -99,8 +105,18 @@
   var zoneModes = {};    // Map<zoneId, Map<stateKey, 'Manual'>>
   var subscribers = {};  // Map<zoneId, callback[]>
 
+  function seededState(z) {
+    var s = defaultState();
+    if (z.defaults) {
+      for (var k in z.defaults) {
+        if (Object.prototype.hasOwnProperty.call(z.defaults, k) && s.hasOwnProperty(k)) s[k] = z.defaults[k];
+      }
+    }
+    return s;
+  }
+
   ZONES.forEach(function(z) {
-    zoneStates[z.id] = defaultState();
+    zoneStates[z.id] = seededState(z);
     zoneModes[z.id] = {};
     subscribers[z.id] = [];
   });
@@ -286,7 +302,7 @@
    */
   function reset() {
     ZONES.forEach(function(z) {
-      zoneStates[z.id] = defaultState();
+      zoneStates[z.id] = seededState(z);
       zoneModes[z.id] = {};
     });
   }
@@ -296,8 +312,36 @@
 
   // ─── Expose ─────────────────────────────────────────────────────────────────
 
+  /** Release one key on one zone back to Auto (the point dialog's AUTO button). */
+  function clearMode(zoneId, key) {
+    if (zoneModes[zoneId] && zoneModes[zoneId][key]) {
+      delete zoneModes[zoneId][key];
+      recalculate(zoneId);
+    }
+  }
+
+  /**
+   * Single-zone view of this multi-zone controller, shaped like the AHU
+   * controllers (getState()/setValue(key,value)/subscribe(cb)). SymmetreBoard and
+   * the point dialog talk to one unit at a time and shouldn't have to thread a
+   * zoneId through every call.
+   */
+  function zoneFacade(zoneId) {
+    return {
+      getState: function () { return getState(zoneId) || {}; },
+      setValue: function (key, value) { return setValue(zoneId, key, value); },
+      subscribe: function (cb) { return subscribe(zoneId, cb); },
+      recalculate: function () { return recalculate(zoneId); },
+      getModes: function () { return getModes(zoneId); },
+      clearMode: function (key) { return clearMode(zoneId, key); },
+      zoneId: zoneId
+    };
+  }
+
   window.VAVController = {
     getState: getState,
+    clearMode: clearMode,
+    zoneFacade: zoneFacade,
     setValue: setValue,
     subscribe: subscribe,
     recalculate: recalculate,
@@ -308,5 +352,8 @@
     reset: reset,
     REHEAT_MAX_RISE: REHEAT_MAX_RISE
   };
+
+  // Board-facing single-zone handle for the VAV-02-03 station tab.
+  window.VAV0203Controller = zoneFacade('VAV-02-03');
 
 })();

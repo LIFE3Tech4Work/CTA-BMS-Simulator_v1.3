@@ -17,8 +17,11 @@
 
   // ─── Constants ──────────────────────────────────────────────────────────────
 
-  /** Base date: May 1, 2026 00:00 EDT */
-  const BASE_DATE = new Date('2026-05-01T00:00:00-04:00');
+  /** Base date — fiscal-year start, taken from the engine so trends and the
+   *  station clock always agree. */
+  const BASE_DATE = (window.SimulationEngine && window.SimulationEngine.BASE_DATE)
+    ? window.SimulationEngine.BASE_DATE
+    : new Date('2025-07-01T00:00:00-04:00');
   const MS_PER_HOUR = 3600000;
   const TOTAL_ROWS = 1017;
 

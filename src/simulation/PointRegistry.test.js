@@ -10,6 +10,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
+// This file uses ESM import declarations, so it is an ES module regardless of
+// the .js extension — and Node does not provide __dirname in ESM. Without this
+// the readFileSync below throws ReferenceError before any assertion runs.
+const __dirname = new URL('.', import.meta.url).pathname;
+
 function loadPointRegistry() {
   const code = readFileSync(
     resolve(__dirname, 'PointRegistry.js'),

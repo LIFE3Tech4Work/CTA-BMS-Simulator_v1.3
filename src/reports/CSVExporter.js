@@ -19,8 +19,13 @@
 
   // ─── Constants ──────────────────────────────────────────────────────────────
 
-  /** Simulation base date: May 1, 2026 00:00 EDT */
-  var BASE_DATE = new Date('2026-05-01T00:00:00-04:00');
+  /** Simulation base date — fiscal-year start (Jul 1 2025 00:00 EDT). */
+  // Fiscal-year start, from the engine. A hardcoded date here put a wrong
+  // timestamp on every exported row — and "CSV export data doesn't look
+  // correct" is still an open item on the issue checklist.
+  var BASE_DATE = (typeof window !== 'undefined' && window.SimulationEngine && window.SimulationEngine.BASE_DATE)
+    ? window.SimulationEngine.BASE_DATE
+    : new Date('2025-07-01T00:00:00-04:00');
   var MS_PER_HOUR = 3600000;
   var BASE_TEMP = 65; // HDH/CDH base temperature (°F)
 

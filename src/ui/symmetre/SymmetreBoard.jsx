@@ -102,11 +102,11 @@ const SymmetreBoard = (function () {
 
   // ─── Chip ───────────────────────────────────────────────────────────────────
 
-  function Chip({ row, value, manual, alarm, onOpen, label }) {
+  function Chip({ row, value, manual, alarm, onOpen, label, unitId }) {
     const BP = window.SymmetreBoardPoints;
     const key = row[0], type = row[1], x = row[2], y = row[3], w = row[4];
     const align = row[5] || 'left', fs = row[6] || 13;
-    const m = BP.meta(key) || {};
+    const m = BP.meta(key, unitId) || {};
     const [hover, setHover] = useState(false);
     const color = alarm ? '#c21f14' : (manual ? '#c81fae' : null);
     const display = BP.format(key, value);
@@ -386,34 +386,21 @@ const SymmetreBoard = (function () {
     const artCtx = Object.assign(
       ART.contextFor(unitId, {
         fanRunning: !!state.fanRunning,
-        airflow: (state.cfm || 0) > 200,
+        // A VAV box reports its own primary airflow rather than the AHU's cfm.
+        airflow: (state.cfm || state.airflowCFM || 0) > 200,
         riserFlow: (state.cfm || 0) > 200,
         showCommon: !!(cfg.art && cfg.art.showCommon),
         bg: bg,
+        damper: state.damperPosition,
       }),
       { airStyle: state.fanRunning ? 'display:block' : 'display:none' }
     );
-    const svg = ART.resolve(cfg.board === 'U23' ? ART.U23 : ART.MAIN, artCtx);
+    const svg = ART.resolve(ART[cfg.board] || ART.MAIN, artCtx);
 
     function commandPoint(key, value, mode) {
       const c = window[cfg.controller];
       if (!c) return;
-      // economizerActive is a derived status with no independent driving
-      // effect in the sequence logic — forcing it directly left the OA
-      // damper/CFM completely unchanged, so clicking it on the graphic did
-      // nothing even though the sidebar's damper override worked (checklist
-      // Section I: Lev's live walkthrough — "I can't turn it on here, but I
-      // can turn it on on the sidebar"). Redirect to the OA damper, the same
-      // thing the AUTO sequence itself drives when it decides to engage the
-      // economizer (state.oaDamperPosition = 100).
-      if (key === 'economizerActive') {
-        key = 'oaDamperPosition';
-        if (mode !== 'auto') {
-          var floor = (c.getState() || {}).economizerMinPosition;
-          value = value ? 100 : (typeof floor === 'number' ? floor : 20);
-        }
-      }
-      const m = BP.meta(key) || {};
+      const m = BP.meta(key, unitId) || {};
       const prev = BP.format(key, BP.valueOf(state, key));
       if (mode === 'auto') {
         if (c.clearMode) c.clearMode(key);
@@ -455,7 +442,7 @@ const SymmetreBoard = (function () {
     });
 
     // pill stacks + fan blocks
-    cfg.fans.forEach(function (fan, i) {
+    (cfg.fans || []).forEach(function (fan, i) {
       children.push.apply(children, stackFor(fan.pills, fan.x, fan.pillY));
       const rawOn = state[fan.key];
       const on = (typeof rawOn === 'boolean') ? rawOn : (rawOn === 'ON' || rawOn === 'On' || rawOn === 'Start');
@@ -509,12 +496,12 @@ const SymmetreBoard = (function () {
     // value chips
     cfg.chips.forEach(function (row) {
       const key = row[0];
-      const m = BP.meta(key);
+      const m = BP.meta(key, unitId);
       if (!m) return;
       const value = BP.valueOf(state, key);
       if (value === undefined) return;
       children.push(React.createElement(Chip, {
-        key: key, row: row, value: value, label: m.label,
+        key: key, row: row, value: value, label: m.label, unitId: unitId,
         manual: modes[key] === 'Manual',
         alarm: !!alarmKeys[key],
         onOpen: () => setOpenKey(key),
