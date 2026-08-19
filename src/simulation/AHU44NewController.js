@@ -57,6 +57,10 @@ function CTA_createAHU44Controller(seed) {
   // ─── Design Constants ───────────────────────────────────────────────────────
 
   var DESIGN_CFM = 11400;          // Rated max supply airflow at 100% fan speed
+  // Heat the supply fan adds by friction and motor work. Scales with speed because
+  // the work does: a fan at 40% is not adding what it adds at 100%. 2 °F at full
+  // speed is the usual figure for a draw-through unit with the motor in the stream.
+  var FAN_HEAT_RISE_MAX = 2.0;      // °F at 100% fan speed
   // Return air temp and fan speed were previously calibrated to a single
   // Honeywell reference screenshot's live reading (72.0°F / 75%). Lev's real
   // 3-month BMS export (src/data/points/AHU04_04RATemp.js,
@@ -154,6 +158,8 @@ function CTA_createAHU44Controller(seed) {
     phtValvePosition: 0,           // % — preheat valve
     chwValvePosition: 0,           // % — chilled water valve
     supplyAirTemp: 60.0,           // °F — discharge air temp
+    dischargeAirTemp: 60.0,        // °F — after the fan; supplyAirTemp plus fan heat
+    fanHeatRise: 0.0,              // °F — what the fan itself contributes
     preheatTemp: 72.9,             // °F — after preheat coil
     mixedAirTemp: 66.3,            // °F — mixed air
     returnAirTemp: 62.0,           // °F — return air; real 3-month export average, still a static seed (see RETURN_AIR_TEMP note above)
@@ -168,6 +174,7 @@ function CTA_createAHU44Controller(seed) {
     exhaustDamperPct: 100,         // % — tracks OA damper (balanced exhaust)
     returnAirDamperPct: 80,        // % — inverse of OA damper (mixing box return air)
     spillDamperPct: 100,           // % — DA-3 Spill Damper (N.O.): 100% when off, 0% at min OA
+    dischargeDamperPct: 100,       // % — DA-4 Discharge Damper, open when the unit runs
     returnCFM: 7695,               // CFM — return fan flow (90% of supply per SOO CLC #6)
     supplyRH: 55,                  // % — supply air relative humidity (SOO CLC #4 humidity model)
     oaRelHumidity: 60,             // % — TMY3-driven; operator-overridable. Previously not
@@ -383,6 +390,12 @@ function CTA_createAHU44Controller(seed) {
     // manually overridden, which holds independently of the OA damper.
     if (!state.fanRunning) {
       state.spillDamperPct = 100; // N.O. = fully open when system off
+
+    // Open while the unit runs, shut when it stops — an isolation damper, not a
+    // modulating output. Yields to a manual override like any other point.
+    if (modes.dischargeDamperPct !== 'Manual') {
+      state.dischargeDamperPct = state.fanRunning ? 100 : 0;
+    }
     } else if (modes.spillDamperPct !== 'Manual') {
       var extraOADemand = Math.max(0, state.oaDamperPosition - state.economizerMinPosition);
       state.spillDamperPct = Math.min(100, Math.round(extraOADemand * 1.5));
@@ -540,6 +553,16 @@ function CTA_createAHU44Controller(seed) {
 
     // Round outputs
     state.supplyAirTemp = Math.round(state.supplyAirTemp * 10) / 10;
+
+    // Discharge air: what actually leaves the unit, after the fan. supplyAirTemp is
+    // the coil discharge and is what the sequence controls; this is the reading a
+    // technician takes downstream of the fan, and the difference between them is the
+    // fan's own heat.
+    var fanFrac = (typeof state.fanSpeed === 'number' ? state.fanSpeed : 0) / 100;
+    state.fanHeatRise = state.fanRunning
+      ? Math.round(FAN_HEAT_RISE_MAX * Math.max(0, Math.min(1, fanFrac)) * 10) / 10
+      : 0;
+    state.dischargeAirTemp = Math.round((state.supplyAirTemp + state.fanHeatRise) * 10) / 10;
     state.preheatTemp   = Math.round(state.preheatTemp   * 10) / 10;
     state.mixedAirTemp  = Math.round(state.mixedAirTemp  * 10) / 10;
     state.returnAirTemp = RETURN_AIR_TEMP;

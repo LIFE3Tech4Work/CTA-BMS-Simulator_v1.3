@@ -83,7 +83,7 @@ const AHU23ControlsSidebar = (() => {
       className: 'flex items-center justify-between px-2 py-0.5 text-[10px] cta-row',
     },
       React.createElement('span', { className: 'flex-1 font-medium' }, label),
-      React.createElement('span', { className: 'font-bold text-[10px] cta-val' }, value ? yText : nText)
+      React.createElement('span', { className: 'font-bold cta-val' }, value ? yText : nText)
     );
   }
 
@@ -144,7 +144,7 @@ const AHU23ControlsSidebar = (() => {
     },
       React.createElement('span', { className: 'flex-1 font-medium' }, label),
       React.createElement('span', {
-        className: 'px-1.5 py-0 text-[10px] font-mono font-bold rounded border bg-white text-black border-gray-400 text-right min-w-[44px] inline-block'
+        className: 'px-1.5 py-0 text-[10px] font-mono cta-box'
       }, typeof value === 'number' ? value.toFixed(1) : String(value)),
       React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units)
     );
@@ -267,7 +267,7 @@ const AHU23ControlsSidebar = (() => {
                  background: 'transparent', color: '#c81fae' }
       }, '\u27f2') : null,
       React.createElement('span', {
-        className: 'font-mono font-bold text-[10px]',
+        className: 'font-mono font-bold cta-val',
         style: manual ? { color: '#c81fae' } : null
       }, display),
       React.createElement('span', { className: 'text-[9px] cta-unit ml-1' }, units)
@@ -407,6 +407,8 @@ const AHU23ControlsSidebar = (() => {
       React.createElement(ReadOnlyRow, { label: 'CHW Valve (V-2)', stateKey: 'chwValvePosition', units: '%' }),
       React.createElement(ReadOnlyRow, { label: 'PHT Valve (V-1)', stateKey: 'phtValvePosition', units: '%' }),
       React.createElement(ReadOnlyRow, { label: 'Supply Air Temp', stateKey: 'supplyAirTemp', units: '°F' }),
+      React.createElement(ReadOnlyRow, { label: 'Discharge Air Temp', stateKey: 'dischargeAirTemp', units: '°F' }),
+      React.createElement(ReadOnlyRow, { label: 'Fan Heat Gain', stateKey: 'fanHeatRise', units: '°F' }),
       React.createElement(ReadOnlyRow, { label: 'Mixed Air Temp', stateKey: 'mixedAirTemp', units: '°F' }),
 
       // RESET — last section, matching every other unit panel. App.jsx appends the

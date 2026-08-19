@@ -142,7 +142,7 @@
 
   <g id="airLabels" font-weight="800" fill="#3f5170" font-size="15">
     <text x="18" y="251">EXHAUST AIR</text><use href="#arrow" transform="translate(90,265) rotate(180)"/>
-    <text x="24" y="552">OUTSIDE AIR</text><text x="24" y="570">PLENUM</text><use href="#arrow" transform="translate(46,580)"/>
+    <text x="10" y="546">OUTSIDE AIR</text><text x="10" y="564">PLENUM</text><use href="#arrow" transform="translate(14,578)"/>
     <text x="1504" y="255" text-anchor="end">RETURN AIR</text><use href="#arrow" transform="translate(1470,268) rotate(180)"/>
     <text x="1502" y="565" text-anchor="end">SUPPLY AIR</text><use href="#arrow" transform="translate(1424,579)"/>
   </g>
@@ -150,8 +150,10 @@
   <g id="equipment" shape-rendering="geometricPrecision">
     <use href="#damperH" transform="translate(281,280) rotate(-90) scale(1,-1)"/><use href="#damperV" transform="translate(384,379) scale(1.125,1)"/><use href="#cubeGoldL" transform="translate(1172,254)"/><use href="#cubeLimeL" transform="translate(1258,254)"/>
     <use href="#dpPair" transform="translate(999,270)"/><use href="#fanGearR" transform="translate(1026,270)"/>
+    <use href="#cubeGoldL" transform="translate(120,548)"/>
     <use href="#oliveAF" transform="translate(175,561)"/><use href="#filterUnit" transform="translate(558,558)"/><!--IF:notU44--><g><use href="#coilR" transform="translate(650,554)"></use><use href="#valveAct" transform="translate(644.5,604)"></use></g><!--/IF--><!--IF:isU44--><g><use href="#htgBank2" transform="translate(650,520)"></use><use href="#valveAct" transform="translate(644.5,604)"></use></g><!--/IF--><use href="#coilB" transform="translate(740,554)"/><use href="#damperH" transform="translate(281,586) rotate(-90) scale(1,-1)"/><use href="#cubeGoldL" transform="translate(464,560)"/><use href="#valveAct" transform="translate(734.5,604)"/><use href="#cubeGoldS" transform="translate(820,560)"/><use href="#cubeSlateS" transform="translate(858,560)"/><use href="#sqig" transform="translate(823,566)"/><use href="#sqig" transform="translate(861,566)"/>
     <use href="#dpPair" transform="translate(1000,577)"/><use href="#fanGearS" transform="translate(1000,577)"/>
+    <use href="#damperV" transform="translate(1112,558) scale(1.125,1)"/>
     <use href="#cubeGoldS" transform="translate(1172,560)"/><use href="#sqig" transform="translate(1175,566)"/><use href="#dpSensor" transform="translate(1338,560)"/>
     <use href="#pump" transform="translate(658,727)"/>
     <g font-weight="700" text-anchor="middle">
@@ -201,10 +203,12 @@
       <text x="997" y="403">DPS-4/5 · AFMS-2 · CS-2 · VFD</text>
       <text x="1172" y="340">THS-4</text>
       <text x="1258" y="340">CO2-1</text>
+      <text x="112" y="499">TS-OA</text>
       <text x="183" y="499">AFMS-3</text>
       <text x="262" y="499">DA-1 (N.C.)</text>
       <text x="464" y="499">TS-1</text>
       <text x="559" y="499">DPS-1</text>
+      <text x="1112" y="499">DA-4 (N.O.)</text>
       <text x="651" y="{{frzTagY}}">TS-2 · FZ-1</text>
       <text x="997" y="719">DPS-2 / DPS-3</text>
       <text x="997" y="731">AFMS-1 · CS-1 · VFD</text>
@@ -721,7 +725,8 @@
         <!-- Hot-water coil in the discharge duct. Drawn on the duct's own
              faces so it reads as sitting inside the run, not floating over it. -->
         <polygon points="856,453 866,442 946,442 936,453" fill="#c96a52" stroke="#7a2f1d" stroke-width="1.2"/>
-        <rect x="856" y="453" width="80" height="26" fill="url(#v-coilFace)" stroke="#7a2f1d" stroke-width="1.2"/>
+        <rect x="856" y="453" width="80" height="26" fill="#8a8f98" stroke="#7a2f1d" stroke-width="1.2"/>
+        <rect x="856" y="453" width="80" height="26" fill="url(#v-coilFace)" stroke="none" opacity="{{vavReheatHeat}}" style="transition:opacity 0.5s ease-out;"/>
         <g stroke="#8d3520" stroke-width="1.6" opacity="0.85">
           <path d="M862,455 V477 M872,455 V477 M882,455 V477 M892,455 V477 M902,455 V477 M912,455 V477 M922,455 V477 M932,455 V477" fill="none"/>
         </g>
@@ -768,6 +773,11 @@
     <text x="470" y="576" font-size="14">{{vavBoxLabel}}</text>
     <text x="1352" y="362" text-anchor="middle">ZONE TEMP</text>
     <text x="1472" y="362" text-anchor="middle">ZONE CO&#8322;</text>
+    <!-- Room setpoints, tagged so the two readings below are not bare numbers.
+         Named ZONE, never SUPPLY: these are what the space asked for, distinct from
+         the AHU's single discharge setpoint serving every zone. -->
+    <text x="1352" y="272" text-anchor="middle">ZONE CLG SP</text>
+    <text x="1472" y="272" text-anchor="middle">ZONE HTG SP</text>
     <!--IF:vavReheat-->
       <text x="896" y="272" text-anchor="middle">REHEAT COIL</text>
       <text x="1000" y="272" text-anchor="middle">LEAVING AIR</text>
@@ -844,6 +854,12 @@
         // Discharge dashes stop short of the coil on a reheat box and run the
         // full length otherwise.
         vavFlowMid: opts.vavReheat ? 846 : 1036,
+        // Reheat coil brightness follows valve position: cold grey at 0%, full copper
+        // at 100%. A floor of 0.12 keeps the coil visible as a device when it is off.
+        vavReheatHeat: (function (v) {
+          var f = Math.max(0, Math.min(100, v || 0)) / 100;
+          return (0.12 + 0.88 * f).toFixed(2);
+        })(opts.vavReheatValve),
         vavDiscRx: (function (d) {
           var f = 1 - Math.max(0, Math.min(100, d || 0)) / 100;
           return (4.5 + 27 * Math.pow(f, 4.5)).toFixed(1);

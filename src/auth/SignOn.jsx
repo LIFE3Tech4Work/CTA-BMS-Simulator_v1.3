@@ -170,6 +170,15 @@
         if (!res || !res.ok) {
           setError((res && res.error) || 'Could not create the account.');
           setIsLoading(false);
+          // A duplicate is not a dead end — it means they already have an account.
+          // Send them to sign-in with the address kept, rather than leaving them on a
+          // form that will keep refusing.
+          if (res && res.duplicate) {
+            setOperator(email.trim());
+            setMode('signin');
+            setNotice('You already have an account with that email. Sign in below, or use Forgot password.');
+            setError('');
+          }
           return;
         }
         // If the project still requires email confirmation, say so plainly rather
@@ -202,13 +211,14 @@
       setError(''); setNotice('');
       if (!window.LocalAccounts) { setError('Password reset is unavailable.'); return; }
 
+      // Only reachable with a backend: without one there is no way to prove the
+      // person asking owns the address, so no reset is offered at all.
+      if (!backendOn) { setError('Password reset needs an instructor. Ask them to reset it for you.'); return; }
       setIsLoading(true);
       window.LocalAccounts.resetPasswordAsync(email, newPassword).then(function (res) {
         setIsLoading(false);
-        if (!res || !res.ok) { setError((res && res.error) || 'Could not reset the password.'); return; }
-        setNotice(res.emailed
-          ? 'Check your email for a reset link.'
-          : 'Password updated. Sign in with your new password.');
+        if (!res || !res.ok) { setError((res && res.error) || 'Could not send the reset link.'); return; }
+        setNotice('If an account exists for that email, a reset link is on its way. Check your inbox and spam folder.');
         setMode('signin');
         setPassword('');
         setNewPassword('');
@@ -277,7 +287,7 @@
     var signUpDisabled = !emailValid || emailTaken || !pwLongEnough || !pwMatch ||
                          !firstName.trim() || !lastName.trim();
     var backendOn = !!(window.LocalAccounts && window.LocalAccounts.backendActive());
-    var recoverDisabled = backendOn ? !emailValid : (!emailValid || newPassword.length < MIN_PW);
+    var recoverDisabled = !emailValid;
 
     return React.createElement('div', {
       className: 'flex justify-center h-screen',
@@ -439,12 +449,12 @@
                 className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
                 style: primaryButtonStyle(signUpDisabled)
               }, 'Create Account'),
-              // Said up front rather than discovered later on another machine.
-              React.createElement('p', {
+              // The browser-only caveat is a real limitation someone would otherwise
+              // discover on a second machine, so it stays. With a backend there is no
+              // caveat to give, and a line saying so was just noise under the button.
+              backendOn ? null : React.createElement('p', {
                 className: 'text-xs mt-3 leading-relaxed', style: { color: '#6f7f97' }
-              }, backendOn
-                  ? 'Your account works on any computer — sign in with your email address.'
-                  : 'No backend is configured, so this account is stored in this browser only and will not work on another computer. Do not reuse a password from anywhere else.')
+              }, 'No backend is configured, so this account is stored in this browser only and will not work on another computer. Do not reuse a password from anywhere else.')
             ) : null,
 
             // ── FORGOT PASSWORD ──────────────────────────────────────────────
@@ -453,38 +463,30 @@
               React.createElement('p', {
                 className: 'text-xs mb-4 leading-relaxed', style: { color: '#9db0c8' }
               }, backendOn
-                ? 'Enter the email on your account. A reset link will be sent to it.'
-                : 'Enter the email on your account and set a new password. Nothing is emailed — there is no mail server behind this simulator.'),
-                            React.createElement(Field, {
-                id: 'rc-email', label: 'Email on the Account', type: 'email', value: email,
+                ? 'Enter the email on your account. A reset link will be sent to it — open it to set a new password.'
+                : 'Resetting your own password needs an email to be sent, and this copy of the simulator has no mail server. Ask your instructor to reset it for you — they can do it in seconds.'),
+                            backendOn ? React.createElement(Field, {
+                id: 'rc-email', label: 'Email Address', type: 'email', value: email,
                 onChange: function (e) { setEmail(e.target.value.slice(0, 80)); },
                 autoComplete: 'email', autoFocus: true, placeholder: 'name@example.com'
-              }),
-              (window.LocalAccounts && window.LocalAccounts.backendActive())
-                ? null
-                : React.createElement(Field, {
-                id: 'rc-new', label: 'New Password', type: 'password', value: newPassword,
-                onChange: function (e) { setNewPassword(e.target.value.slice(0, 64)); },
-                autoComplete: 'new-password', placeholder: '',
-                state: newPassword.length ? (newPassword.length >= MIN_PW ? 'ok' : 'bad') : null,
-                hint: newPassword.length
-                  ? (newPassword.length >= MIN_PW ? 'Long enough' : 'Too short')
-                  : 'At least ' + MIN_PW + ' characters'
-              }),
+              }) : null,
+
               error ? React.createElement('div', {
                 className: 'mb-4 px-3 py-2 rounded text-sm',
                 style: { background: 'rgba(224,52,43,.14)', border: '1px solid #8a2018', color: '#ff8a7e' },
                 role: 'alert'
               }, error) : null,
-              React.createElement('button', {
+              backendOn ? React.createElement('button', {
                 type: 'submit',
                 disabled: recoverDisabled,
                 className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
                 style: primaryButtonStyle(recoverDisabled)
-              }, backendOn ? 'Send Reset Link' : 'Set New Password'),
+              }, 'Send Reset Link') : null,
               React.createElement('p', {
                 className: 'text-xs mt-3', style: { color: '#6f7f97' }
-              }, 'Using an account your instructor set up? Ask them to reset it for you.')
+              }, backendOn
+                  ? 'Using an account your instructor set up? Ask them to reset it for you.'
+                  : 'Instructors: sign in, open View \u2192 Exercise Report, and use Reset Password beside the student\'s name.')
             ) : null
           ),
 

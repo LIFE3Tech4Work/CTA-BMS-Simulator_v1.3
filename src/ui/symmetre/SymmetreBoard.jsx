@@ -401,6 +401,8 @@ const SymmetreBoard = (function () {
         vavLocation: cfg.art && cfg.art.vavLocation,
         vavBoxLabel: cfg.art && cfg.art.vavBoxLabel,
         vavReheat: !!(cfg.art && cfg.art.vavReheat),
+        // Live valve position, so the coil in the drawing changes when the valve does.
+        vavReheatValve: state.reheatValvePosition,
       }),
       { airStyle: state.fanRunning ? 'display:block' : 'display:none' }
     );

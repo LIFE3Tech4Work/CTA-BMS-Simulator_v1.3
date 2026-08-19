@@ -33,6 +33,10 @@
   // ─── Design Constants ───────────────────────────────────────────────────────
 
   var DESIGN_CFM = 16500;          // Rated max airflow at 100% fan speed
+  // Heat the supply fan adds by friction and motor work. Scales with speed because
+  // the work does: a fan at 40% is not adding what it adds at 100%. 2 °F at full
+  // speed is the usual figure for a draw-through unit with the motor in the stream.
+  var FAN_HEAT_RISE_MAX = 2.0;      // °F at 100% fan speed
   var RETURN_AIR_TEMP = 72;        // Assumed return air temperature (°F)
   var OA_DAMPER_FLOOR = 20;        // Minimum damper position (%) per ASHRAE 62.1
   // Coil capacity, same figures as AHU-4-6 / 4-4 / 4-3. Valves are sized to REACH
@@ -93,6 +97,8 @@
     phtValvePosition: 0,           // % — preheat valve command
     chwValvePosition: 0,           // % — chilled water valve command
     supplyAirTemp: 60.0,           // °F — supply air temp (after CHW coil)
+    dischargeAirTemp: 60.0,        // °F — after the fan; supplyAirTemp plus fan heat
+    fanHeatRise: 0.0,              // °F — what the fan itself contributes
     preheatTemp: 83.4,             // °F — temp after preheat coil (TS-1)
     mixedAirTemp: 72.0,            // °F — mixed air before coils
     phtValveStatus: 'OFF',         // V-1 valve label
@@ -299,6 +305,16 @@
 
     // Round output temperatures to 1 decimal
     state.supplyAirTemp = Math.round(state.supplyAirTemp * 10) / 10;
+
+    // Discharge air: what actually leaves the unit, after the fan. supplyAirTemp is
+    // the coil discharge and is what the sequence controls; this is the reading a
+    // technician takes downstream of the fan, and the difference between them is the
+    // fan's own heat.
+    var fanFrac = (typeof state.fanSpeed === 'number' ? state.fanSpeed : 0) / 100;
+    state.fanHeatRise = state.fanRunning
+      ? Math.round(FAN_HEAT_RISE_MAX * Math.max(0, Math.min(1, fanFrac)) * 10) / 10
+      : 0;
+    state.dischargeAirTemp = Math.round((state.supplyAirTemp + state.fanHeatRise) * 10) / 10;
     state.preheatTemp = Math.round(state.preheatTemp * 10) / 10;
     state.mixedAirTemp = Math.round(state.mixedAirTemp * 10) / 10;
 

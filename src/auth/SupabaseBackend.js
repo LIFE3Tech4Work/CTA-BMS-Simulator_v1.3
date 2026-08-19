@@ -124,16 +124,53 @@
           }
         }
       }).then(function (res) {
-        if (res.error) return { ok: false, error: friendly(res.error) };
+        var user = res.data && res.data.user;
+        var session = res.data && res.data.session;
+
+        if (res.error) {
+          var msg = (res.error && res.error.message) || '';
+          // A confirmation-email failure hides whether the address was already taken:
+          // Supabase attempts the send before it would tell us, so the identities
+          // signal below never arrives. Ask the sign-in endpoint instead — if the
+          // address exists, a deliberately wrong password comes back as "invalid
+          // credentials"; if it does not exist, Supabase says the same thing, so this
+          // only distinguishes the case where our OWN password is accepted.
+          if (/confirmation email|sending.*email|error sending/i.test(msg)) {
+            return c.auth.signInWithPassword({
+              email: String(fields.email || '').trim(),
+              password: String(fields.password || '')
+            }).then(function (probe) {
+              if (probe.data && probe.data.session) {
+                // Those exact credentials already work — the account is theirs.
+                status.signedIn = true;
+                notify();
+                return {
+                  ok: false, duplicate: true, alreadyUsable: true,
+                  error: 'You already have an account with that email, and that password works. Sign in below.'
+                };
+              }
+              return { ok: false, error: friendly(res.error) };
+            }).catch(function () { return { ok: false, error: friendly(res.error) }; });
+          }
+          return { ok: false, error: friendly(res.error) };
+        }
+
+        // Empty identities means the address is already registered. Supabase returns
+        // this INSTEAD of an error to avoid confirming which emails exist, so without
+        // the check a duplicate sign-up looks like a brand-new account.
+        if (user && Array.isArray(user.identities) && user.identities.length === 0) {
+          return {
+            ok: false,
+            duplicate: true,
+            error: 'An account with that email already exists. Sign in instead, or reset the password if you have forgotten it.'
+          };
+        }
+
         // With email confirmation switched off (Authentication → Providers → Email)
         // a session comes back immediately and the student is straight in.
-        status.signedIn = !!(res.data && res.data.session);
+        status.signedIn = !!session;
         notify();
-        return {
-          ok: true,
-          needsConfirmation: !(res.data && res.data.session),
-          user: res.data && res.data.user
-        };
+        return { ok: true, needsConfirmation: !session, user: user };
       });
     }).catch(function (e) { fail('signUp', e); return { ok: false, error: 'Sign-up failed. ' + e.message }; });
   }
@@ -161,7 +198,11 @@
       return c.auth.resetPasswordForEmail(String(email || '').trim(), { redirectTo: redirect })
         .then(function (res) {
           if (res.error) return { ok: false, error: friendly(res.error) };
-          return { ok: true };
+          // Supabase reports success whether or not the address is registered, and
+          // that is correct — telling an anonymous visitor which emails have accounts
+          // hands them a list of who to target. The UI wording matches: "if an
+          // account exists", never "sent".
+          return { ok: true, emailed: true, ambiguous: true };
         });
     }).catch(function (e) { fail('resetPassword', e); return { ok: false, error: e.message }; });
   }
@@ -212,6 +253,26 @@
     if (/Password should be at least/i.test(m)) return 'Password is too short.';
     if (/rate limit|too many/i.test(m)) return 'Too many attempts just now. Wait a minute and try again.';
     if (/valid email/i.test(m)) return 'Enter a valid email address.';
+    if (/confirmation email|sending.*email|error sending/i.test(m)) {
+      return 'Accounts cannot be created yet: this project still has email confirmation ' +
+             'switched on and cannot send mail. An instructor needs to turn off ' +
+             '"Confirm email" in Supabase \u2192 Authentication \u2192 Providers \u2192 Email.';
+    }
+    // A network failure must not read as a credential problem — otherwise someone
+    // retypes a correct password repeatedly and hits the rate limit.
+    if (/fetch|network|Failed to fetch|NetworkError/i.test(m)) {
+      return 'Could not reach the server. Check the connection and try again.';
+    }
+    if (/signup.*disabled|not allowed/i.test(m)) {
+      return 'Account creation is turned off for this project. Ask your instructor for an account.';
+    }
+    if (/weak.*password|pwned/i.test(m)) return 'That password is too easily guessed. Choose another.';
+    if (/same.*password|different from the old/i.test(m)) {
+      return 'That is already your password. Choose a different one.';
+    }
+    if (/session|expired|invalid.*token/i.test(m)) {
+      return 'That link has expired. Request a new one.';
+    }
     return m || 'Something went wrong.';
   }
 

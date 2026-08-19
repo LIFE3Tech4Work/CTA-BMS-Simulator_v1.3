@@ -490,6 +490,8 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(ReadOnlyRow, { label: 'CHW Valve', stateKey: 'chwValvePosition', units: '%' }),
       React.createElement(ReadOnlyRow, { label: 'PHT Valve', stateKey: 'phtValvePosition', units: '%' }),
       React.createElement(ReadOnlyRow, { label: 'Supply Air Temp', stateKey: 'supplyAirTemp', units: '°F' }),
+      React.createElement(ReadOnlyRow, { label: 'Discharge Air Temp', stateKey: 'dischargeAirTemp', units: '°F' }),
+      React.createElement(ReadOnlyRow, { label: 'Fan Heat Gain', stateKey: 'fanHeatRise', units: '°F' }),
       React.createElement(ReadOnlyRow, { label: 'Preheat Temp', stateKey: 'preheatTemp', units: '°F' }),
       React.createElement(ReadOnlyRow, { label: 'Mixed Air Temp', stateKey: 'mixedAirTemp', units: '°F' }),
       React.createElement(ReadOnlyRow, { label: 'Return Air Temp', stateKey: 'returnAirTemp', units: '°F' }),

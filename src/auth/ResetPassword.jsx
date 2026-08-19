@@ -25,19 +25,65 @@
     // or been used already leaves no session, and saying so is better than letting
     // someone type a new password into a form that cannot save it.
     var [linkOk, setLinkOk] = useState(null);
+    // Why the link failed, in Supabase's own words where it gives them.
+    var [linkErr, setLinkErr] = useState('');
 
     useEffect(function () {
       var B = window.SupabaseBackend;
-      if (!B || !B.isConfigured()) { setLinkOk(false); return; }
+      if (!B || !B.isConfigured()) {
+        setLinkOk(false);
+        setLinkErr('This copy of the simulator has no email backend configured, so reset links cannot be used here.');
+        return;
+      }
+
+      // Supabase reports a dead link in the URL fragment rather than by omitting the
+      // session, so check that first and quote it back.
+      var frag = (window.location.hash || '').replace(/^#/, '');
+      var qs = frag.indexOf('?') >= 0 ? frag.slice(frag.indexOf('?') + 1) : frag;
+      var params = new URLSearchParams(qs);
+      var urlErr = params.get('error_description') || params.get('error');
+      if (urlErr) {
+        setLinkOk(false);
+        setLinkErr(decodeURIComponent(String(urlErr).replace(/\+/g, ' ')));
+        return;
+      }
+
+      var settled = false;
+      var unsub = null;
+      var timer = null;
+
+      function settle(ok, message) {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (unsub && unsub.data && unsub.data.subscription) unsub.data.subscription.unsubscribe();
+        setLinkOk(ok);
+        if (message) setLinkErr(message);
+      }
+
       B.getClient().then(function (c) {
-        if (!c) { setLinkOk(false); return; }
-        // Give the SDK a moment to consume the token from the URL fragment.
-        setTimeout(function () {
-          c.auth.getSession().then(function (r) {
-            setLinkOk(!!(r && r.data && r.data.session));
-          });
-        }, 400);
+        if (!c) { settle(false, 'Could not reach the account service.'); return; }
+
+        // The event fires when the token exchange completes, however long it takes.
+        unsub = c.auth.onAuthStateChange(function (event, session) {
+          if (event === 'PASSWORD_RECOVERY' || (session && !settled)) settle(true);
+        });
+
+        // A session may already exist by the time this mounts.
+        c.auth.getSession().then(function (res) {
+          if (res && res.data && res.data.session) settle(true);
+        });
+
+        // Only after a real wait do we call it dead.
+        timer = setTimeout(function () {
+          settle(false, 'This reset link is no longer valid \u2014 links expire, and each one can only be used once.');
+        }, 6000);
       });
+
+      return function () {
+        if (timer) clearTimeout(timer);
+        if (unsub && unsub.data && unsub.data.subscription) unsub.data.subscription.unsubscribe();
+      };
     }, []);
 
     var MIN_PW = (window.LocalAccounts && window.LocalAccounts.MIN_PASSWORD) || 6;
@@ -54,6 +100,10 @@
         setBusy(false);
         if (!res || !res.ok) { setErr((res && res.error) || 'Could not update the password.'); return; }
         setDone(true);
+        // The reset link signed them in to perform the change. Ending that session
+        // means the new password has to be used at least once, and it stops a
+        // recovery session outliving the person at a shared classroom machine.
+        if (window.SupabaseBackend.signOut) window.SupabaseBackend.signOut();
       });
     }
 
@@ -85,7 +135,11 @@
         ),
 
         React.createElement('div', { style: { padding: '22px' } },
-          done
+          linkOk === null
+            ? React.createElement('p', {
+                style: { color: '#9db0c8', fontSize: '13px', lineHeight: 1.5 }
+              }, 'Checking your reset link\u2026')
+          : done
             ? React.createElement('div', null,
                 React.createElement('p', {
                   style: { color: '#8ff0b5', fontSize: '13px', marginBottom: '16px', lineHeight: 1.5 }
@@ -101,8 +155,16 @@
             : linkOk === false
               ? React.createElement('div', null,
                   React.createElement('p', {
-                    style: { color: '#ff8a7e', fontSize: '13px', lineHeight: 1.5, marginBottom: '14px' }
-                  }, 'This reset link is no longer valid \u2014 they expire, and can only be used once. Request a new one from the sign-in screen.'),
+                    style: { color: '#ff8a7e', fontSize: '13px', lineHeight: 1.5, marginBottom: '6px' }
+                  }, linkErr || 'This reset link is no longer valid \u2014 links expire, and each one can only be used once.'),
+                  React.createElement('p', {
+                    style: { color: '#9db0c8', fontSize: '12px', lineHeight: 1.5, marginBottom: '14px' }
+                  }, (window.SupabaseBackend && window.SupabaseBackend.isConfigured())
+                      // Genuinely expired link: another one can be issued, so say so.
+                      ? 'Request a fresh one from the sign-in screen, or ask your instructor to reset it for you.'
+                      // No backend: the sign-in screen has no reset form to send you to,
+                      // so naming it would be a dead end. Only real routes here.
+                      : 'Ask your instructor to reset it for you \u2014 they can do it from View \u2192 Exercise Report.'),
                   React.createElement('button', {
                     type: 'button',
                     onClick: function () { window.location.hash = '#/'; },

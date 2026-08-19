@@ -709,10 +709,23 @@
         className: 'w-24 px-2 py-1.5 truncate capitalize',
         style: { color: priColor, fontWeight: 700 }
       }, alarm.priority || '—'),
-      // Description — fixed width + truncate, same as every other column, so the
-      // row's intrinsic width matches the header's exactly when scrolled.
+      // Description — the field that says what the alarm actually IS, so truncating
+      // it with no way to read the rest hides the point of the row. Several
+      // conditions are longer than any workable column width, so the cell wraps to a
+      // second line when the text needs it rather than cutting off. Fixed width is
+      // kept so the row's intrinsic width still matches the header's when scrolled
+      // sideways, and the full text is also on hover for the rare third line.
       React.createElement('div', {
-        className: 'w-96 px-2 py-1.5 truncate'
+        className: 'w-96 px-2 py-1.5',
+        title: alarm.description || '',
+        style: {
+          whiteSpace: 'normal',
+          lineHeight: 1.3,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden'
+        }
       }, alarm.description || '—'),
       // Value
       React.createElement('div', {

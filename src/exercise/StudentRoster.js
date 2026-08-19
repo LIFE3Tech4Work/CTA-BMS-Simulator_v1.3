@@ -25,18 +25,25 @@
 
   function seats() {
     // With a backend, the roster IS the signed-up accounts — real user ids, pulled
-    // down by syncDown. The six fixed seats are the offline fallback.
+    // down by syncDown. Without one, the six fixed seats PLUS anyone who has
+    // registered locally.
     //
-    // This matters for assignment: an exercise assigned to "student_a" cannot reach
-    // a real Supabase account, because that seat id is not a user id. Returning the
-    // actual profile ids here is what lets the author dialog target real students.
+    // The union matters: self-registered students were invisible to the Exercise
+    // Report, so an instructor could never see them or reset their password, while
+    // the six demo seats that WERE listed have no stored credential to reset. That
+    // combination made the reset control unreachable for every row.
     var B = window.SupabaseBackend;
     if (B && B.isConfigured()) {
       var ids = Object.keys(read());
       if (ids.length) return ids;
     }
-    return (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||
+    var fixed = (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||
       ['student_a', 'student_b', 'student_c', 'student_d', 'student_e', 'student_f'];
+    var LA = window.LocalAccounts;
+    if (!LA || typeof LA.all !== 'function') return fixed;
+    var registered = LA.all().map(function (a) { return a.username; })
+      .filter(function (u) { return fixed.indexOf(u) < 0; });
+    return fixed.concat(registered);
   }
 
   function read() {
@@ -60,6 +67,21 @@
   /** The stored record for a seat, or an empty one. Never null, so callers need no guard. */
   function get(seatId) {
     var r = read()[seatId] || {};
+    // Fall back to the local account record, so a self-registered student shows their
+    // real name and email in the report rather than a bare username. They never
+    // appear in the roster store — that is written by syncDown or by an instructor
+    // naming a fixed seat.
+    if (!r.firstName && !r.lastName && !r.email && window.LocalAccounts) {
+      var acct = window.LocalAccounts.get(seatId);
+      if (acct) {
+        return {
+          seatId: seatId,
+          firstName: acct.firstName || '',
+          lastName: acct.lastName || '',
+          email: acct.email || ''
+        };
+      }
+    }
     return {
       seatId: seatId,
       firstName: r.firstName || '',

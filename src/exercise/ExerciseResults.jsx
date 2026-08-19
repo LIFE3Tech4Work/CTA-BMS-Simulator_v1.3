@@ -25,6 +25,10 @@
     var [, bump] = useState(0);
     var [openId, setOpenId] = useState(null);
     var [openLog, setOpenLog] = useState(null);
+    // The temporary password just issued, shown once under its own row. Held in
+    // state rather than persisted: it is a hand-off to the person standing there,
+    // not a record — storing it would recreate the hole this control replaced.
+    var [resetInfo, setResetInfo] = useState(null);
 
     // Attempts arrive through localStorage from other tabs/sessions, so this polls
     // the same way the dashboard's submission list already does.
@@ -46,12 +50,36 @@
       }, st.label);
     }
 
+    // Readable rather than random-looking: it gets spoken aloud across a classroom,
+    // so no characters that are ambiguous out loud (0/O, 1/l/I) and a short digit run.
+    function tempPassword() {
+      var words = ['maple', 'harbor', 'quartz', 'ember', 'willow', 'cobalt', 'summit', 'cedar'];
+      return words[Math.floor(Math.random() * words.length)] +
+             String(Math.floor(Math.random() * 90) + 10);
+    }
+
+    function resetStudentPassword(seat) {
+      var LA = window.LocalAccounts, R = window.StudentRoster;
+      if (!LA || !R) return;
+      var acct = LA.get(seat) || R.get(seat);
+      var pw = tempPassword();
+      var res = LA.resetPassword(seat, acct.email, pw);
+      if (!res || !res.ok) {
+        setResetInfo({ seat: seat, error: (res && res.error) || 'Could not reset that password.' });
+        return;
+      }
+      setResetInfo({ seat: seat, password: pw });
+    }
+
     function renderStudentRow(ex, seat) {
       var attempt = ES.attemptFor(ex.id, seat);
       var status = ES.statusFor(ex, seat);
       var logKey = ex.id + '|' + seat;
       var isOpen = openLog === logKey;
       var actions = (attempt && attempt.actions) || [];
+      // Only real self-registered accounts can be reset. The shared demo seats live
+      // in AuthContext's fixed list and have no stored credential to replace, so
+      // offering the button there would fail rather than help.
 
       return React.createElement('div', { key: seat, style: { borderTop: '1px solid rgba(53,64,90,.6)' } },
         React.createElement('div', {
@@ -241,7 +269,81 @@
       );
     }
 
+    // Student accounts, with the one action an instructor needs when somebody cannot
+    // sign in. Driven by the account store rather than by any exercise's assignment
+    // list, because a locked-out student is locked out regardless of what they were
+    // assigned.
+    function renderAccounts() {
+      var LA = window.LocalAccounts, R = window.StudentRoster;
+      if (!LA || typeof LA.all !== 'function') return null;
+      var accounts = LA.all();
+      if (!accounts.length) return null;
+      return React.createElement('div', { style: { marginBottom: '22px' } },
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '10px' }
+        },
+          React.createElement('span', { style: { fontSize: '15px', fontWeight: 800, color: '#fff' } },
+            'Student Accounts'),
+          React.createElement('span', { style: { fontSize: '11.5px', color: '#9db0c8' } },
+            accounts.length + (accounts.length === 1 ? ' registered' : ' registered'))
+        ),
+        React.createElement('div', {
+          style: { border: '1px solid #35405a', borderRadius: '8px', background: '#1b2536',
+                   overflow: 'hidden' }
+        },
+          accounts.map(function (a, idx) {
+            var shown = resetInfo && resetInfo.seat === a.username ? resetInfo : null;
+            var name = (a.firstName || a.lastName)
+              ? ((a.firstName || '') + ' ' + (a.lastName || '')).trim()
+              : a.username;
+            return React.createElement('div', {
+              key: a.username,
+              style: idx ? { borderTop: '1px solid rgba(53,64,90,.6)' } : null
+            },
+              React.createElement('div', {
+                style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 10px' }
+              },
+                React.createElement('span', { style: { lineHeight: 1.25, minWidth: 0, flex: 1 } },
+                  React.createElement('div', {
+                    style: { fontSize: '11.5px', fontWeight: 700, color: '#e8edf6' }
+                  }, name),
+                  React.createElement('div', {
+                    style: { fontSize: '9.5px', color: '#7f8ea6' }
+                  }, a.email || a.username)
+                ),
+                React.createElement('button', {
+                  type: 'button',
+                  onClick: function () { resetStudentPassword(a.username); },
+                  title: 'Set a temporary password and show it once',
+                  style: { padding: '3px 9px', borderRadius: '4px', fontSize: '10px',
+                           fontWeight: 800, letterSpacing: '.3px', fontFamily: 'inherit',
+                           cursor: 'pointer', background: '#1b2230',
+                           border: '1px solid #46536b', color: '#c3cfdd', flexShrink: 0 }
+                }, 'RESET PASSWORD')
+              ),
+              shown ? React.createElement('div', {
+                style: { padding: '0 10px 9px', fontSize: '11px', lineHeight: 1.45,
+                         color: shown.error ? '#ff8a7e' : '#8ff0b5' }
+              }, shown.error
+                  ? shown.error
+                  : React.createElement('span', null,
+                      'Temporary password: ',
+                      React.createElement('code', {
+                        style: { fontFamily: 'ui-monospace,Menlo,monospace', fontSize: '12.5px',
+                                 fontWeight: 700, padding: '1px 6px', borderRadius: '3px',
+                                 background: 'rgba(255,255,255,.10)', color: '#e8edf6' }
+                      }, shown.password),
+                      '  \u2014 read it to them now. It is not shown again and nothing is emailed.'
+                    )
+              ) : null
+            );
+          })
+        )
+      );
+    }
+
     return React.createElement('div', { style: { fontFamily: FONT, marginBottom: '22px' } },
+      renderAccounts(),
       React.createElement('div', {
         style: { display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '10px' }
       },

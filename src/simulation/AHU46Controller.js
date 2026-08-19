@@ -48,6 +48,10 @@
   // Calibrated so 75% fan speed × 9200 ≈ 6900 CFM, matching the
   // screenshot's live supply fan reading (6901 CFM at 47 Hz ≈ 75% speed).
   var DESIGN_CFM = 9200;
+  // Heat the supply fan adds by friction and motor work. Scales with speed because
+  // the work does: a fan at 40% is not adding what it adds at 100%. 2 °F at full
+  // speed is the usual figure for a draw-through unit with the motor in the stream.
+  var FAN_HEAT_RISE_MAX = 2.0;      // °F at 100% fan speed
 
   // Return air temperature (SCENARIO_TRACKING.md item #12) — was a
   // hardcoded constant despite being labeled a live sensor (THS-4 in the
@@ -391,10 +395,13 @@
     returnFanCFM: 0,                  // CFM — 90% of supply flow once running; SCENARIO_TRACKING.md item #10
     oaCFM: 4500,                      // OA CFM at 50% minimum (= minOAAirflowSetpoint)
     oaDamperPosition: 50,             // % (at minimum position)
+    dischargeDamperPct: 100,       // % — DA-4 Discharge Damper, open when the unit runs
     economizerActive: false,
     phtValvePosition: 0,              // %
     chwValvePosition: 38,             // % (from screenshot: 38%)
     supplyAirTemp: 59.9,              // °F (from screenshot)
+    dischargeAirTemp: 60.0,        // °F — after the fan; supplyAirTemp plus fan heat
+    fanHeatRise: 0.0,              // °F — what the fan itself contributes
     preheatTemp: 81.6,                // °F — after preheat coil (= OAT when no heating)
     mixedAirTemp: 73.6,               // °F (from screenshot)
     returnAirTemp: 72.1,               // °F — dynamic (supplyAirTemp + ROOM_DELTA_T, previous tick);
@@ -962,6 +969,13 @@
       state.spillDamperPosition = 0;
     }
 
+    // Discharge damper on the supply trunk. Open while the unit runs, shut when it
+    // stops — an isolation damper, not a modulating output, so modelling it as
+    // proportional would invent control behaviour the sequence does not have.
+    if (modes.dischargeDamperPct !== 'Manual') {
+      state.dischargeDamperPct = state.fanRunning ? 100 : 0;
+    }
+
     // 3. SEASON / ACTIVE SETPOINT — which setpoint owns the coils this pass.
     var prevSeason = state.activeSeason || 'Summer';
     if (state.controlMode === 'Winter' || state.controlMode === 'Summer') {
@@ -1194,6 +1208,16 @@
     }
 
     state.supplyAirTemp = Math.round(state.supplyAirTemp * 10) / 10;
+
+    // Discharge air: what actually leaves the unit, after the fan. supplyAirTemp is
+    // the coil discharge and is what the sequence controls; this is the reading a
+    // technician takes downstream of the fan, and the difference between them is the
+    // fan's own heat.
+    var fanFrac = (typeof state.fanSpeed === 'number' ? state.fanSpeed : 0) / 100;
+    state.fanHeatRise = state.fanRunning
+      ? Math.round(FAN_HEAT_RISE_MAX * Math.max(0, Math.min(1, fanFrac)) * 10) / 10
+      : 0;
+    state.dischargeAirTemp = Math.round((state.supplyAirTemp + state.fanHeatRise) * 10) / 10;
     state.preheatTemp = Math.round(state.preheatTemp * 10) / 10;
     state.mixedAirTemp = Math.round(state.mixedAirTemp * 10) / 10;
     state.returnAirTemp = Math.round(

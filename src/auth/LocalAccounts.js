@@ -204,7 +204,11 @@
     var B = backend();
     if (!B) return Promise.resolve(signUp(fields));
     return B.signUp(fields).then(function (res) {
-      if (!res.ok && res.local) return signUp(fields);
+      // ONLY fall back when there is no backend at all. Falling back on any failure
+      // meant a rejected duplicate email silently created a browser-local account
+      // with that same address — the person got in, and their work went nowhere the
+      // instructor could see it.
+      if (!res.ok && res.local && !res.duplicate) return signUp(fields);
       return res;
     });
   }
@@ -217,6 +221,8 @@
                                : { ok: false, error: 'That email and password do not match an account.' });
     }
     return B.signIn(identifier, password).then(function (res) {
+      // Local fallback only when the backend is genuinely absent. Otherwise a stale
+      // browser-local record could accept a password the server had already rejected.
       if (!res.ok && res.local) {
         var lr = signIn(identifier, password);
         return lr ? { ok: true, username: lr.username, securityLevel: lr.securityLevel } : res;
@@ -250,7 +256,10 @@
     if (!B) return Promise.resolve(resetPassword(email, email, newPassword));
     return B.resetPassword(email).then(function (res) {
       if (!res.ok && res.local) return resetPassword(email, email, newPassword);
-      return res.ok ? { ok: true, emailed: true } : res;
+      // Pass the backend's own result through rather than rebuilding it — the
+      // rebuilt object dropped the `ambiguous` flag, so a caller could not tell a
+      // real send from a deliberately non-committal one.
+      return res;
     });
   }
 
