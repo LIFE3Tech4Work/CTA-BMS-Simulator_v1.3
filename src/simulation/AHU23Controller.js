@@ -49,6 +49,11 @@
   var DEHUMID_RH_WEIGHT = 8;       // %RH pulled down at fully-open chwValvePosition
   var RETURN_AIR_RH_MIN = 30;      // %
   var RETURN_AIR_RH_MAX = 70;      // %
+  // Above this return-air humidity, running both coils is dehumidification rather
+  // than the simultaneous heating/cooling fault — cool to dry, reheat to temperature.
+  // Same trigger as AHU-4-6, so the paired units judge it alike. Without this flag
+  // the fault banner had nothing to check and fired on legitimate operation.
+  var DEHUMID_RH_TRIGGER = 52;     // %RH return air
 
   // ─── Shared State Object ────────────────────────────────────────────────────
   // This is THE single source of truth. The Controls Sidebar writes inputs,
@@ -316,6 +321,13 @@
       + (state.chwValvePosition / 100) * (95 - mixRH)
       - (state.phtValvePosition / 100) * (mixRH - 20);
     state.supplyAirRH = Math.round(Math.max(5, Math.min(100, saRH)) * 10) / 10;
+
+    // Is the unit deliberately drying air? Both coils open is correct operation while
+    // it is, and the fault indication has to know the difference.
+    state.dehumidifying = state.fanRunning &&
+      state.returnAirRH > DEHUMID_RH_TRIGGER &&
+      state.chwValvePosition > 0 &&
+      state.phtValvePosition > 0;
 
     // Notify all subscribers (overlay, sidebar read-only rows, etc.)
     notifySubscribers();

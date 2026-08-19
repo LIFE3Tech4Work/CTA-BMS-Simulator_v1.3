@@ -1,6 +1,23 @@
-/* SignOn.jsx — Honeywell EBI-style sign-on dialog
- * Loaded via <script type="text/babel"> before App.jsx
- * No import/export — exposes window.SignOn
+/* SignOn.jsx — LIFE3 BMS Simulator sign-on
+ *
+ * Three modes in one dialog: sign in, create an account, recover a password. The
+ * screen previously offered only sign-in against a fixed credential list, and
+ * printed a demo username and password on the face of it — fine for a private
+ * demo, wrong for anything a class uses.
+ *
+ * The demo accounts still work exactly as before (cta_student, cta_instructor,
+ * student_a…f, all with bms2026); they are simply no longer advertised. Anyone who
+ * needs them has been told them.
+ *
+ * "Operator Name" is now "Username or Email Address": self-registered accounts are
+ * created with both, and people reach for their email first.
+ *
+ * Registration is handled by auth/LocalAccounts.js — read the note at the top of
+ * that file for what local accounts can and cannot promise. Recovery cannot email
+ * without a server, which the recover panel says plainly rather than implying a
+ * link is on its way.
+ *
+ * No import/export — exposes window.SignOn.
  */
 
 (function() {
@@ -8,70 +25,289 @@
 
   const { useState, useCallback } = React;
 
+  // ─── Shared field styling ───────────────────────────────────────────────────
+  const FIELD_CLASS = 'w-full px-3 py-2 rounded text-white text-sm focus:outline-none';
+  const FIELD_STYLE = { background: '#1b2536', border: '1px solid #46536b', fontFamily: 'inherit' };
+
+  function focusOn(e) { e.target.style.borderColor = '#35bdd3'; e.target.style.boxShadow = '0 0 0 1px #35bdd3'; }
+  function focusOff(e) { e.target.style.borderColor = '#46536b'; e.target.style.boxShadow = 'none'; }
+
+
+  function Field(props) {
+    // Live validation state: 'ok' tints the border green, 'bad' red. Null leaves it
+    // neutral, which is what an untouched field should look like — colouring a
+    // field the moment it renders scolds someone for not having typed yet.
+    var st = props.state;
+    var borderColor = st === 'bad' ? '#c0392b' : (st === 'ok' ? '#2f7a52' : '#46536b');
+    var hintColor = st === 'bad' ? '#ff8a7e' : (st === 'ok' ? '#8ff0b5' : '#6f7f97');
+    return React.createElement('div', { className: props.wrapClass || 'mb-4' },
+      React.createElement('label', {
+        htmlFor: props.id,
+        className: 'block text-sm mb-1', style: { color: '#c7d4e6' }
+      }, props.label),
+      React.createElement('input', {
+        id: props.id,
+        type: props.type || 'text',
+        value: props.value,
+        onChange: props.onChange,
+        maxLength: props.maxLength || 64,
+        autoComplete: props.autoComplete,
+        autoFocus: props.autoFocus,
+        className: FIELD_CLASS,
+        style: Object.assign({}, FIELD_STYLE, { border: '1px solid ' + borderColor }),
+        onFocus: focusOn,
+        onBlur: function (e) {
+          e.target.style.borderColor = borderColor;
+          e.target.style.boxShadow = 'none';
+        },
+        placeholder: props.placeholder
+      }),
+      props.hint ? React.createElement('p', {
+        className: 'text-xs mt-1', style: { color: hintColor }
+      }, props.hint) : null
+    );
+  }
+
+  function primaryButtonStyle(disabled) {
+    return {
+      background: disabled ? '#1b2230' : 'linear-gradient(180deg,#3f6fbf,#2d5aa8)',
+      border: '1px solid ' + (disabled ? '#38445c' : '#2d5aa8'),
+      color: disabled ? '#5d6b83' : '#fff',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      fontFamily: 'inherit'
+    };
+  }
+
   function SignOn() {
+    // 'signin' | 'signup' | 'recover'
+    const [mode, setMode] = useState('signin');
+
     const [operator, setOperator] = useState('');
     const [password, setPassword] = useState('');
+
+    // Sign-up fields
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [email, setEmail] = useState('');
+    const [confirm, setConfirm] = useState('');
+
+    // Recovery fields
+    const [newPassword, setNewPassword] = useState('');
+
     const [error, setError] = useState('');
+    const [notice, setNotice] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = useCallback(function(e) {
-      e.preventDefault();
+    function switchMode(next) {
+      setMode(next);
       setError('');
-      setIsLoading(true);
+      setNotice('');
+      setPassword('');
+      setConfirm('');
+      setNewPassword('');
+    }
 
-      var authResult = window.AuthHelpers.login(operator, password);
+    // ─── Sign in ──────────────────────────────────────────────────────────────
+    const handleSignIn = useCallback(function(e) {
+      e.preventDefault();
+      setError(''); setNotice(''); setIsLoading(true);
 
-      if (authResult) {
-        // Valid credentials — update auth state and navigate
-        if (window.setAuthState) {
-          window.setAuthState(authResult);
-        }
-        // Navigate to SymmetrE within 1 second
-        setTimeout(function() {
+      // Built-in demo accounts first, and synchronously — they must keep working
+      // with no backend, no network and no waiting.
+      var demo = window.AuthHelpers.login(operator.trim(), password);
+      if (demo) {
+        if (window.setAuthState) window.setAuthState(demo);
+        setTimeout(function () {
           window.location.hash = '#/symmetre';
           setIsLoading(false);
         }, 300);
-      } else {
-        // Invalid credentials — show error, clear password
-        setError('Invalid operator name or password');
-        setPassword('');
-        setIsLoading(false);
+        return;
       }
+
+      // Then a real account. Asynchronous, because this is a network call when a
+      // backend is configured.
+      var LA = window.LocalAccounts;
+      if (!LA || !LA.signInAsync) {
+        setError('That email and password do not match an account.');
+        setPassword(''); setIsLoading(false);
+        return;
+      }
+      LA.signInAsync(operator.trim(), password).then(function (res) {
+        if (res && res.ok) {
+          // createAuthState is the only correct way to build this — it carries the
+          // privilege functions every screen calls, and the field is `authenticated`,
+          // not `isAuthenticated`. A hand-rolled fallback object got both wrong.
+          if (!window.AuthHelpers.createAuthState) {
+            setError('Sign-in is unavailable: the auth layer failed to load.');
+            setIsLoading(false);
+            return;
+          }
+          var st = window.AuthHelpers.createAuthState(res.username, res.securityLevel || 'Oper');
+          if (window.setAuthState) window.setAuthState(st);
+          window.location.hash = '#/symmetre';
+        } else {
+          // Deliberately does not say which of the two was wrong.
+          setError((res && res.error) || 'That email and password do not match an account.');
+          setPassword('');
+        }
+        setIsLoading(false);
+      });
     }, [operator, password]);
 
-    const handleOperatorChange = useCallback(function(e) {
-      var value = e.target.value;
-      if (value.length <= 32) {
-        setOperator(value);
-      }
-    }, []);
+    // ─── Create account ───────────────────────────────────────────────────────
+    const handleSignUp = useCallback(function(e) {
+      e.preventDefault();
+      setError(''); setNotice('');
 
-    const handlePasswordChange = useCallback(function(e) {
-      var value = e.target.value;
-      if (value.length <= 64) {
-        setPassword(value);
-      }
-    }, []);
+      if (password !== confirm) { setError('The two passwords do not match.'); return; }
+      if (!window.LocalAccounts) { setError('Account creation is unavailable.'); return; }
+
+      setIsLoading(true);
+      window.LocalAccounts.signUpAsync({
+        email: email, password: password,
+        firstName: firstName, lastName: lastName
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          setError((res && res.error) || 'Could not create the account.');
+          setIsLoading(false);
+          return;
+        }
+        // If the project still requires email confirmation, say so plainly rather
+        // than dropping them at a sign-in form that will reject them.
+        if (res.needsConfirmation) {
+          setNotice('Account created. Check your email for a confirmation link, then sign in.');
+          switchMode('signin');
+          setIsLoading(false);
+          return;
+        }
+        // Sign the new account straight in — making someone re-type credentials they
+        // set ten seconds ago is friction with no purpose.
+        return window.LocalAccounts.signInAsync(email.trim(), password).then(function (si) {
+          if (si && si.ok && window.AuthHelpers.createAuthState) {
+            var st = window.AuthHelpers.createAuthState(si.username, si.securityLevel || 'Oper');
+            if (window.setAuthState) window.setAuthState(st);
+            window.location.hash = '#/symmetre';
+          } else {
+            setNotice('Account created. Sign in with your new details.');
+            switchMode('signin');
+          }
+          setIsLoading(false);
+        });
+      });
+    }, [operator, email, password, confirm, firstName, lastName]);
+
+    // ─── Recover ──────────────────────────────────────────────────────────────
+    const handleRecover = useCallback(function(e) {
+      e.preventDefault();
+      setError(''); setNotice('');
+      if (!window.LocalAccounts) { setError('Password reset is unavailable.'); return; }
+
+      setIsLoading(true);
+      window.LocalAccounts.resetPasswordAsync(email, newPassword).then(function (res) {
+        setIsLoading(false);
+        if (!res || !res.ok) { setError((res && res.error) || 'Could not reset the password.'); return; }
+        setNotice(res.emailed
+          ? 'Check your email for a reset link.'
+          : 'Password updated. Sign in with your new password.');
+        setMode('signin');
+        setPassword('');
+        setNewPassword('');
+      });
+    }, [operator, email, newPassword]);
+
+    // Back first, on the left, then the title beneath it. The previous single row
+    // put the title left and the back link right, directly under a centred system
+    // block — three competing alignments in three stacked rows, which is what made
+    // it read oddly. Stacking them left-aligned gives one edge to follow.
+    function subHeader(title) {
+      return React.createElement('div', { className: 'mb-4' },
+        React.createElement('button', {
+          type: 'button',
+          onClick: function () { switchMode('signin'); },
+          className: 'text-xs mb-2',
+          style: { background: 'none', border: 'none', color: '#9db0c8', padding: 0,
+                   cursor: 'pointer', fontFamily: 'inherit', display: 'block' }
+        }, '\u2190 Back to sign in'),
+        React.createElement('div', {
+          className: 'text-base font-semibold', style: { color: '#e8edf6' }
+        }, title)
+      );
+    }
+
+    // ─── Live validation ──────────────────────────────────────────────────────
+    // Checked as you type rather than only on submit, so a mistyped confirmation
+    // is caught where it happened instead of after pressing the button. Rules come
+    // from LocalAccounts so the form and the store cannot disagree.
+    var LA = window.LocalAccounts || {};
+    var EMAIL_RE = LA.EMAIL_RE || /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    var MIN_PW = LA.MIN_PASSWORD || 6;
+
+    var emailTyped = email.trim().length > 0;
+    var emailValid = EMAIL_RE.test(email.trim());
+    var emailTaken = emailTyped && emailValid && LA.exists && LA.exists(email.trim());
+
+    var pwTyped = password.length > 0;
+    var pwLongEnough = password.length >= MIN_PW;
+
+    var confirmTyped = confirm.length > 0;
+    var pwMatch = confirmTyped && password === confirm;
+
+    function emailState() {
+      if (!emailTyped) return null;
+      return (emailValid && !emailTaken) ? 'ok' : 'bad';
+    }
+    function emailHint() {
+      if (!emailTyped) return 'This is what you will sign in with.';
+      if (!emailValid) return 'That does not look like an email address.';
+      if (emailTaken) return 'An account with that email already exists.';
+      return 'This is what you will sign in with.';
+    }
+    function pwHint() {
+      if (!pwTyped) return 'At least ' + MIN_PW + ' characters';
+      return pwLongEnough
+        ? 'Long enough'
+        : (MIN_PW - password.length) + ' more character' + ((MIN_PW - password.length) === 1 ? '' : 's');
+    }
+    function confirmHint() {
+      if (!confirmTyped) return 'Repeat it';
+      return pwMatch ? 'Passwords match' : 'Passwords do not match';
+    }
+
+    var signInDisabled = isLoading || !operator || !password;
+    var signUpDisabled = !emailValid || emailTaken || !pwLongEnough || !pwMatch ||
+                         !firstName.trim() || !lastName.trim();
+    var backendOn = !!(window.LocalAccounts && window.LocalAccounts.backendActive());
+    var recoverDisabled = backendOn ? !emailValid : (!emailValid || newPassword.length < MIN_PW);
 
     return React.createElement('div', {
-      className: 'flex items-center justify-center h-screen',
-      style: { background: '#141a26', fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" }
+      className: 'flex justify-center h-screen',
+      style: {
+        background: '#141a26',
+        fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif",
+        // The scroller. Without it a panel taller than the window has nowhere to go,
+        // because the page shell sets overflow-y: hidden on the body.
+        overflowY: 'auto',
+        // Breathing room that also guarantees the card never sits flush against a
+        // clipped edge when it does overflow.
+        padding: '16px'
+      }
     },
       React.createElement('div', {
-        className: 'w-full max-w-md'
+        className: 'w-full max-w-md',
+        // Centres a short panel exactly as items-center did, but a tall one grows
+        // downward into the scroll instead of out of both ends.
+        style: { margin: 'auto' }
       },
-        // Main dialog container
         React.createElement('div', {
           className: 'rounded-md shadow-2xl overflow-hidden',
           style: { background: 'linear-gradient(180deg,#243044,#1b2536)', border: '1px solid #171f2d' }
         },
-          // Title bar (Honeywell EBI style)
+          // Title bar
           React.createElement('div', {
             className: 'px-4 py-2 flex items-center justify-between',
             style: { background: 'linear-gradient(180deg,#33425d,#2b3850)', borderBottom: '1px solid #171f2d' }
           },
             React.createElement('div', { className: 'flex items-center gap-2' },
-              // LIFE3 mark
               React.createElement('img', {
                 src: 'assets/LIFE3_White_Logo.png',
                 alt: 'LIFE3',
@@ -82,7 +318,6 @@
                 className: 'text-white text-sm font-semibold tracking-wide'
               }, 'LIFE3 BMS Simulator')
             ),
-            // Window control dots (decorative)
             React.createElement('div', { className: 'flex gap-1' },
               React.createElement('div', { className: 'w-3 h-3 rounded-full', style: { background: 'rgba(255,255,255,.22)' } }),
               React.createElement('div', { className: 'w-3 h-3 rounded-full', style: { background: 'rgba(255,255,255,.22)' } }),
@@ -90,109 +325,170 @@
             )
           ),
 
-          // Form body
           React.createElement('div', { className: 'p-6' },
-            // System info
-            React.createElement('div', {
-              className: 'text-center mb-6'
-            },
-              React.createElement('p', {
-                className: 'text-sm', style: { color: '#e8edf6' }
-              }, 'Enterprise Buildings Integrator'),
-              React.createElement('p', {
-                className: 'text-xs mt-1', style: { color: '#9db0c8' }
-              }, 'CTA Training Building — NYC Downtown')
-            ),
+            // The centred building block belongs to the sign-on screen itself. On the
+            // sub-screens it sat above a left-aligned heading and fought it, so it is
+            // dropped there — the sub-header says where you are instead.
+            mode === 'signin' ? React.createElement('div', { className: 'text-center mb-5' },
+              React.createElement('p', { className: 'text-sm', style: { color: '#e8edf6' } },
+                'Enterprise Buildings Integrator'),
+              React.createElement('p', { className: 'text-xs mt-1', style: { color: '#9db0c8' } },
+                'CTA Training Building — NYC Downtown')
+            ) : null,
 
-            // Login form
-            React.createElement('form', {
-              onSubmit: handleSubmit
-            },
-              // Operator name field
-              React.createElement('div', { className: 'mb-4' },
-                React.createElement('label', {
-                  htmlFor: 'signon-operator',
-                  className: 'block text-sm mb-1', style: { color: '#c7d4e6' }
-                }, 'Operator Name'),
-                React.createElement('input', {
-                  id: 'signon-operator',
-                  type: 'text',
-                  value: operator,
-                  onChange: handleOperatorChange,
-                  maxLength: 32,
-                  autoComplete: 'username',
-                  autoFocus: true,
-                  className: 'w-full px-3 py-2 rounded text-white text-sm focus:outline-none',
-                  style: { background: '#1b2536', border: '1px solid #46536b', fontFamily: 'inherit' },
-                  onFocus: function (e) { e.target.style.borderColor = '#35bdd3'; e.target.style.boxShadow = '0 0 0 1px #35bdd3'; },
-                  onBlur: function (e) { e.target.style.borderColor = '#46536b'; e.target.style.boxShadow = 'none'; },
-                  placeholder: 'Enter operator name'
-                })
-              ),
+            notice ? React.createElement('div', {
+              className: 'mb-4 px-3 py-2 rounded text-sm',
+              style: { background: 'rgba(63,143,90,.16)', border: '1px solid #2f7a52', color: '#8ff0b5' },
+              role: 'status'
+            }, notice) : null,
 
-              // Password field
-              React.createElement('div', { className: 'mb-4' },
-                React.createElement('label', {
-                  htmlFor: 'signon-password',
-                  className: 'block text-sm mb-1', style: { color: '#c7d4e6' }
-                }, 'Password'),
-                React.createElement('input', {
-                  id: 'signon-password',
-                  type: 'password',
-                  value: password,
-                  onChange: handlePasswordChange,
-                  maxLength: 64,
-                  autoComplete: 'current-password',
-                  className: 'w-full px-3 py-2 rounded text-white text-sm focus:outline-none',
-                  style: { background: '#1b2536', border: '1px solid #46536b', fontFamily: 'inherit' },
-                  onFocus: function (e) { e.target.style.borderColor = '#35bdd3'; e.target.style.boxShadow = '0 0 0 1px #35bdd3'; },
-                  onBlur: function (e) { e.target.style.borderColor = '#46536b'; e.target.style.boxShadow = 'none'; },
-                  placeholder: 'Enter password'
-                })
-              ),
-
-              // Error message area (hidden by default)
+            // ── SIGN IN ──────────────────────────────────────────────────────
+            mode === 'signin' ? React.createElement('form', { onSubmit: handleSignIn },
+              React.createElement(Field, {
+                id: 'signon-operator',
+                // Renamed from "Operator Name": accounts now carry an email, and
+                // that is what people reach for first.
+                label: 'Username or Email Address',
+                value: operator,
+                onChange: function (e) { setOperator(e.target.value.slice(0, 64)); },
+                autoComplete: 'username',
+                autoFocus: true,
+                placeholder: 'Username or email'
+              }),
+              React.createElement(Field, {
+                id: 'signon-password',
+                label: 'Password',
+                type: 'password',
+                value: password,
+                onChange: function (e) { setPassword(e.target.value.slice(0, 64)); },
+                autoComplete: 'current-password',
+                placeholder: 'Enter password'
+              }),
               error ? React.createElement('div', {
                 className: 'mb-4 px-3 py-2 rounded text-sm',
                 style: { background: 'rgba(224,52,43,.14)', border: '1px solid #8a2018', color: '#ff8a7e' },
                 role: 'alert'
               }, error) : null,
-
-              // Sign On button
               React.createElement('button', {
                 type: 'submit',
-                disabled: isLoading || !operator || !password,
+                disabled: signInDisabled,
                 className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
-                style: (function () {
-                  var off = isLoading || !operator || !password;
-                  return {
-                    background: off ? '#1b2230' : 'linear-gradient(180deg,#3f6fbf,#2d5aa8)',
-                    border: '1px solid ' + (off ? '#38445c' : '#2d5aa8'),
-                    color: off ? '#5d6b83' : '#fff',
-                    cursor: off ? 'not-allowed' : 'pointer',
-                    fontFamily: 'inherit'
-                  };
-                })()
-              }, isLoading ? 'Signing On...' : 'Sign On')
-            ),
-
-            // Demo credentials hint
-            React.createElement('div', {
-              className: 'mt-4 pt-4', style: { borderTop: '1px solid #2b3850' }
-            },
-              React.createElement('p', {
-                className: 'text-xs text-center mb-2', style: { color: '#9db0c8' }
-              }, 'Demo Accounts'),
-              React.createElement('div', { className: 'flex justify-center gap-4 text-xs' },
-                React.createElement('div', null,
-                  React.createElement('span', { style: { color: '#9db0c8' } }, 'Student: '),
-                  React.createElement('span', { style: { color: '#6fd3e8', fontWeight: 700, fontSize: '13.5px' } }, 'cta_student / bms2026')
-                )
+                style: primaryButtonStyle(signInDisabled)
+              }, isLoading ? 'Signing On...' : 'Sign On'),
+              React.createElement('div', { className: 'flex justify-between mt-3' },
+                React.createElement('button', {
+                  type: 'button',
+                  onClick: function () { switchMode('signup'); },
+                  className: 'text-xs',
+                  style: { background: 'none', border: 'none', color: '#6fd3e8', cursor: 'pointer', fontFamily: 'inherit' }
+                }, 'Create an account'),
+                React.createElement('button', {
+                  type: 'button',
+                  onClick: function () { switchMode('recover'); },
+                  className: 'text-xs',
+                  style: { background: 'none', border: 'none', color: '#9db0c8', cursor: 'pointer', fontFamily: 'inherit' }
+                }, 'Forgot password?')
               )
-            )
+            ) : null,
+
+            // ── CREATE ACCOUNT ───────────────────────────────────────────────
+            mode === 'signup' ? React.createElement('form', { onSubmit: handleSignUp },
+              subHeader('Create an account'),
+              React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
+                React.createElement(Field, {
+                  id: 'su-first', label: 'First Name', value: firstName,
+                  onChange: function (e) { setFirstName(e.target.value.slice(0, 40)); },
+                  autoComplete: 'given-name', autoFocus: true, placeholder: 'First'
+                }),
+                React.createElement(Field, {
+                  id: 'su-last', label: 'Last Name', value: lastName,
+                  onChange: function (e) { setLastName(e.target.value.slice(0, 40)); },
+                  autoComplete: 'family-name', placeholder: 'Last'
+                })
+              ),
+              React.createElement(Field, {
+                id: 'su-email', label: 'Email Address', type: 'email', value: email,
+                onChange: function (e) { setEmail(e.target.value.slice(0, 80)); },
+                autoComplete: 'email', placeholder: 'name@example.com',
+                state: emailState(), hint: emailHint()
+              }),
+                            React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
+                React.createElement(Field, {
+                  id: 'su-pass', label: 'Password', type: 'password', value: password,
+                  onChange: function (e) { setPassword(e.target.value.slice(0, 64)); },
+                  autoComplete: 'new-password', placeholder: '',
+                  state: pwTyped ? (pwLongEnough ? 'ok' : 'bad') : null,
+                  hint: pwHint()
+                }),
+                React.createElement(Field, {
+                  id: 'su-confirm', label: 'Confirm Password', type: 'password', value: confirm,
+                  onChange: function (e) { setConfirm(e.target.value.slice(0, 64)); },
+                  autoComplete: 'new-password', placeholder: '',
+                  state: confirmTyped ? (pwMatch ? 'ok' : 'bad') : null,
+                  hint: confirmHint()
+                })
+              ),
+              error ? React.createElement('div', {
+                className: 'mb-4 px-3 py-2 rounded text-sm',
+                style: { background: 'rgba(224,52,43,.14)', border: '1px solid #8a2018', color: '#ff8a7e' },
+                role: 'alert'
+              }, error) : null,
+              React.createElement('button', {
+                type: 'submit',
+                disabled: signUpDisabled,
+                className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
+                style: primaryButtonStyle(signUpDisabled)
+              }, 'Create Account'),
+              // Said up front rather than discovered later on another machine.
+              React.createElement('p', {
+                className: 'text-xs mt-3 leading-relaxed', style: { color: '#6f7f97' }
+              }, backendOn
+                  ? 'Your account works on any computer — sign in with your email address.'
+                  : 'No backend is configured, so this account is stored in this browser only and will not work on another computer. Do not reuse a password from anywhere else.')
+            ) : null,
+
+            // ── FORGOT PASSWORD ──────────────────────────────────────────────
+            mode === 'recover' ? React.createElement('form', { onSubmit: handleRecover },
+              subHeader('Reset your password'),
+              React.createElement('p', {
+                className: 'text-xs mb-4 leading-relaxed', style: { color: '#9db0c8' }
+              }, backendOn
+                ? 'Enter the email on your account. A reset link will be sent to it.'
+                : 'Enter the email on your account and set a new password. Nothing is emailed — there is no mail server behind this simulator.'),
+                            React.createElement(Field, {
+                id: 'rc-email', label: 'Email on the Account', type: 'email', value: email,
+                onChange: function (e) { setEmail(e.target.value.slice(0, 80)); },
+                autoComplete: 'email', autoFocus: true, placeholder: 'name@example.com'
+              }),
+              (window.LocalAccounts && window.LocalAccounts.backendActive())
+                ? null
+                : React.createElement(Field, {
+                id: 'rc-new', label: 'New Password', type: 'password', value: newPassword,
+                onChange: function (e) { setNewPassword(e.target.value.slice(0, 64)); },
+                autoComplete: 'new-password', placeholder: '',
+                state: newPassword.length ? (newPassword.length >= MIN_PW ? 'ok' : 'bad') : null,
+                hint: newPassword.length
+                  ? (newPassword.length >= MIN_PW ? 'Long enough' : 'Too short')
+                  : 'At least ' + MIN_PW + ' characters'
+              }),
+              error ? React.createElement('div', {
+                className: 'mb-4 px-3 py-2 rounded text-sm',
+                style: { background: 'rgba(224,52,43,.14)', border: '1px solid #8a2018', color: '#ff8a7e' },
+                role: 'alert'
+              }, error) : null,
+              React.createElement('button', {
+                type: 'submit',
+                disabled: recoverDisabled,
+                className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
+                style: primaryButtonStyle(recoverDisabled)
+              }, backendOn ? 'Send Reset Link' : 'Set New Password'),
+              React.createElement('p', {
+                className: 'text-xs mt-3', style: { color: '#6f7f97' }
+              }, 'Using an account your instructor set up? Ask them to reset it for you.')
+            ) : null
           ),
 
-          // Status bar (bottom)
+          // Status bar
           React.createElement('div', {
             className: 'px-4 py-1 flex justify-between items-center',
             style: { background: '#0e1420', borderTop: '1px solid #171f2d' }
@@ -205,6 +501,5 @@
     );
   }
 
-  // Expose on window
   window.SignOn = SignOn;
 })();

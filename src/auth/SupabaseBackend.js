@@ -1,0 +1,445 @@
+/**
+ * SupabaseBackend.js — real accounts and shared storage
+ *
+ * Until now every account, exercise, group and attempt lived in localStorage, which
+ * meant a student who signed up on one machine existed only on that machine and an
+ * instructor could not see any results at all. This is the layer that makes those
+ * things real.
+ *
+ * ── DESIGN: WRITE-THROUGH CACHE ──────────────────────────────────────────────
+ * Every screen in this app reads its data synchronously (ExerciseStore.getExercise,
+ * StudentGroups.all, and so on). Supabase is asynchronous. Rewriting every screen
+ * to await would have meant touching all of them, so instead:
+ *
+ *   • reads stay synchronous, served from the same localStorage keys as before
+ *   • signing in pulls the server's rows down into those keys
+ *   • writes go to localStorage immediately AND to Supabase in the background
+ *
+ * So the UI is unchanged, the local copy is a cache rather than the record, and the
+ * app still works with no backend configured — which matters, because a classroom
+ * with no internet should still be able to run an exercise.
+ *
+ * The honest limitation: a background write that fails leaves the local copy ahead
+ * of the server until the next sync. Failures are surfaced through
+ * getStatus().lastError rather than swallowed, and syncDown() is safe to re-run.
+ *
+ * ── WHAT IS SECRET ───────────────────────────────────────────────────────────
+ * The publishable key ships to the browser and cannot be hidden; Row Level Security
+ * in docs/supabase-schema.sql is what actually protects the data. server.js serves
+ * the key from a Railway environment variable so it stays out of the repository.
+ *
+ * No import/export — exposes window.SupabaseBackend.
+ */
+(function () {
+  'use strict';
+
+  var SDK_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+
+  var client = null;
+  var sdkPromise = null;
+  var status = { configured: false, ready: false, signedIn: false, lastError: null, lastSync: null };
+  var listeners = [];
+
+  function cfg() { return window.CTA_CONFIG || {}; }
+  function isConfigured() {
+    var c = cfg();
+    return !!(c.supabaseUrl && c.supabasePublishableKey);
+  }
+  status.configured = isConfigured();
+
+  function notify() {
+    listeners.forEach(function (fn) { try { fn(getStatus()); } catch (e) {} });
+  }
+  function subscribe(fn) {
+    listeners.push(fn);
+    return function () { listeners = listeners.filter(function (f) { return f !== fn; }); };
+  }
+  function getStatus() { return Object.assign({}, status); }
+
+  function fail(where, err) {
+    status.lastError = where + ': ' + ((err && err.message) || String(err));
+    // Logged rather than swallowed — a silent sync failure is how a class ends up
+    // looking at stale data with no idea why.
+    if (window.console) console.warn('[Supabase] ' + status.lastError);
+    notify();
+  }
+
+  /** Load the SDK once, on first use rather than on page load. */
+  function loadSdk() {
+    if (sdkPromise) return sdkPromise;
+    sdkPromise = new Promise(function (resolve, reject) {
+      if (window.supabase && window.supabase.createClient) return resolve(window.supabase);
+      var s = document.createElement('script');
+      s.src = SDK_URL;
+      s.async = true;
+      s.onload = function () {
+        if (window.supabase && window.supabase.createClient) resolve(window.supabase);
+        else reject(new Error('SDK loaded but createClient missing'));
+      };
+      s.onerror = function () { reject(new Error('could not load the Supabase SDK')); };
+      document.head.appendChild(s);
+    });
+    return sdkPromise;
+  }
+
+  /** The client, or null when unconfigured. Safe to call repeatedly. */
+  function getClient() {
+    if (!isConfigured()) return Promise.resolve(null);
+    if (client) return Promise.resolve(client);
+    return loadSdk().then(function (sdk) {
+      var c = cfg();
+      client = sdk.createClient(c.supabaseUrl, c.supabasePublishableKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+      status.ready = true;
+      notify();
+      return client;
+    }).catch(function (e) { fail('client', e); return null; });
+  }
+
+  // ─── Auth ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Create an account. The email is the identifier — the sign-up form asks for no
+   * username, so there is nothing to invent or forget.
+   *
+   * First and last name go into user metadata, which the profiles trigger in
+   * docs/supabase-schema.sql reads to fill display_name. role is never sent: the
+   * trigger always writes 'student', because anything the client could set is a
+   * door a student can walk through.
+   */
+  function signUp(fields) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, error: 'No backend configured.', local: true };
+      var first = String(fields.firstName || '').trim();
+      var last = String(fields.lastName || '').trim();
+      return c.auth.signUp({
+        email: String(fields.email || '').trim(),
+        password: String(fields.password || ''),
+        options: {
+          data: {
+            display_name: (first + ' ' + last).trim(),
+            first_name: first,
+            last_name: last
+          }
+        }
+      }).then(function (res) {
+        if (res.error) return { ok: false, error: friendly(res.error) };
+        // With email confirmation switched off (Authentication → Providers → Email)
+        // a session comes back immediately and the student is straight in.
+        status.signedIn = !!(res.data && res.data.session);
+        notify();
+        return {
+          ok: true,
+          needsConfirmation: !(res.data && res.data.session),
+          user: res.data && res.data.user
+        };
+      });
+    }).catch(function (e) { fail('signUp', e); return { ok: false, error: 'Sign-up failed. ' + e.message }; });
+  }
+
+  function signIn(email, password) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, error: 'No backend configured.', local: true };
+      return c.auth.signInWithPassword({
+        email: String(email || '').trim(),
+        password: String(password || '')
+      }).then(function (res) {
+        if (res.error) return { ok: false, error: friendly(res.error) };
+        status.signedIn = true;
+        notify();
+        return { ok: true, user: res.data.user, session: res.data.session };
+      });
+    }).catch(function (e) { fail('signIn', e); return { ok: false, error: 'Sign-in failed. ' + e.message }; });
+  }
+
+  /** Emails a real reset link back to this app's #/reset route. */
+  function resetPassword(email) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, error: 'No backend configured.', local: true };
+      var redirect = window.location.origin + window.location.pathname + '#/reset';
+      return c.auth.resetPasswordForEmail(String(email || '').trim(), { redirectTo: redirect })
+        .then(function (res) {
+          if (res.error) return { ok: false, error: friendly(res.error) };
+          return { ok: true };
+        });
+    }).catch(function (e) { fail('resetPassword', e); return { ok: false, error: e.message }; });
+  }
+
+  /** Called from the #/reset route, once the recovery link has established a session. */
+  function updatePassword(newPassword) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, error: 'No backend configured.' };
+      return c.auth.updateUser({ password: String(newPassword || '') }).then(function (res) {
+        if (res.error) return { ok: false, error: friendly(res.error) };
+        return { ok: true };
+      });
+    }).catch(function (e) { fail('updatePassword', e); return { ok: false, error: e.message }; });
+  }
+
+  function signOut() {
+    return getClient().then(function (c) {
+      if (!c) return;
+      return c.auth.signOut().then(function () {
+        status.signedIn = false;
+        notify();
+      });
+    }).catch(function (e) { fail('signOut', e); });
+  }
+
+  /** The signed-in user's profile row, or null. */
+  function currentProfile() {
+    return getClient().then(function (c) {
+      if (!c) return null;
+      return c.auth.getUser().then(function (u) {
+        var user = u && u.data && u.data.user;
+        if (!user) return null;
+        return c.from('profiles').select('*').eq('id', user.id).maybeSingle()
+          .then(function (r) {
+            if (r.error) { fail('profile', r.error); return null; }
+            return r.data ? Object.assign({}, r.data, { email: r.data.email || user.email }) : null;
+          });
+      });
+    }).catch(function (e) { fail('currentProfile', e); return null; });
+  }
+
+  /** Supabase's messages are terse and sometimes leak internals; these do not. */
+  function friendly(err) {
+    var m = (err && err.message) || '';
+    if (/already registered|already exists/i.test(m)) return 'An account with that email already exists.';
+    if (/Invalid login credentials/i.test(m)) return 'That email and password do not match an account.';
+    if (/Email not confirmed/i.test(m)) return 'Check your email for a confirmation link before signing in.';
+    if (/Password should be at least/i.test(m)) return 'Password is too short.';
+    if (/rate limit|too many/i.test(m)) return 'Too many attempts just now. Wait a minute and try again.';
+    if (/valid email/i.test(m)) return 'Enter a valid email address.';
+    return m || 'Something went wrong.';
+  }
+
+  // ─── Data sync ──────────────────────────────────────────────────────────────
+  // Mirrors server rows into the localStorage keys the existing stores already read,
+  // so no screen had to change to become backend-aware.
+
+  var EX_KEY = 'cta_exercises';
+  var ATTEMPT_KEY = 'cta_exercise_attempts';
+  var GROUP_KEY = 'cta_student_groups';
+  var ROSTER_KEY = 'cta_student_roster';
+
+  function writeLocal(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+  function readLocal(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+
+  /** Server row -> the shape ExerciseStore already expects. */
+  function rowToExercise(row) {
+    return {
+      id: row.id,
+      title: row.title,
+      unitId: row.unit_id,
+      instructions: row.instructions,
+      setup: row.setup || {},
+      weather: row.weather,
+      goal: row.goal,
+      assignment: (row.goal && row.goal.__assignment) || row.assignment || null,
+      assignedTo: (row.goal && row.goal.__assignedTo) || [],
+      published: !!row.published,
+      createdBy: row.created_by,
+      createdAt: row.created_at
+    };
+  }
+
+  /**
+   * Pull everything this user is allowed to see. RLS decides that, so a student
+   * gets their own assignments and attempts and an instructor gets the exercises
+   * they authored plus every attempt against them — the same query either way.
+   */
+  function syncDown() {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, local: true };
+      return Promise.all([
+        c.from('exercises').select('*'),
+        c.from('attempts').select('*'),
+        c.from('groups').select('id,name,class_id'),
+        c.from('group_members').select('group_id,student_id'),
+        c.from('profiles').select('id,email,display_name,role')
+      ]).then(function (res) {
+        var exRes = res[0], atRes = res[1], grRes = res[2], gmRes = res[3], prRes = res[4];
+        if (exRes.error) { fail('exercises', exRes.error); return { ok: false }; }
+
+        // Do NOT overwrite the local list when the server has nothing. On a fresh
+        // project the exercises table is empty, and a blind write would erase the
+        // seeded starter exercises — a student's first sign-in would show an empty
+        // list. The server is authoritative only once it actually holds rows.
+        var serverEx = (exRes.data || []).map(rowToExercise);
+        if (serverEx.length) writeLocal(EX_KEY, serverEx);
+
+        // Same reasoning for attempts and groups: an empty server response is
+        // "nothing uploaded yet", not "the student has no work".
+        if (!atRes.error && (atRes.data || []).length) {
+          writeLocal(ATTEMPT_KEY, (atRes.data || []).map(function (a) {
+            return {
+              exerciseId: a.exercise_id,
+              operator: a.student_id,
+              startedAt: a.started_at,
+              passedAt: a.passed_at,
+              actions: a.actions || []
+            };
+          }));
+        }
+
+        if (!grRes.error && !gmRes.error && (grRes.data || []).length) {
+          var members = {};
+          (gmRes.data || []).forEach(function (m) {
+            (members[m.group_id] = members[m.group_id] || []).push(m.student_id);
+          });
+          writeLocal(GROUP_KEY, (grRes.data || []).map(function (g) {
+            return { id: g.id, name: g.name, seatIds: members[g.id] || [], classId: g.class_id };
+          }));
+        }
+
+        if (!prRes.error) {
+          // The roster is keyed by the identifier the rest of the app treats as the
+          // operator, which for a real account is its user id.
+          var roster = readLocal(ROSTER_KEY, {}) || {};
+          (prRes.data || []).forEach(function (p) {
+            var name = String(p.display_name || '').trim();
+            var sp = name.indexOf(' ');
+            roster[p.id] = {
+              firstName: sp > 0 ? name.slice(0, sp) : name,
+              lastName: sp > 0 ? name.slice(sp + 1) : '',
+              email: p.email || ''
+            };
+          });
+          writeLocal(ROSTER_KEY, roster);
+        }
+
+        status.lastSync = new Date().toISOString();
+        status.lastError = null;
+        notify();
+        return { ok: true };
+      });
+    }).catch(function (e) { fail('syncDown', e); return { ok: false }; });
+  }
+
+  /**
+   * Push one exercise. assignedTo and the targeting ride inside goal, so the server
+   * needs no extra column for a shape that is still settling — the assignments
+   * table is the durable form and is written alongside.
+   */
+  /**
+   * Write the assignment rows for an exercise, replacing whatever was there.
+   *
+   * These are what make an exercise visible to a student: the RLS policy on
+   * exercises calls is_assigned_to_me(), which reads this table. An exercise with no
+   * assignment row is readable only by its author.
+   *
+   * Rows are per student. Class- and group-scoped rows would be fewer, but they only
+   * resolve if that class or group also exists on the server — and the flattened seat
+   * list is the one thing all three targeting modes produce, so this works today
+   * without a class-management screen.
+   *
+   * Seat ids from the local roster (student_a…) are not real user ids and are skipped;
+   * a UUID means a genuine account.
+   */
+  function pushAssignments(c, ex) {
+    var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    var ids = (ex.assignedTo || []).filter(function (s) { return UUID.test(String(s)); });
+    // Clear first so un-assigning actually removes access rather than only adding.
+    return c.from('assignments').delete().eq('exercise_id', ex.id).then(function () {
+      if (!ids.length) return { ok: true };
+      return c.from('assignments').insert(ids.map(function (sid) {
+        return { exercise_id: ex.id, student_id: sid };
+      })).then(function (r) {
+        if (r.error) fail('pushAssignments', r.error);
+        return { ok: !r.error };
+      });
+    });
+  }
+
+  function pushExercise(ex) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, local: true };
+      return c.auth.getUser().then(function (u) {
+        var uid = u && u.data && u.data.user && u.data.user.id;
+        if (!uid) return { ok: false, error: 'Not signed in.' };
+        var goal = Object.assign({}, ex.goal, {
+          __assignment: ex.assignment || null,
+          __assignedTo: ex.assignedTo || []
+        });
+        return c.from('exercises').upsert({
+          id: ex.id,
+          title: ex.title,
+          unit_id: ex.unitId,
+          instructions: ex.instructions || '',
+          setup: ex.setup || {},
+          weather: ex.weather || null,
+          goal: goal,
+          published: !!ex.published,
+          created_by: uid
+        }).then(function (r) {
+          if (r.error) { fail('pushExercise', r.error); return { ok: false, error: r.error.message }; }
+          // Assignment rows are what make the exercise VISIBLE to a student: the RLS
+          // policy on exercises calls is_assigned_to_me(), which reads this table.
+          // Without them a published exercise is readable only by its author, and
+          // every student sees an empty list with no error to explain it.
+          //
+          // Written per student rather than per class, because that works whether or
+          // not classes and groups exist on the server yet — the flattened seat list
+          // is the one thing every targeting mode produces.
+          return pushAssignments(c, ex).then(function () { return { ok: true }; });
+        });
+      });
+    }).catch(function (e) { fail('pushExercise', e); return { ok: false, error: e.message }; });
+  }
+
+  function deleteExercise(id) {
+    return getClient().then(function (c) {
+      if (!c) return;
+      return c.from('exercises').delete().eq('id', id).then(function (r) {
+        if (r.error) fail('deleteExercise', r.error);
+      });
+    }).catch(function (e) { fail('deleteExercise', e); });
+  }
+
+  /** Attempts are per (exercise, student), so this upserts on that pair. */
+  function pushAttempt(attempt) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, local: true };
+      return c.auth.getUser().then(function (u) {
+        var uid = u && u.data && u.data.user && u.data.user.id;
+        if (!uid) return { ok: false };
+        return c.from('attempts').upsert({
+          exercise_id: attempt.exerciseId,
+          student_id: uid,
+          started_at: attempt.startedAt || new Date().toISOString(),
+          passed_at: attempt.passedAt || null,
+          actions: attempt.actions || []
+        }, { onConflict: 'exercise_id,student_id' }).then(function (r) {
+          if (r.error) { fail('pushAttempt', r.error); return { ok: false }; }
+          return { ok: true };
+        });
+      });
+    }).catch(function (e) { fail('pushAttempt', e); return { ok: false }; });
+  }
+
+  window.SupabaseBackend = {
+    isConfigured: isConfigured,
+    getStatus: getStatus,
+    subscribe: subscribe,
+    getClient: getClient,
+    signUp: signUp,
+    signIn: signIn,
+    signOut: signOut,
+    resetPassword: resetPassword,
+    updatePassword: updatePassword,
+    currentProfile: currentProfile,
+    syncDown: syncDown,
+    pushExercise: pushExercise,
+    deleteExercise: deleteExercise,
+    pushAttempt: pushAttempt
+  };
+})();

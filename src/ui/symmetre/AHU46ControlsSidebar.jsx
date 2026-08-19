@@ -498,9 +498,10 @@ const AHU46ControlsSidebar = (() => {
       React.createElement(ReadOnlyRow, { label: 'Spill Damper', stateKey: 'spillDamperPosition', units: '%' }),
 
       // LL97 PANEL
-      window.LL97Panel
-        ? React.createElement(window.LL97Panel)
-        : null,
+      // Removed from here: this sidebar rendered it mid-panel, above the Alarm Reset
+      // and Reset sections, so on AHU-4-6 it sat in the middle while every other tab
+      // showed it last. App.jsx now injects it for every unit, which puts it at the
+      // bottom everywhere and drops the special case for this one.
 
       // FIRE ALARM SYSTEM
       React.createElement(SectionHeader, { title: 'Fire Alarm System' }),
@@ -512,13 +513,22 @@ const AHU46ControlsSidebar = (() => {
       // above the trip point — see the controller's own guard comment)
       // and every DPS-2..5 trip.
       React.createElement(SectionHeader, { title: 'Alarm Reset' }),
-      React.createElement('div', { className: 'px-2 py-1' },
-        React.createElement('button', {
-          className: 'px-3 py-1 text-[10px] bg-gray-200 border border-gray-400 rounded hover:bg-gray-300 text-gray-800 font-bold',
-          onClick: function() {
-            if (window.AHU46Controller) window.AHU46Controller.setValue('resetPressed', true);
-          }
-        }, 'RESET')
+      React.createElement('div', { className: 'px-2 py-2' },
+        // This unit really does latch: freezestat and the DPS-2..5 chain. The
+        // button sends the reset; the controller decides whether the condition
+        // has cleared enough for it to take.
+        window.ResetControls
+          ? React.createElement(window.ResetControls.AlarmResetButton, { controller: 'AHU46Controller' })
+          : null
+      ),
+
+      React.createElement(SectionHeader, { title: 'Reset' }),
+      React.createElement('div', { className: 'px-2 py-2' },
+        window.ResetControls
+          ? React.createElement(window.ResetControls.ResetAllButton, {
+              controller: 'AHU46Controller', faultEngine: 'AHU46FaultEngine'
+            })
+          : null
       )
     );
   }

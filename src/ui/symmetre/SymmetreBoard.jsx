@@ -454,6 +454,70 @@ const SymmetreBoard = (function () {
 
     const children = [];
 
+    // Simultaneous heating and cooling. A board-level banner, not an overlay chip —
+    // which is why it is kept OUT of `children`: for units with artView, children are
+    // wrapped in a scale+translate that pins chips to artwork coordinates, and a
+    // banner caught in that wrapper is scaled 18% larger and dragged off centre.
+    // Rendered as a sibling of artChild for the same reason artwork is.
+    //
+    // The curriculum teaches this fault explicitly (companionSlides slide 29 tells
+    // students to look for the amber warning), and the board previously showed no
+    // indication of it at all.
+    //
+    // Dehumidification is the legitimate exception: both coils open together is
+    // correct on a cold humid day. A unit that does not report the flag falls back to
+    // its return-air humidity rather than assuming the exception does not apply.
+    const dryEnoughToBeAFault = (function () {
+      if (typeof state.dehumidifying === 'boolean') return !state.dehumidifying;
+      if (typeof state.returnAirRH === 'number') return state.returnAirRH <= 52;
+      return true;
+    })();
+    const simulBanner = (state.phtValvePosition > 20 && state.chwValvePosition > 20 &&
+                         dryEnoughToBeAFault)
+      ? React.createElement('div', {
+          key: 'simul-heat-cool',
+          role: 'alert',
+          style: {
+            // Pinned to the TOP of the pane in screen coordinates. Bottom-anchoring
+            // put it at y 615 in a 540px viewport — the board pane is taller than the
+            // visible area, so the pane's bottom edge is below the fold. The pane's
+            // top edge is always visible, and sits well clear of the pill band (screen
+            // y 257+ on every unit).
+            //
+            // Screen coordinates rather than a board coordinate because every fixed y
+            // inside the drawing collided with some unit's pills: 236px on AHU-23-1,
+            // 150px on AHU-4-6 and 4-4. The boards place pills in different bands, and
+            // the zoomed unit shifts them again.
+            // Anchored to the pane's top-LEFT, not centred. Centring at any vertical
+            // position put it over some unit's pill stack: the pills sit centre-right
+            // on every board and a centred banner is wide enough to reach them. The
+            // left gutter is empty on all four units.
+            position: 'absolute', left: '14px', top: '14px',
+            display: 'flex',
+            pointerEvents: 'none', zIndex: 40
+          }
+        },
+          React.createElement('div', {
+            style: {
+              display: 'flex', alignItems: 'center', gap: '11px',
+              padding: '13px 26px', borderRadius: '8px',
+              background: 'linear-gradient(180deg,#e8912a,#d4761b)',
+              border: '1px solid #a8560f',
+              boxShadow: '0 6px 18px rgba(0,0,0,.34)',
+              color: '#fff', whiteSpace: 'nowrap',
+              // bms-blink, not bms-flash: that one is a steps(1) square wave to .15
+              // opacity tuned for a 16px icon, which reads as strobing at this size.
+              animation: 'bms-blink 1.6s ease-in-out infinite'
+            }
+          },
+            React.createElement('span', { style: { fontSize: '19px', lineHeight: 1 } }, '\u26a0'),
+            React.createElement('span', {
+              style: { fontSize: '15px', fontWeight: 800, letterSpacing: '.7px' }
+            }, 'SIMULTANEOUS HEATING AND COOLING')
+          )
+        )
+      : null;
+
     // Artwork is rendered outside `children` so a unit's artView wrapper scales
     // only the overlay — the SVG already carries that zoom in its own viewBox.
     const artChild = React.createElement('div', {
@@ -568,7 +632,10 @@ const SymmetreBoard = (function () {
                                     + cfg.artView.s + ')' },
               }, children)
             : children
-        )
+        ),
+        // Outside the scale transform: chrome over the board rather than part of the
+        // drawing, so it cannot collide with pills and does not shrink with the fit.
+        simulBanner
       ),
       openKey && window.PointDialog ? React.createElement(window.PointDialog, {
         unitId: unitId,

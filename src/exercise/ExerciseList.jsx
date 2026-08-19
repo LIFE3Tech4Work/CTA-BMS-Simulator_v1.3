@@ -85,7 +85,13 @@
       React.createElement('div', { style: { fontSize: '17px', fontWeight: 800, letterSpacing: '.3px' } },
         'My Exercises'),
       React.createElement('div', { style: { fontSize: '11.5px', color: '#9db0c8', marginTop: '3px' } },
-        'Signed in as ' + auth.operator),
+        // Named when the instructor has filled the roster in, so a student can
+        // confirm they are signed in as themselves rather than decoding a seat id.
+        // The seat id stays in the line, because that is what they typed to get in.
+        (window.StudentRoster && window.StudentRoster.isNamed(auth.operator))
+          ? 'Signed in as ' + window.StudentRoster.displayLong(auth.operator) +
+            '  (' + auth.operator + ')'
+          : 'Signed in as ' + auth.operator),
 
       !mine.length
         ? React.createElement('div', {
@@ -108,7 +114,16 @@
                     React.createElement('div', { style: { fontSize: '13.5px', fontWeight: 800 } }, ex.title),
                     React.createElement('div', {
                       style: { fontSize: '11px', color: '#9db0c8', marginTop: '2px' }
-                    }, ex.unitId + '  \u00b7  Goal: ' + ES.goalText(ex))
+                    }, ex.unitId + '  \u00b7  Goal: ' + ES.goalText(ex)),
+                    // Visible before starting, so a student knows which standard
+                    // the exercise is testing them against.
+                    (ex.goal && ex.goal.standard && window.ASHRAECriteria)
+                      ? React.createElement('div', {
+                          style: { marginTop: '4px', fontSize: '9.5px', fontWeight: 800,
+                                   letterSpacing: '.4px', color: '#7fd4e2' }
+                        }, window.ASHRAECriteria.badge(ex.goal.standard) +
+                           (ex.goal.criterionLabel ? '  \u00b7  ' + ex.goal.criterionLabel : ''))
+                      : null
                   ),
                   React.createElement('span', {
                     style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.3px',
@@ -190,6 +205,17 @@
       React.createElement('span', { style: { fontSize: '11.5px', fontWeight: 700 } }, ex.title),
       React.createElement('span', { style: { fontSize: '11px', opacity: .85 } },
         'Goal: ' + ES.goalText(ex)),
+      // The standard as its own chip, so a student working the unit can see the
+      // basis for the target without opening the brief again.
+      (ex.goal && ex.goal.standard && window.ASHRAECriteria)
+        ? React.createElement('span', {
+            title: ex.goal.citation || '',
+            style: { fontSize: '9.5px', fontWeight: 800, letterSpacing: '.4px',
+                     padding: '2px 6px', borderRadius: '3px', flexShrink: 0,
+                     background: 'rgba(127,212,226,.22)', border: '1px solid #4e9aa8',
+                     color: '#cfe6ea' }
+          }, window.ASHRAECriteria.badge(ex.goal.standard))
+        : null,
       React.createElement('span', {
         style: { fontSize: '11px', fontFamily: 'monospace', fontWeight: 700 }
       }, 'now ' + (res.value == null ? '\u2014' : (Math.round(res.value * 10) / 10) + unitLabel)),

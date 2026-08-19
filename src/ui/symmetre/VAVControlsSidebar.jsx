@@ -234,7 +234,19 @@ const VAVControlsSidebar = (() => {
       React.createElement(EditableRow, { zoneId: zoneId, label: 'Reheat Valve', stateKey: 'reheatValvePosition', units: '%', min: 0, max: 100 }),
       React.createElement(ReadOnlyRow, { zoneId: zoneId, label: 'Reheat Status', stateKey: 'reheatValveStatus', units: '' }),
       React.createElement(ReadOnlyRow, { zoneId: zoneId, label: 'Discharge Air Temp (from AHU)', stateKey: 'dischargeAirTemp', units: '°F' }),
-      React.createElement(ReadOnlyRow, { zoneId: zoneId, label: 'Leaving Air Temp', stateKey: 'leavingAirTemp', units: '°F' })
+      React.createElement(ReadOnlyRow, { zoneId: zoneId, label: 'Leaving Air Temp', stateKey: 'leavingAirTemp', units: '°F' }),
+
+      // RESET — the VAV tabs were the only ones without it, so a zone left with
+      // manual overrides had to be undone point by point. Zone-scoped: it releases
+      // THIS box, not every zone on the system.
+      React.createElement(SectionHeader, { title: 'Reset' }),
+      React.createElement('div', { className: 'px-2 py-2' },
+        window.ResetControls
+          ? React.createElement(window.ResetControls.ResetAllButton, {
+              controller: 'VAVController', zoneId: zoneId
+            })
+          : null
+      )
     );
   }
 
