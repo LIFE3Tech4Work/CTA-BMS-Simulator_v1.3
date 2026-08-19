@@ -58,6 +58,12 @@
     reheatValveStatus: { label: 'Reheat Valve Status', unit: '', kind: 'bi', dec: 0, bac: 'ReheatSts' },
     spaceTempCoolingSetpoint: { label: 'Zone Cooling Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 65, max: 85, step: 0.5, bac: 'ZoneClgSP' },
     spaceTempHeatingSetpoint: { label: 'Zone Heating Setpoint', unit: '°F', kind: 'sp', dec: 1, min: 60, max: 80, step: 0.5, bac: 'ZoneHtgSP' },
+    // Outdoor conditions. These have no board chip of their own — they live in the
+    // header's OA strip — but alarms reference them, so they need metadata or their
+    // Value column renders a bare unitless number.
+    oaTemperature:   { label: 'Outside Air Temperature', unit: '°F', kind: 'ai', dec: 1, min: -20, max: 120, bac: 'OATemp' },
+    oaRelHumidity:   { label: 'Outside Air Humidity', unit: '%RH', kind: 'ai', dec: 0, min: 0, max: 100, bac: 'OAHumid' },
+    oaEnthalpy:      { label: 'Outside Air Enthalpy', unit: 'BTU/lb', kind: 'ai', dec: 1, min: 0, max: 60, bac: 'OAEnthalpy' },
     oaCFM:           { label: 'Outside Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'OAFlow' },
     returnFanCFM:    { label: 'Return Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'RAFlow' },
     returnCFM:       { label: 'Return Air Flow', unit: 'CFM', kind: 'ai', dec: 0, min: 0, max: 14000, bac: 'RAFlow' },
@@ -251,10 +257,10 @@
       // and widening the gaps between device groups. The origin sits on the
       // header block's top-right corner so the unit title stays put and the
       // drawing grows down and to the left, into the empty space.
-      // The artwork zooms via its viewBox (285 120 1367 744); the overlay rides the
+      // The artwork zooms via its viewBox (225 120 1367 744); the overlay rides the
       // same mapping so chips, the fan block and pill stacks stay registered to
       // the drawing and grow with it. screen = (art - v) * s.
-      artView: { vx: 285, vy: 120, s: 1.18 },
+      artView: { vx: 225, vy: 120, s: 1.18 },
       chips: [
         ['preheatTemp',   'pill', 528,  380, null, 'left', 13],
         ['supplyAirTemp', 'pill', 738,  380, null, 'left', 13],

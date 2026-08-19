@@ -1,0 +1,133 @@
+/**
+ * StudentRoster.js — student identity for the six classroom seats
+ *
+ * The seats themselves (student_a … student_f) are sign-in credentials defined in
+ * auth/AuthContext.js. That is all the app knew about a student, so every screen
+ * that named one showed "student_c" — fine for a login, useless on an assignment
+ * list or a results table an instructor has to read.
+ *
+ * This holds the human record for each seat: first name, last name, email. The
+ * seat id stays the key, so nothing about assignment or grading changes — an
+ * exercise is still assigned to `student_c`; the roster only decides how that seat
+ * is DISPLAYED.
+ *
+ * Deliberately a thin store behind a small API. When the Supabase migration lands
+ * (docs/supabase-schema.sql), the profiles table already carries display_name and
+ * email per account, and this becomes a query against it rather than a rewrite of
+ * every screen that shows a name.
+ *
+ * No import/export — exposes window.StudentRoster.
+ */
+(function () {
+  'use strict';
+
+  var KEY = 'cta_student_roster';
+
+  function seats() {
+    // With a backend, the roster IS the signed-up accounts — real user ids, pulled
+    // down by syncDown. The six fixed seats are the offline fallback.
+    //
+    // This matters for assignment: an exercise assigned to "student_a" cannot reach
+    // a real Supabase account, because that seat id is not a user id. Returning the
+    // actual profile ids here is what lets the author dialog target real students.
+    var B = window.SupabaseBackend;
+    if (B && B.isConfigured()) {
+      var ids = Object.keys(read());
+      if (ids.length) return ids;
+    }
+    return (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||
+      ['student_a', 'student_b', 'student_c', 'student_d', 'student_e', 'student_f'];
+  }
+
+  function read() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+
+  function write(map) {
+    try { localStorage.setItem(KEY, JSON.stringify(map)); } catch (e) {}
+    listeners.forEach(function (fn) { try { fn(); } catch (e) {} });
+  }
+
+  var listeners = [];
+  function subscribe(fn) {
+    listeners.push(fn);
+    return function () { listeners = listeners.filter(function (f) { return f !== fn; }); };
+  }
+
+  /** The stored record for a seat, or an empty one. Never null, so callers need no guard. */
+  function get(seatId) {
+    var r = read()[seatId] || {};
+    return {
+      seatId: seatId,
+      firstName: r.firstName || '',
+      lastName: r.lastName || '',
+      email: r.email || ''
+    };
+  }
+
+  function set(seatId, fields) {
+    var map = read();
+    var cur = map[seatId] || {};
+    map[seatId] = {
+      firstName: fields.firstName !== undefined ? String(fields.firstName).trim() : (cur.firstName || ''),
+      lastName: fields.lastName !== undefined ? String(fields.lastName).trim() : (cur.lastName || ''),
+      email: fields.email !== undefined ? String(fields.email).trim() : (cur.email || '')
+    };
+    write(map);
+    return get(seatId);
+  }
+
+  function all() { return seats().map(get); }
+
+  /** True once someone has actually been entered for this seat. */
+  function isNamed(seatId) {
+    var r = get(seatId);
+    return !!(r.firstName || r.lastName);
+  }
+
+  /** "Ada Lovelace" if named, otherwise the seat id — never an empty string. */
+  function displayName(seatId) {
+    var r = get(seatId);
+    var full = (r.firstName + ' ' + r.lastName).trim();
+    return full || seatId;
+  }
+
+  /** "Ada Lovelace · ada@school.edu", falling back gracefully as fields are filled. */
+  function displayLong(seatId) {
+    var r = get(seatId);
+    var name = displayName(seatId);
+    return r.email ? name + ' \u00b7 ' + r.email : name;
+  }
+
+  /** Initials for a compact avatar; the seat letter when unnamed. */
+  function initials(seatId) {
+    var r = get(seatId);
+    if (r.firstName || r.lastName) {
+      return ((r.firstName[0] || '') + (r.lastName[0] || '')).toUpperCase();
+    }
+    var m = /_([a-z])$/i.exec(seatId);
+    return (m ? m[1] : '?').toUpperCase();
+  }
+
+  /** How many seats have a name on them — used to prompt the instructor once. */
+  function namedCount() {
+    return seats().filter(isNamed).length;
+  }
+
+  window.StudentRoster = {
+    KEY: KEY,
+    seats: seats,
+    get: get,
+    set: set,
+    all: all,
+    isNamed: isNamed,
+    displayName: displayName,
+    displayLong: displayLong,
+    initials: initials,
+    namedCount: namedCount,
+    subscribe: subscribe
+  };
+})();

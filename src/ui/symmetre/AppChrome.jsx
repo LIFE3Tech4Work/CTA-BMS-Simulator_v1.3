@@ -104,7 +104,13 @@ const SymmetreAppChrome = (function() {
 
     const handleMenuClick = useCallback(function(item) {
       if (item === 'Sign Off') {
-        // Clear auth state and navigate to auth screen
+        // Clear the Supabase session too, not just the app's own auth state. Without
+        // this a student's session token stays on the machine after they sign off —
+        // on a shared classroom computer that leaves their account reachable to
+        // whoever sits down next, and a later syncDown would pull their rows.
+        if (window.SupabaseBackend && window.SupabaseBackend.isConfigured()) {
+          try { window.SupabaseBackend.signOut(); } catch (e) {}
+        }
         if (window.setAuthState) {
           window.setAuthState({
             authenticated: false,
@@ -214,7 +220,18 @@ const SymmetreAppChrome = (function() {
       if (id === 'alarms') {
         window.location.hash = '#/alarms';
       } else if (id === 'reload') {
-        // Full simulation reset: jump to row 1 and reset all Manual points to Auto
+        // ─── Full simulation reset ───────────────────────────────────────────
+        // Previously this only reset AHU-4-4: the block hardcoded that unit's
+        // defaults and named its controller directly, so pressing ↻ while looking
+        // at AHU-4-6, 4-3 or 23-1 left every override on that unit untouched and
+        // the button appeared to do nothing. It also called a VAV method that does
+        // not exist (resetToDefaults — the real one is reset), and left an active
+        // weather override in place, so a "reset" simulator could still be sitting
+        // in hand-set January.
+        //
+        // Now driven by each controller's own clearModes(), which restores every
+        // point's pre-override value. Nothing is hardcoded per unit, so adding a
+        // unit does not silently fall out of the reset again.
         if (window.SimulationEngine) {
           // Reset to the seasonally-current moment rather than the fiscal-year
           // start, so a reset does not silently jump the class to July.
@@ -222,6 +239,13 @@ const SymmetreAppChrome = (function() {
             window.SimulationEngine.SEASONAL_START_DATE || window.SimulationEngine.BASE_DATE);
           window.SimulationEngine.pause();
         }
+
+        // Hand outdoor conditions back to the weather file before the units
+        // recalculate, so they settle against live weather rather than a held one.
+        if (window.WeatherOverride && window.WeatherOverride.release) {
+          window.WeatherOverride.release();
+        }
+
         // Reset PointRegistry-driven points to Auto mode
         if (window.PointRegistry && window.PointRegistry.points) {
           window.PointRegistry.points.forEach(function(point) {
@@ -231,49 +255,30 @@ const SymmetreAppChrome = (function() {
             window.PointRegistry.interpolate(1, 0);
           }
         }
-        // Reset AHU-4-4 formula-driven controller to starting values
-        (function() {
-          var ctrl = window.AHU44NewController;
-          if (!ctrl) return;
-          var defaults = {
-            runSchedule:             true,
-            systemStarting:          false,
-            startingTimeSetpoint:    240,
-            coolingCoilSetpoint:     60.0,
-            heatingCoilSetpoint:     55.0,
-            plenumMinSetpoint:       40.0,
-            lowOATLockout:           false,
-            enthalpyOKForEconomizer: false,
-            economizerMinPosition:   20,
-            minPositionFanSpeedLock: 5,
-            economizerTempControlSP: 58.0,
-            co2Sensor:               538,
-            co2Setpoint:             900,
-            minOAAirflowSetpoint:    4900,
-            fanSpeedSetpoint:        75,
-            fireAlarmShutdown:       false,
-            fireAlarmSmokePurge:     false,
-            interlockOn:             true,
-            exhaustFanOn:            true,
-            commonDamperOpen:        true,
-            freezePumpOn:            true,
-            oaDamperPosition:        20,
-          };
-          Object.keys(defaults).forEach(function(key) {
-            ctrl.setValue(key, defaults[key]);
+
+        // Every AHU, plus every fault engine that carries latched alarms.
+        ['AHU46Controller', 'AHU44NewController', 'AHU43Controller', 'AHU23Controller']
+          .forEach(function(name) {
+            var ctrl = window[name];
+            if (!ctrl) return;
+            if (ctrl.clearModes) ctrl.clearModes();
+            if (ctrl.recalculate) ctrl.recalculate();
           });
-          if (ctrl.clearModes) ctrl.clearModes();
-          ctrl.recalculate();
-          // Also clear fault engine alarms
-          var engine = window.AHU44NewFaultEngine;
-          if (engine && engine.reset) engine.reset();
-        })();
-        // Reset VAV controller manual overrides
+
+        ['AHU46FaultEngine', 'AHU44NewFaultEngine', 'AHU23FaultEngine', 'VAVFaultEngine', 'FaultEngine']
+          .forEach(function(name) {
+            var engine = window[name];
+            if (engine && engine.reset) engine.reset();
+          });
+
+        // VAV zones: clear overrides, restore seeded state, then re-pull discharge
+        // air from each zone's own upstream AHU now that the AHUs have settled.
         (function() {
           var ctrl = window.VAVController;
           if (!ctrl) return;
           if (ctrl.clearModes) ctrl.clearModes();
-          if (ctrl.resetToDefaults) ctrl.resetToDefaults();
+          if (ctrl.reset) ctrl.reset();
+          if (ctrl.syncFromUpstream) ctrl.syncFromUpstream();
         })();
       } else if (id === 'back') {
         window.history.back();

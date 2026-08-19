@@ -218,7 +218,7 @@
   </g>
   </svg>`;
 
-  var U23 = `<svg id="ahu-board" viewBox="285 120 1367 744" width="1613" height="878" style="position:absolute;left:0;top:0;pointer-events:none;" xmlns="http://www.w3.org/2000/svg" font-family="'Barlow','Segoe UI',system-ui,sans-serif">
+  var U23 = `<svg id="ahu-board" viewBox="225 120 1367 744" width="1613" height="878" style="position:absolute;left:0;top:0;pointer-events:none;" xmlns="http://www.w3.org/2000/svg" font-family="'Barlow','Segoe UI',system-ui,sans-serif">
 
   <defs>
     {{bgGrad}}
@@ -387,7 +387,7 @@
 
   <rect x="-200" y="-200" width="2200" height="1400" fill="url(#bgGrad)"/>
 
-  <g id="header" transform="translate(285,120) scale(0.8474576)">
+  <g id="header" transform="translate(225,120) scale(0.8474576)">
     <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">AHU-23-1</text>
     <text x="1606" y="72" font-size="14" font-weight="800" fill="#22406e" text-anchor="end">Service: Floor 23 Boiler Room Ventilation</text>
     <text x="1606" y="90" font-size="14" font-weight="800" fill="#22406e" text-anchor="end">Location: Floor 23 MER</text>
@@ -411,15 +411,15 @@
       <polygon points="530,414 541,402 817,402 806,414" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
       <path d="M506.5,457 L532,416.5 H803.5" fill="none" stroke="#ffffff" stroke-width="2.2" opacity="0.9"/>
     </g>
-    <polygon points="355,460 366,448 1311,448 1300,460" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
+    <polygon points="355,460 366,448 1251,448 1240,460" fill="url(#ductTop)" stroke="#6c7280" stroke-width="1.4"/>
     
     
     
-    <rect x="355" y="460" width="945" height="24" fill="url(#ductFront)" stroke="#6c7280" stroke-width="1.4"/>
-    <rect x="355" y="461.4" width="945" height="2.2" fill="#ffffff" opacity="0.95"/>
-    <rect x="355" y="478.6" width="945" height="2" fill="#9ba1ac" opacity="0.75"/>
+    <rect x="355" y="460" width="885" height="24" fill="url(#ductFront)" stroke="#6c7280" stroke-width="1.4"/>
+    <rect x="355" y="461.4" width="885" height="2.2" fill="#ffffff" opacity="0.95"/>
+    <rect x="355" y="478.6" width="885" height="2" fill="#9ba1ac" opacity="0.75"/>
     <polygon points="355,460 366,448 366,472 355,484" fill="url(#ductCap)" stroke="#6c7280" stroke-width="1.4"/>
-    <g><polygon points="1300,460 1311,448 1311,484 1300,484" fill="#c3c8d0"/><polygon points="1302.3,459.7 1308.8,452.6 1308.8,481.8 1302.3,481.8" fill="url(#mouthG)"/><polygon points="1300,460 1311,448 1311,484 1300,484" fill="none" stroke="#6c7280" stroke-width="1.4"/></g>
+    <g><polygon points="1240,460 1251,448 1251,484 1240,484" fill="#c3c8d0"/><polygon points="1242.3,459.7 1248.8,452.6 1248.8,481.8 1242.3,481.8" fill="url(#mouthG)"/><polygon points="1240,460 1251,448 1251,484 1240,484" fill="none" stroke="#6c7280" stroke-width="1.4"/></g>
     <g id="coil-1">
       <rect x="539" y="470" width="8" height="101" fill="url(#redPD)" stroke="#1c0c09" stroke-width="0.8"/>
       <rect x="549" y="470" width="8" height="196" fill="url(#redPL)" stroke="#1c0c09" stroke-width="0.8"/>
@@ -435,16 +435,16 @@
   <rect x="521.8" y="600" width="8" height="66" fill="url(#redPD)" stroke="#1c0c09" stroke-width="0.8"/><rect x="683.8" y="600" width="8" height="66" fill="url(#redPL)" stroke="#1c0c09" stroke-width="0.8"/><g id="preheat-pumps"><use href="#pumpL" transform="translate(525.8,600) rotate(90)"/><use href="#pumpL" transform="translate(687.8,600) rotate(90)"/></g>
 
   <g id="airflow23">
-    <path style="{{airStyle}}" d="M370 470 H394 M456 470 H524 M580 470 H683 M755 470 H946 M1074 470 H1297" fill="none" stroke="#5a86c8" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="2 18" opacity="0.72">
+    <path style="{{airStyle}}" d="M370 470 H394 M456 470 H524 M580 470 H683 M755 470 H946 M1074 470 H1237" fill="none" stroke="#5a86c8" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="2 18" opacity="0.72">
       <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1s" repeatCount="indefinite"></animate>
     </path>
   </g>
 
   <g id="airLabels" font-weight="800" fill="#5a6b84" font-size="14" letter-spacing="0.4">
-    <text x="292" y="454">OUTDOOR AIR</text>
-    <use href="#arrow" transform="translate(296,474)"/>
-    <text x="1317" y="454">SUPPLY AIR</text>
-    <use href="#arrow" transform="translate(1324,476)"/>
+    <text x="232" y="454">OUTDOOR AIR</text>
+    <use href="#arrow" transform="translate(236,474)"/>
+    <text x="1262" y="454">SUPPLY AIR</text>
+    <use href="#arrow" transform="translate(1269,476)"/>
   </g>
 
   <g id="equipment">

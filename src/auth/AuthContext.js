@@ -43,6 +43,21 @@
     if (account) {
       return { valid: true, securityLevel: account.securityLevel };
     }
+    // Self-registered accounts, created through the sign-up flow. Checked after
+    // the built-ins so a demo credential can never be shadowed by a registration.
+    // Accepts a username OR the email on the account, matching what the sign-on
+    // field asks for; the resolved username comes back so the session is named by
+    // the account rather than by whatever identifier was typed.
+    if (window.LocalAccounts) {
+      const local = window.LocalAccounts.signIn(operator, password);
+      if (local) {
+        return {
+          valid: true,
+          securityLevel: local.securityLevel,
+          operator: local.username || operator
+        };
+      }
+    }
     return { valid: false };
   }
 
@@ -98,7 +113,10 @@
   function login(operator, password) {
     var result = validateCredentials(operator, password);
     if (result.valid) {
-      return createAuthState(operator, result.securityLevel);
+      // Prefer the operator name the validator resolved. Signing in with an email
+      // would otherwise name the session by that email, and every screen keyed on
+      // the operator — assignments, attempts, the roster — would miss it.
+      return createAuthState(result.operator || operator, result.securityLevel);
     }
     return null;
   }

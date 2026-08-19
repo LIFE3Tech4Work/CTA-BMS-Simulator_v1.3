@@ -58,8 +58,22 @@
           style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px' }
         },
           React.createElement('span', {
-            style: { width: '78px', fontSize: '11.5px', fontWeight: 700, color: '#e8edf6' }
-          }, seat),
+            style: { width: '150px', flexShrink: 0, lineHeight: 1.25 },
+            title: (window.StudentRoster ? window.StudentRoster.displayLong(seat) + '  ' : '') + '(' + seat + ')'
+          },
+            React.createElement('div', {
+              style: { fontSize: '11.5px', fontWeight: 700, color: '#e8edf6',
+                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+            }, window.StudentRoster ? window.StudentRoster.displayName(seat) : seat),
+            // Email underneath rather than beside: it is the identifier an
+            // instructor uses to chase someone up, but not what they scan by.
+            (window.StudentRoster && window.StudentRoster.get(seat).email)
+              ? React.createElement('div', {
+                  style: { fontSize: '9.5px', color: '#7f8ea6', overflow: 'hidden',
+                           textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+                }, window.StudentRoster.get(seat).email)
+              : null
+          ),
           statusPill(status),
           React.createElement('span', { style: { fontSize: '11px', color: '#9db0c8', width: '86px' } },
             attempt ? (ES.durationOf(attempt) || '—') : '—'),
@@ -95,6 +109,58 @@
         ) : null
       );
     }
+
+    // Grouped by team when the exercise was assigned by group, flat otherwise.
+    // A team project reported as six unrelated rows tells an instructor nothing
+    // about how the teams did, which is the thing they need to know.
+    function studentRows(ex, seats) {
+      var G = window.StudentGroups;
+      var asg = ex.assignment;
+      if (!G || !asg || asg.mode !== 'groups' || !(asg.groupIds || []).length) {
+        return React.createElement('div', null,
+          seats.map(function (s) { return renderStudentRow(ex, s); }));
+      }
+      var placed = {};
+      var blocks = (asg.groupIds || []).map(function (gid) {
+        var g = G.get(gid);
+        if (!g) return null;
+        var members = g.seatIds.filter(function (s) { return seats.indexOf(s) >= 0; });
+        members.forEach(function (s) { placed[s] = true; });
+        var passed = members.filter(function (s) { return ES.statusFor(ex, s) === 'passed'; }).length;
+        return React.createElement('div', { key: gid },
+          React.createElement('div', {
+            style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                     padding: '5px 12px', background: '#141a26',
+                     borderTop: '1px solid #232c3d', borderBottom: '1px solid #232c3d' }
+          },
+            React.createElement('span', {
+              style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.4px', color: '#9db0c8' }
+            }, g.name.toUpperCase()),
+            React.createElement('span', {
+              style: { fontSize: '10px', fontWeight: 700,
+                       color: (members.length && passed === members.length) ? '#8ff0b5' : '#7f8ea6' }
+            }, passed + ' of ' + members.length + ' passed')
+          ),
+          members.map(function (s) { return renderStudentRow(ex, s); })
+        );
+      }).filter(Boolean);
+
+      // A seat in the list but in none of the chosen groups — happens if a
+      // student was removed from a team after the exercise was published.
+      var orphans = seats.filter(function (s) { return !placed[s]; });
+      if (orphans.length) {
+        blocks.push(React.createElement('div', { key: '__ungrouped' },
+          React.createElement('div', {
+            style: { padding: '5px 12px', background: '#141a26', fontSize: '10px',
+                     fontWeight: 800, letterSpacing: '.4px', color: '#e6a23c',
+                     borderTop: '1px solid #232c3d' }
+          }, 'NO LONGER IN A GROUP'),
+          orphans.map(function (s) { return renderStudentRow(ex, s); })
+        ));
+      }
+      return React.createElement('div', null, blocks);
+    }
+
 
     function renderExercise(ex) {
       var isOpen = openId === ex.id;
@@ -138,7 +204,7 @@
             style: { padding: '0 12px 10px', fontSize: '11.5px', color: '#c3cfdd', lineHeight: 1.45 }
           }, ex.brief) : null,
           seats.length
-            ? React.createElement('div', null, seats.map(function (s) { return renderStudentRow(ex, s); }))
+            ? studentRows(ex, seats)
             : React.createElement('div', {
                 style: { padding: '10px 12px', fontSize: '11px', color: '#9db0c8',
                          borderTop: '1px solid rgba(53,64,90,.6)' }

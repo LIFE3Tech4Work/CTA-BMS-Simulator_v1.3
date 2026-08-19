@@ -98,6 +98,12 @@
 
     var [title, setTitle] = useState('');
     var [brief, setBrief] = useState('');
+    // Which ASHRAE criterion the goal came from, or '' for a hand-set target.
+    // Picking one fills in the point, comparator and target below, resolved
+    // against this unit's live state — so a criterion follows the unit's own
+    // configuration (its minimum OA airflow, its active setpoint) instead of
+    // hardcoding a number that then disagrees with the sequence.
+    var [criterionId, setCriterionId] = useState('');
     var [goalKey, setGoalKey] = useState('supplyAirTemp');
     var [comparator, setComparator] = useState('within');
     var [target, setTarget] = useState('55');
@@ -106,7 +112,106 @@
     var [err, setErr] = useState(null);
     var [confirmedTrivial, setConfirmedTrivial] = useState(false);
 
-    var seats = (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) || [];
+    // Through the roster, so the picker lists real signed-up accounts when a backend
+    // is configured and the six fixed seats when it is not. Reading STUDENT_SEATS
+    // directly would have shown the fallback seats even with real students present —
+    // and an exercise assigned to "student_a" cannot reach a Supabase account.
+    var Roster = window.StudentRoster;
+    var Groups = window.StudentGroups;
+    var seats = (Roster && typeof Roster.seats === 'function')
+      ? Roster.seats()
+      : ((window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) || []);
+
+    // How this exercise is targeted. Seat-by-seat was the only option, so an
+    // instructor running team projects had to remember which students were Team A
+    // and tick them individually on every exercise — and nothing recorded that they
+    // were a team, so the results table could not group them either.
+    var [assignMode, setAssignMode] = useState('class');
+    var [assignGroups, setAssignGroups] = useState([]);
+    var [groupTick, setGroupTick] = useState(0);
+    var [newGroupName, setNewGroupName] = useState('');
+    var [managingGroups, setManagingGroups] = useState(false);
+    var [groupErr, setGroupErr] = useState('');
+    // Which group's name is being edited, and the draft. Teams get named in a hurry
+    // at the start of a session ("Team 1") and renamed once they pick something, so
+    // rename has to be reachable without deleting and rebuilding the membership.
+    var [renamingId, setRenamingId] = useState(null);
+    var [renameDraft, setRenameDraft] = useState('');
+
+    function startRename(g) {
+      setRenamingId(g.id);
+      setRenameDraft(g.name);
+      setGroupErr('');
+    }
+
+    function commitRename() {
+      if (!Groups || !renamingId) { setRenamingId(null); return; }
+      var next = renameDraft.trim();
+      var current = Groups.get(renamingId);
+      // An unchanged name is not an error, and neither is an empty box the operator
+      // clicked away from — both just close the editor.
+      if (next && current && next !== current.name) {
+        var clash = Groups.all().some(function (x) {
+          return x.id !== renamingId && x.name.toLowerCase() === next.toLowerCase();
+        });
+        if (clash) { setGroupErr('A group with that name already exists.'); return; }
+        Groups.rename(renamingId, next);
+        setGroupTick(groupTick + 1);
+      }
+      setGroupErr('');
+      setRenamingId(null);
+    }
+
+    var allGroups = Groups ? Groups.all() : [];
+
+    function toggleAssignGroup(id) {
+      setAssignGroups(function (prev) {
+        return prev.indexOf(id) >= 0
+          ? prev.filter(function (g) { return g !== id; })
+          : prev.concat([id]);
+      });
+    }
+
+    function addGroup() {
+      if (!Groups) return;
+      var res = Groups.create(newGroupName, []);
+      if (!res.ok) { setGroupErr(res.error); return; }
+      setGroupErr('');
+      setNewGroupName('');
+      setGroupTick(groupTick + 1);
+      // Newly created group is selected, since creating one mid-assignment means
+      // you intend to use it.
+      setAssignGroups(function (prev) { return prev.concat([res.group.id]); });
+    }
+
+    var assignment = {
+      mode: assignMode,
+      groupIds: assignGroups,
+      seatIds: assigned
+    };
+    var resolvedSeats = Groups ? Groups.resolveSeats(assignment) : assigned;
+
+    // Which seat's name/email fields are open, and a re-render tick so edits show
+    // immediately (the roster lives outside React state).
+    var [editingSeat, setEditingSeat] = useState(null);
+    var [rosterTick, setRosterTick] = useState(0);
+    var [draftFirst, setDraftFirst] = useState('');
+    var [draftLast, setDraftLast] = useState('');
+    var [draftEmail, setDraftEmail] = useState('');
+
+    function openSeatEditor(seat) {
+      var r = Roster ? Roster.get(seat) : { firstName: '', lastName: '', email: '' };
+      setDraftFirst(r.firstName); setDraftLast(r.lastName); setDraftEmail(r.email);
+      setEditingSeat(seat);
+    }
+
+    function saveSeatEditor() {
+      if (Roster && editingSeat) {
+        Roster.set(editingSeat, { firstName: draftFirst, lastName: draftLast, email: draftEmail });
+        setRosterTick(rosterTick + 1);
+      }
+      setEditingSeat(null);
+    }
 
     // Any numeric point on this unit can be the goal, named the way the rest of
     // the station names it rather than by state key.
@@ -145,6 +250,25 @@
       if (Math.abs(sp - t) <= (isFinite(tol) ? tol : 0.5)) return null;
       return sp;
     })();
+
+    var AC = window.ASHRAECriteria;
+    var criteria = (AC && AC.forState(state)) || [];
+    var criterion = (criterionId && AC) ? AC.byId(criterionId) : null;
+
+    function applyCriterion(id) {
+      setCriterionId(id);
+      if (!id || !AC) return;
+      var g = AC.goalFrom(id, state, metaFor((AC.byId(id).goalFor(state) || {}).key));
+      if (!g) return;
+      setGoalKey(g.key);
+      setComparator(g.comparator);
+      setTarget(String(g.target));
+      setTolerance(String(g.tolerance));
+    }
+
+    // Editing the fields by hand detaches the goal from its criterion, rather
+    // than leaving it citing a standard whose number no longer matches.
+    function detach() { if (criterionId) setCriterionId(''); }
 
     function metaFor(k) {
       var found = null;
@@ -186,11 +310,22 @@
         setup: snap.setup,
         weather: snap.weather,
         goal: {
+          // Criterion fields travel with the goal so the student brief and the
+          // instructor report can cite the same source the author chose.
+          standard: criterion ? criterion.standard : null,
+          criterionId: criterion ? criterion.id : null,
+          criterionLabel: criterion ? criterion.label : null,
+          citation: criterion ? criterion.citation : null,
+          basis: criterion ? criterion.basis : null,
           key: goalKey, label: gm.label, unit: gm.unit,
           comparator: comparator, target: Number(target),
           tolerance: Number(tolerance)
         },
-        assignedTo: assigned,
+        // Flattened seat list, so exercisesFor() and everything downstream is
+        // unchanged; the targeting travels beside it purely so the dialog and the
+        // results table can show what was chosen.
+        assignedTo: resolvedSeats,
+        assignment: assignment,
         published: !!publish
       });
       onClose(true);
@@ -280,7 +415,52 @@
 
           // Goal — the thing the simulator checks
           React.createElement('div', null,
-            React.createElement('div', { style: labelStyle() }, 'COMPLETE WHEN'),
+            // Criterion first, then the fields it fills. Choosing the standard
+            // before the number is the order the exercise is actually reasoned in.
+            React.createElement('div', { style: labelStyle() }, 'SUCCESS CRITERION'),
+            React.createElement('select', {
+              value: criterionId,
+              onChange: function (e) { applyCriterion(e.target.value); },
+              style: Object.assign({}, fieldStyle(), { width: '100%', marginTop: '3px' })
+            },
+              React.createElement('option', { value: '' }, 'Custom target (no standard)'),
+              ['62.1', '55', '90.1', '36'].map(function (std) {
+                var group = criteria.filter(function (c) { return c.standard === std; });
+                if (!group.length) return null;
+                return React.createElement('optgroup', {
+                  key: std, label: AC ? AC.badge(std) : std
+                }, group.map(function (c) {
+                  return React.createElement('option', { key: c.id, value: c.id }, c.label);
+                }));
+              })
+            ),
+
+            criterion ? React.createElement('div', {
+              style: { marginTop: '6px', padding: '7px 9px', borderRadius: '5px',
+                       background: 'rgba(53,189,211,.10)', border: '1px solid #2b6f7d',
+                       fontSize: '10.5px', lineHeight: 1.45, color: '#cfe6ea' }
+            },
+              React.createElement('div', {
+                style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }
+              },
+                React.createElement('span', {
+                  style: { fontWeight: 800, fontSize: '9.5px', letterSpacing: '.4px',
+                           padding: '1px 5px', borderRadius: '3px', color: '#0d2b31',
+                           background: '#7fd4e2' }
+                }, AC.badge(criterion.standard)),
+                // Requirement vs indicator, because presenting a rule of thumb as
+                // a code limit is exactly the wrong lesson for a trainee.
+                React.createElement('span', {
+                  style: { fontWeight: 800, fontSize: '9.5px', letterSpacing: '.4px',
+                           color: criterion.basis === 'requirement' ? '#8ff0b5' : '#ffd79a' }
+                }, criterion.basis === 'requirement' ? 'REQUIREMENT' : 'COMMON INDICATOR')
+              ),
+              React.createElement('div', { style: { fontWeight: 700, marginBottom: '3px' } },
+                criterion.citation),
+              React.createElement('div', { style: { color: '#9db0c8' } }, criterion.rationale)
+            ) : null,
+
+            React.createElement('div', { style: Object.assign({}, labelStyle(), { marginTop: '9px' }) }, 'COMPLETE WHEN'),
             React.createElement('div', {
               // A ± column between target and tolerance, so the row reads as
               // "is within 58 ± 3" instead of two unlabelled numbers side by side.
@@ -290,20 +470,20 @@
                          : '1fr auto 70px' }
             },
               React.createElement('select', {
-                value: goalKey, onChange: function (e) { setGoalKey(e.target.value); },
+                value: goalKey, onChange: function (e) { setGoalKey(e.target.value); detach(); },
                 style: fieldStyle()
               }, goalOptions.map(function (o) {
                 return React.createElement('option', { key: o.key, value: o.key }, o.label);
               })),
               React.createElement('select', {
-                value: comparator, onChange: function (e) { setComparator(e.target.value); },
+                value: comparator, onChange: function (e) { setComparator(e.target.value); detach(); },
                 style: fieldStyle()
               }, Object.keys(ES.COMPARATORS).map(function (c) {
                 return React.createElement('option', { key: c, value: c }, ES.COMPARATORS[c].label);
               })),
               React.createElement('input', {
                 type: 'number', step: 'any', value: target, title: 'Target value',
-                onChange: function (e) { setTarget(e.target.value); }, style: fieldStyle()
+                onChange: function (e) { setTarget(e.target.value); detach(); }, style: fieldStyle()
               }),
               comparator === 'within'
                 ? React.createElement('span', {
@@ -347,20 +527,206 @@
           // Assignment
           React.createElement('div', null,
             React.createElement('div', { style: labelStyle() }, 'ASSIGN TO'),
-            React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' } },
+
+            // Who gets it, before which seats. Three modes, because "the whole
+            // class", "Team A and Team B" and "these two students" are different
+            // intentions and only the last one was expressible before.
+            React.createElement('div', {
+              style: { display: 'flex', gap: '4px', marginTop: '5px', marginBottom: '7px' }
+            },
+              [['class', 'Whole class'], ['groups', 'Groups'], ['students', 'Individuals']]
+                .map(function (m) {
+                  var on = assignMode === m[0];
+                  return React.createElement('button', {
+                    key: m[0], type: 'button',
+                    onClick: function () { setAssignMode(m[0]); },
+                    style: {
+                      flex: 1, padding: '5px 4px', borderRadius: '5px', fontSize: '10.5px',
+                      fontWeight: 800, letterSpacing: '.2px', cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      background: on ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
+                      border: '1px solid ' + (on ? '#2f7a52' : '#46536b'),
+                      color: on ? '#fff' : '#c3cfdd'
+                    }
+                  }, m[1]);
+                })
+            ),
+
+            // ── Whole class ────────────────────────────────────────────────────
+            assignMode === 'class' ? React.createElement('div', {
+              style: { fontSize: '10.5px', color: '#9db0c8', lineHeight: 1.45,
+                       padding: '7px 9px', borderRadius: '5px', background: '#141a26',
+                       border: '1px solid #38445c' }
+            }, 'Every student seat gets this exercise. Nothing to keep in sync as the roster changes.') : null,
+
+            // ── Groups ─────────────────────────────────────────────────────────
+            assignMode === 'groups' ? React.createElement('div', null,
+              allGroups.length === 0
+                ? React.createElement('div', {
+                    style: { fontSize: '10.5px', color: '#9db0c8', lineHeight: 1.45, marginBottom: '6px' }
+                  }, 'No groups yet. Name one below, then add students to it.')
+                : React.createElement('div', {
+                    style: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '6px' }
+                  },
+                    allGroups.map(function (g) {
+                      var on = assignGroups.indexOf(g.id) >= 0;
+                      return React.createElement('button', {
+                        key: g.id, type: 'button',
+                        onClick: function () { toggleAssignGroup(g.id); },
+                        title: g.seatIds.length
+                          ? g.seatIds.map(function (s) {
+                              return Roster ? Roster.displayName(s) : s;
+                            }).join(', ')
+                          : 'This group has no students in it yet',
+                        style: {
+                          padding: '4px 10px', borderRadius: '999px', fontSize: '11px',
+                          fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                          background: on ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
+                          border: '1px solid ' + (on ? '#2f7a52' : '#46536b'),
+                          // An empty group is called out rather than silently
+                          // assigning an exercise to nobody.
+                          color: on ? '#fff' : (g.seatIds.length ? '#c3cfdd' : '#e6a23c')
+                        }
+                      }, Groups.label(g));
+                    })
+                  ),
+
+              React.createElement('button', {
+                type: 'button',
+                onClick: function () { setManagingGroups(!managingGroups); },
+                style: { background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                         fontSize: '10.5px', color: '#6fd3e8', fontFamily: 'inherit' }
+              }, managingGroups ? 'Done managing groups' : 'Manage groups'),
+
+              managingGroups ? React.createElement('div', {
+                style: { marginTop: '7px', padding: '9px', borderRadius: '6px',
+                         background: '#141a26', border: '1px solid #38445c' }
+              },
+                React.createElement('div', { style: { display: 'flex', gap: '5px', marginBottom: '8px' } },
+                  React.createElement('input', {
+                    value: newGroupName, placeholder: 'New group name, e.g. Team A',
+                    onChange: function (e) { setNewGroupName(e.target.value.slice(0, 40)); },
+                    onKeyDown: function (e) { if (e.key === 'Enter') { e.preventDefault(); addGroup(); } },
+                    style: Object.assign({}, fieldStyle(), { flex: 1 })
+                  }),
+                  React.createElement('button', {
+                    type: 'button', onClick: addGroup,
+                    style: { padding: '5px 11px', borderRadius: '5px', fontSize: '10.5px',
+                             fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+                             border: '1px solid #2f7a52', color: '#fff',
+                             background: 'linear-gradient(180deg,#3f8f5a,#2d7346)' }
+                  }, 'ADD')
+                ),
+                groupErr ? React.createElement('div', {
+                  style: { fontSize: '10px', color: '#ff8a7e', marginBottom: '7px' }
+                }, groupErr) : null,
+
+                allGroups.map(function (g) {
+                  return React.createElement('div', {
+                    key: g.id,
+                    style: { marginBottom: '9px', paddingBottom: '8px',
+                             borderBottom: '1px solid #232c3d' }
+                  },
+                    React.createElement('div', {
+                      style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                               marginBottom: '4px' }
+                    },
+                      renamingId === g.id
+                        ? React.createElement('input', {
+                            value: renameDraft,
+                            autoFocus: true,
+                            onChange: function (e) { setRenameDraft(e.target.value.slice(0, 40)); },
+                            onKeyDown: function (e) {
+                              if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+                              if (e.key === 'Escape') { setRenamingId(null); setGroupErr(''); }
+                            },
+                            onBlur: commitRename,
+                            style: Object.assign({}, fieldStyle(), { flex: 1, marginRight: '6px' })
+                          })
+                        : React.createElement('button', {
+                            type: 'button',
+                            onClick: function () { startRename(g); },
+                            title: 'Rename this group',
+                            style: { background: 'none', border: 'none', padding: 0,
+                                     cursor: 'pointer', fontFamily: 'inherit',
+                                     fontSize: '10.5px', fontWeight: 800, color: '#e8edf6',
+                                     textAlign: 'left' }
+                          }, g.name + '  \u270e'),
+                      React.createElement('button', {
+                        type: 'button',
+                        onClick: function () {
+                          Groups.remove(g.id);
+                          setAssignGroups(function (p) { return p.filter(function (x) { return x !== g.id; }); });
+                          setGroupTick(groupTick + 1);
+                        },
+                        title: 'Delete this group',
+                        style: { background: 'none', border: 'none', cursor: 'pointer',
+                                 color: '#7f8ea6', fontSize: '11px', fontFamily: 'inherit' }
+                      }, 'Remove')
+                    ),
+                    // Membership edited right here, so building a team and
+                    // assigning to it is one pass rather than two screens.
+                    React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px' } },
+                      seats.map(function (seat) {
+                        var inGroup = g.seatIds.indexOf(seat) >= 0;
+                        return React.createElement('button', {
+                          key: seat, type: 'button',
+                          onClick: function () {
+                            Groups.toggleSeat(g.id, seat);
+                            setGroupTick(groupTick + 1);
+                          },
+                          style: {
+                            padding: '3px 8px', borderRadius: '999px', fontSize: '10px',
+                            fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                            background: inGroup ? 'rgba(63,143,90,.28)' : '#1b2230',
+                            border: '1px solid ' + (inGroup ? '#3f8f5a' : '#46536b'),
+                            color: inGroup ? '#8ff0b5' : '#9db0c8'
+                          }
+                        }, Roster ? Roster.displayName(seat) : seat);
+                      })
+                    )
+                  );
+                })
+              ) : null
+            ) : null,
+
+            // ── Individuals ────────────────────────────────────────────────────
+            // Names rather than seat ids: an instructor picking who gets an
+            // exercise is thinking about people, not credentials. The seat id is
+            // still what gets assigned — the roster only changes the label. Each
+            // chip carries a pencil to fill in a real name and email once.
+            assignMode === 'students' ? React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' } },
               seats.map(function (seat) {
                 var on = assigned.indexOf(seat) >= 0;
-                return React.createElement('button', {
-                  key: seat, type: 'button',
+                var named = Roster ? Roster.isNamed(seat) : false;
+                var label = Roster ? Roster.displayName(seat) : seat;
+                return React.createElement('span', {
+                  key: seat,
+                  style: { display: 'inline-flex', alignItems: 'stretch', borderRadius: '999px',
+                           overflow: 'hidden', border: '1px solid ' + (on ? '#2f7a52' : '#46536b'),
+                           background: on ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230' }
+                },
+                React.createElement('button', {
+                  type: 'button',
                   onClick: function () { toggleSeat(seat); },
+                  title: Roster ? Roster.displayLong(seat) + '  (' + seat + ')' : seat,
                   style: {
-                    padding: '4px 9px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
-                    fontFamily: 'inherit', cursor: 'pointer',
-                    border: '1px solid ' + (on ? '#3f8f5a' : '#3a4560'),
-                    background: on ? 'rgba(63,143,90,.28)' : '#242e42',
-                    color: on ? '#8ff0b5' : '#c3cfdd'
+                    padding: '4px 4px 4px 10px', fontSize: '11px', fontWeight: 700,
+                    fontFamily: 'inherit', cursor: 'pointer', border: 'none',
+                    background: 'transparent',
+                    color: on ? '#fff' : '#c3cfdd'
                   }
-                }, seat);
+                // An unnamed seat still shows its id, so it is obvious which ones
+                // have not been filled in yet.
+                }, named ? label : seat.replace('student_', 'Student ').toUpperCase()),
+                React.createElement('button', {
+                  type: 'button',
+                  onClick: function (e) { e.stopPropagation(); openSeatEditor(seat); },
+                  title: 'Set this student\'s name and email',
+                  style: { padding: '4px 8px 4px 4px', fontSize: '10px', border: 'none',
+                           background: 'transparent', cursor: 'pointer',
+                           color: on ? 'rgba(255,255,255,.75)' : '#7f8ea6' }
+                }, '\u270e'));
               }),
               React.createElement('button', {
                 type: 'button',
@@ -371,7 +737,66 @@
                   background: 'transparent', color: '#9db0c8'
                 }
               }, assigned.length === seats.length ? 'Clear all' : 'All')
-            )
+            ) : null,
+
+            // Who this actually reaches, resolved from whichever mode is chosen.
+            // Shown because "Groups: Team A" is not an answer to "will this land
+            // on anybody" — an empty team assigns to nobody, silently.
+            React.createElement('div', {
+              style: { marginTop: '8px', fontSize: '10px', lineHeight: 1.45,
+                       color: resolvedSeats.length ? '#8ff0b5' : '#e6a23c' }
+            }, resolvedSeats.length
+                ? (Groups ? Groups.describe(assignment) + '  \u00b7  ' : '') +
+                  resolvedSeats.length + ' student' + (resolvedSeats.length === 1 ? '' : 's') +
+                  ' will see this'
+                : 'Nobody will see this yet \u2014 pick a group with students in it, or choose individuals.'),
+
+            editingSeat ? React.createElement('div', {
+              style: { marginTop: '8px', padding: '9px', borderRadius: '6px',
+                       background: '#141a26', border: '1px solid #38445c' }
+            },
+              React.createElement('div', {
+                style: { fontSize: '9.5px', fontWeight: 800, letterSpacing: '.4px',
+                         color: '#9db0c8', marginBottom: '6px' }
+              }, 'WHO IS ' + editingSeat.replace('student_', 'STUDENT ').toUpperCase() + '?'),
+              React.createElement('div', {
+                style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }
+              },
+                React.createElement('input', {
+                  value: draftFirst, placeholder: 'First name',
+                  onChange: function (e) { setDraftFirst(e.target.value); },
+                  style: fieldStyle()
+                }),
+                React.createElement('input', {
+                  value: draftLast, placeholder: 'Last name',
+                  onChange: function (e) { setDraftLast(e.target.value); },
+                  style: fieldStyle()
+                })
+              ),
+              React.createElement('input', {
+                value: draftEmail, placeholder: 'Email address', type: 'email',
+                onChange: function (e) { setDraftEmail(e.target.value); },
+                style: Object.assign({}, fieldStyle(), { width: '100%', marginTop: '5px' })
+              }),
+              React.createElement('div', { style: { display: 'flex', gap: '5px', marginTop: '7px' } },
+                React.createElement('button', {
+                  type: 'button', onClick: function () { setEditingSeat(null); },
+                  style: { flex: 1, padding: '5px', borderRadius: '5px', fontSize: '10.5px',
+                           fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+                           border: '1px solid #46536b', background: '#1b2230', color: '#c3cfdd' }
+                }, 'CANCEL'),
+                React.createElement('button', {
+                  type: 'button', onClick: saveSeatEditor,
+                  style: { flex: 1, padding: '5px', borderRadius: '5px', fontSize: '10.5px',
+                           fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+                           border: '1px solid #2f7a52', color: '#fff',
+                           background: 'linear-gradient(180deg,#3f8f5a,#2d7346)' }
+                }, 'SAVE')
+              ),
+              React.createElement('div', {
+                style: { fontSize: '9px', color: '#6f7f97', marginTop: '6px', lineHeight: 1.4 }
+              }, 'Sign-in stays ' + editingSeat + ' \u2014 this only changes how they are named on assignment lists and results.')
+            ) : null
           ),
 
           err ? React.createElement('div', {
@@ -436,15 +861,50 @@
     // decorative.
     var [count, setCount] = useState(0);
     useEffect(function () {
-      if (!armed || !window.ExerciseStore || !unitId) return;
-      function tick() {
-        var s = window.ExerciseStore.snapshot(unitId);
-        setCount(Object.keys(s.setup).length);
+      if (!armed || !window.ExerciseStore) return;
+
+      // The unit is resolved INSIDE the tick, not captured from the render that
+      // started this effect. If the banner mounts before the route settles — arming
+      // authoring and then navigating, or arming on a bare '#/symmetre' — a captured
+      // unit id would leave this counting changes on the wrong unit forever, which
+      // reads exactly like the count being frozen at zero.
+      function currentUnit() {
+        var m = /#\/symmetre\/([^/?]+)/.exec(window.location.hash || '');
+        return m ? decodeURIComponent(m[1]) : (props.unitId || 'AHU-4-4');
       }
+
+      function tick() {
+        var u = currentUnit();
+        if (!u) return;
+        try {
+          var s = window.ExerciseStore.snapshot(u);
+          setCount(Object.keys(s.setup).length);
+        } catch (e) {}
+      }
+
       tick();
-      var iv = setInterval(tick, 1200);
-      return function () { clearInterval(iv); };
-    }, [armed, unitId]);
+
+      // Recompute the moment a value actually changes. The controllers already
+      // notify every subscriber on setValue, so this is the real signal — the
+      // interval below is only a backstop for the things that move state without
+      // going through a controller (a weather override, PointRegistry).
+      var unsubs = [];
+      ['AHU46Controller', 'AHU44NewController', 'AHU43Controller', 'AHU23Controller',
+       'VAV4402Controller', 'VAV0203Controller'].forEach(function (name) {
+        var c = window[name];
+        if (!c || typeof c.subscribe !== 'function') return;
+        try {
+          var off = c.subscribe(tick);
+          if (typeof off === 'function') unsubs.push(off);
+        } catch (e) {}
+      });
+
+      var iv = setInterval(tick, 1000);
+      return function () {
+        clearInterval(iv);
+        unsubs.forEach(function (off) { try { off(); } catch (e) {} });
+      };
+    }, [armed, unitId, props.unitId]);
 
     useEffect(function () {
       if (!saved) return;
