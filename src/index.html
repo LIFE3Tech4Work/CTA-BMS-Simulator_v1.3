@@ -58,6 +58,19 @@
     @keyframes dashmove { to { stroke-dashoffset: -40; } }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes bms-blink { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+    /* Alarm-icon blink. AlarmIcon.jsx appends `animate-bms-flash` for every state
+       the SME legend calls "blinking"; that looks like a Tailwind arbitrary
+       utility, but this page loads a PREBUILT Tailwind and the JIT config script
+       does not run, so no animate-* utility can be generated and the class was
+       resolving to nothing at all. Every "blinking" icon therefore rendered
+       static, which made filled-blinking and filled-steady identical and defeated
+       the legend. Defined here as a real rule instead.
+
+       A hard on/off rather than the softer bms-blink pulse: at 16px an opacity
+       dip to .4 is easy to miss, and the whole point is that an unacknowledged
+       alarm is unmissable. steps(1, end) gives a square wave at ~1Hz. */
+    @keyframes bms-flash { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .15; } }
+    .animate-bms-flash { animation: bms-flash 1s steps(1, end) infinite; }
     @keyframes bms-ring {
       0%, 100% { box-shadow: 0 0 0 2px #e0342b; }
       50% { box-shadow: 0 0 0 4px rgba(224,52,43,.35); }
@@ -314,7 +327,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Auth layer — must load before App.jsx -->
+  <!-- Runtime configuration. server.js generates this from Railway environment
+       variables (SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY), so the credentials stay
+       out of the repository. Declared first so the object always exists: the file is
+       absent in a plain static preview, and a missing CTA_CONFIG would otherwise
+       read as "unconfigured" only by luck. Relative path, not /config.js, so it
+       resolves whether the app is served from the root or a subdirectory. -->
+  <script>window.CTA_CONFIG = window.CTA_CONFIG || { supabaseUrl: '', supabasePublishableKey: '' };</script>
+  <script src="config.js"></script>
+  <script src="auth/SupabaseBackend.js"></script>
+  <script src="auth/LocalAccounts.js"></script>
   <script src="auth/AuthContext.js"></script>
+  <script src="auth/ResetPassword.jsx" type="text/babel"></script>
   <script src="auth/SignOn.jsx"></script>
 
   <!-- Shared UI components — load before screen-level components -->
@@ -348,12 +372,12 @@
   <script type="text/babel" src="ui/symmetre/AHU46ImageOverlay.jsx"></script>
   <script type="text/babel" src="ui/symmetre/AHU46PointDetail.jsx"></script>
   <script type="text/babel" src="ui/symmetre/AHU46VectorOverlay.jsx"></script>
+  <script type="text/babel" src="ui/symmetre/ResetControls.jsx"></script>
   <script type="text/babel" src="ui/symmetre/AHU46ControlsSidebar.jsx"></script>
   <script type="text/babel" src="ui/symmetre/VAVControlsSidebar.jsx"></script>
   <script type="text/babel" src="ui/symmetre/VAVGraphic.jsx"></script>
   <script type="text/babel" src="ui/symmetre/AHU23Graphic.jsx"></script>
   <script type="text/babel" src="ui/symmetre/AHU23ControlsSidebar.jsx"></script>
-  <script type="text/babel" src="ui/symmetre/SimultaneousHeatCool.jsx"></script>
   <script type="text/babel" src="ui/symmetre/LL97Panel.jsx"></script>
   <script type="text/babel" src="ui/symmetre/SMEQAForm.jsx"></script>
   <script type="text/babel" src="ui/symmetre/AppChrome.jsx"></script>
@@ -384,6 +408,9 @@
   <script src="simulation/Engine.js"></script>
   <script src="simulation/TMY3Projector.js"></script>
   <script src="simulation/WeatherOverride.js"></script>
+  <script src="exercise/StudentGroups.js"></script>
+  <script src="exercise/StudentRoster.js"></script>
+  <script src="exercise/ashraeCriteria.js"></script>
   <script src="exercise/ExerciseStore.js"></script>
   <script src="simulation/FaultEngine.js"></script>
   <script src="simulation/LL97Accumulator.js"></script>

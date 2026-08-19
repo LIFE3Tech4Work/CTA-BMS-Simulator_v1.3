@@ -80,6 +80,12 @@ function parseRoute(hash) {
   if (parts[0] === 'instructor') {
     return { screen: 'instructor', params: {} };
   }
+  // The route an emailed password-reset link lands on. Supabase puts the recovery
+  // token in the URL and the SDK exchanges it for a session, so this page only has
+  // to collect the new password. Reachable without being signed in, by definition.
+  if (parts[0] === 'reset') {
+    return { screen: 'reset', params: {} };
+  }
   if (parts[0] === 'exercises') {
     return { screen: 'exercises', params: {} };
   }
@@ -141,9 +147,11 @@ function SymmetreScreen({ params }) {
               : (window.ControlsSidebar
                 ? React.createElement(window.ControlsSidebar, { ahuId: params.ahuId || 'AHU-4-4' })
                 : null),
-            // LL97 Panel at bottom of sidebar — AHU-4-6 sidebar includes it
-            // directly via window.LL97Panel; all other tabs inject it here
-            (params.ahuId !== 'AHU-4-6' && window.LL97Panel)
+            // LL97 panel, last in every sidebar. AHU-4-6 used to render it inside its
+            // own sidebar instead, which put it above that panel's reset sections while
+            // every other tab had it at the bottom. Injected here for all units so the
+            // placement is the same on every tab.
+            window.LL97Panel
               ? React.createElement(window.LL97Panel, null)
               : null
           ),
@@ -168,12 +176,11 @@ function SymmetreScreen({ params }) {
                 : React.createElement('div', { className: 'text-center' },
                     React.createElement('h1', { className: 'text-2xl font-bold' }, 'SymmetrE Station'),
                     React.createElement('p', { className: 'text-gray-400 mt-2' }, 'AHU: ' + (params.ahuId || 'AHU-4-4'))
-                  )),
-            (window.SimultaneousHeatCool &&
-           params.ahuId.indexOf('VAV') !== 0 &&
-           params.ahuId !== 'AHU-4-6')
-              ? React.createElement(window.SimultaneousHeatCool, { ahuId: params.ahuId || 'AHU-4-4' })
-              : null
+                  ))
+            // The simultaneous heating/cooling banner used to be mounted here, from
+            // the legacy overlay era — and excluded on AHU-4-6, so the unit the
+            // curriculum teaches this fault on could never show it. SymmetreBoard now
+            // renders it for every unit from live controller state.
           )
         )
       )
@@ -361,15 +368,30 @@ function Router() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // If not authenticated and trying to access a non-auth route, redirect to auth
+  // Screens reachable without signing in. The reset route is the reason this is a
+  // list rather than a single comparison: an emailed password-reset link is only ever
+  // clicked by someone who CANNOT sign in, so bouncing them to the sign-on screen is
+  // the exact dead end the route exists to avoid.
+  //
+  // Note this guard runs as an effect, independent of the render switch below —
+  // ordering the switch cases does not exempt anything from it.
+  const PUBLIC_SCREENS = { auth: true, reset: true };
+
+  // If not authenticated and trying to access a gated route, redirect to auth
   useEffect(() => {
-    if (!auth.authenticated && route.screen !== 'auth') {
+    if (!auth.authenticated && !PUBLIC_SCREENS[route.screen]) {
       window.location.hash = '#/auth';
     }
   }, [auth.authenticated, route.screen]);
 
   // Render the appropriate screen based on the current route
   switch (route.screen) {
+    // Before the auth gate on purpose: the whole point of a reset link is that it
+    // works for someone who cannot sign in.
+    case 'reset':
+      return window.ResetPassword
+        ? React.createElement(window.ResetPassword, null)
+        : React.createElement('div', { className: 'p-6 text-gray-300' }, 'Password reset unavailable.');
     case 'symmetre':
       return React.createElement(SymmetreScreen, { params: route.params });
     case 'ebi':

@@ -340,10 +340,27 @@
   }
 
   /**
+   * Release EVERY override on ONE zone, restoring it to its seeded state. Used by
+   * the panel's Reset All to Defaults, which is zone-scoped — reset() below wipes
+   * every zone at once and would take an unrelated box down with it.
+   */
+  function clearModes(zoneId) {
+    if (!zoneModes[zoneId]) return;
+    var z = null;
+    for (var i = 0; i < ZONES.length; i++) if (ZONES[i].id === zoneId) { z = ZONES[i]; break; }
+    if (!z) return;
+    zoneModes[zoneId] = {};
+    zoneStates[zoneId] = seededState(z);
+    // Discharge air belongs to the upstream AHU, not to this box, so it is pulled
+    // back in rather than left at the seeded default.
+    if (typeof syncFromUpstream === 'function') syncFromUpstream();
+    recalculate(zoneId);
+  }
+
+  /**
    * Reset all zones to default state. For tests / scenario changes.
    */
-  function reset() {
-    ZONES.forEach(function(z) {
+  function reset() {    ZONES.forEach(function(z) {
       zoneStates[z.id] = seededState(z);
       zoneModes[z.id] = {};
     });
@@ -395,6 +412,7 @@
     getZoneIds: getZoneIds,
     getZoneInfo: getZoneInfo,
     reset: reset,
+    clearModes: clearModes,
     REHEAT_MAX_RISE: REHEAT_MAX_RISE
   };
 

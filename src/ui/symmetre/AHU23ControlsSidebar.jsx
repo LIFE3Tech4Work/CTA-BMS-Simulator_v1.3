@@ -348,15 +348,16 @@ const AHU23ControlsSidebar = (() => {
       React.createElement(SectionHeader, { title: 'Fire Alarm' }),
       React.createElement(ToggleRow, { label: 'Fire Alarm Shutdown Signal', stateKey: 'fireAlarmShutdown', onLabel: 'ON', offLabel: 'OFF' }),
 
-      // ALARM RESET
-      React.createElement(SectionHeader, { title: 'Alarm Reset' }),
-      React.createElement('div', { className: 'flex justify-center py-3' },
-        React.createElement('button', {
-          className: 'px-5 py-1 text-[10px] font-bold bg-gray-100',
-          style: { minWidth: '100px' },
-          onClick: function() { /* Alarm reset placeholder */ }
-        }, 'RESET')
-      ),
+      // ALARM RESET — was an empty placeholder: the handler was a comment, so the
+      // button did nothing at all. Unlike AHU-4-6, this unit carries no latched
+      // safety trip (no freezestat, no DPS chain), so there is no trip to clear;
+      // what a reset can honestly do here is release every point this unit holds
+      // in Manual and let the sequence take back over. Labelled for what it does
+      // rather than left implying an alarm latch that does not exist.
+      // Reset lives at the END of this panel, not here. It was replaced in place
+      // where this unit's old mid-panel RESET button happened to sit, which left it
+      // fourth from the top with ~1,100px of controls below it while every other tab
+      // had it last. See the bottom of this element list.
 
       // ════════════════════════════════════════════════════════════════════════
       // ENGINEERING CONTROLS (for training — editable setpoints)
@@ -406,7 +407,20 @@ const AHU23ControlsSidebar = (() => {
       React.createElement(ReadOnlyRow, { label: 'CHW Valve (V-2)', stateKey: 'chwValvePosition', units: '%' }),
       React.createElement(ReadOnlyRow, { label: 'PHT Valve (V-1)', stateKey: 'phtValvePosition', units: '%' }),
       React.createElement(ReadOnlyRow, { label: 'Supply Air Temp', stateKey: 'supplyAirTemp', units: '°F' }),
-      React.createElement(ReadOnlyRow, { label: 'Mixed Air Temp', stateKey: 'mixedAirTemp', units: '°F' })
+      React.createElement(ReadOnlyRow, { label: 'Mixed Air Temp', stateKey: 'mixedAirTemp', units: '°F' }),
+
+      // RESET — last section, matching every other unit panel. App.jsx appends the
+      // LL97 panel after the sidebar, so that still lands below this.
+      React.createElement(SectionHeader, { title: 'Reset' }),
+      React.createElement('div', { className: 'px-2 py-2' },
+        // No freezestat and no DPS chain on this unit, so there is no latched trip
+        // to clear — only overrides to release. No ALARM RESET here for that reason.
+        window.ResetControls
+          ? React.createElement(window.ResetControls.ResetAllButton, {
+              controller: 'AHU23Controller'
+            })
+          : null
+      )
     );
   }
 

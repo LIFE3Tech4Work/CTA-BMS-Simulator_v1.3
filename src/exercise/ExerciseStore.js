@@ -131,12 +131,19 @@
     writeJSON(EX_KEY, all);
     notify();
     return ex;
+    // Background push. The local copy is already written, so a failed network call
+    // leaves the instructor's own view intact and getStatus().lastError explains why
+    // students have not seen it yet.
+    var B = be();
+    if (B) B.pushExercise(ex);
   }
 
   function deleteExercise(id) {
     writeJSON(EX_KEY, listExercises().filter(function (e) { return e.id !== id; }));
     writeJSON(ATTEMPT_KEY, listAttempts().filter(function (a) { return a.exerciseId !== id; }));
     notify();
+    var B = be();
+    if (B) B.deleteExercise(id);
   }
 
   function newId() {
@@ -171,18 +178,64 @@
   function startAttempt(exerciseId, operator) {
     var ex = getExercise(exerciseId);
     if (!ex) return null;
-    applySetup(ex);
     var existing = attemptFor(exerciseId, operator);
+
+    // Resume where they left off. Signing out used to lose everything a student had
+    // changed: the attempt record survived, but the diagram state did not, so they
+    // came back to the exercise's original fault with their partial fix gone. For a
+    // multi-hour project that is the difference between usable and not.
+    if (existing && existing.progress && Object.keys(existing.progress).length) {
+      applySetup(ex);
+      restoreProgress(ex, existing.progress);
+    } else {
+      applySetup(ex);
+    }
+
     var attempt = existing || {
       exerciseId: exerciseId, operator: operator,
       startedAt: new Date().toISOString(),
-      completedAt: null, passed: false, actions: []
+      completedAt: null, passed: false, actions: [], progress: {}
     };
     // Restarting keeps the original start time and log: a student who resets is
     // still on the same attempt, and hiding that from the instructor would make
     // the duration column a lie.
     if (!existing) saveAttempt(attempt); else notify();
+
+    // Push BEFORE the return — an earlier edit put this after it, where it never ran.
+    var B = be();
+    if (B) B.pushAttempt(attempt);
     return attempt;
+  }
+
+  /**
+   * Re-apply a student's own overrides on top of the exercise's starting state, so
+   * resuming shows the unit as they left it rather than as the instructor authored it.
+   */
+  function restoreProgress(ex, progress) {
+    var ctrl = controllerFor(ex.unitId);
+    if (!ctrl || typeof ctrl.setValue !== 'function') return;
+    Object.keys(progress).forEach(function (k) {
+      try { ctrl.setValue(k, progress[k]); } catch (e) {}
+    });
+    if (typeof ctrl.recalculate === 'function') ctrl.recalculate();
+  }
+
+  /**
+   * Capture the student's current overrides into their attempt. Called on every
+   * logged action, so progress is saved continuously rather than needing a Save
+   * button nobody would remember to press before signing out.
+   */
+  function saveProgress(exerciseId, operator) {
+    var ex = getExercise(exerciseId);
+    var attempt = attemptFor(exerciseId, operator);
+    if (!ex || !attempt || attempt.passed) return;
+    try {
+      var snap = snapshot(ex.unitId);
+      attempt.progress = snap.setup || {};
+      saveAttempt(attempt);
+      var B = be();
+      if (B) B.pushAttempt(attempt);
+    } catch (e) {}
   }
 
   // Outdoor-condition keys, which two different mechanisms can own: the weather
@@ -231,7 +284,20 @@
       // Keep the log bounded; an exercise that runs long shouldn't fill storage.
       if (a.actions.length > 300) a.actions = a.actions.slice(-300);
       saveAttempt(a);
+      // Progress saved HERE, inside the loop that already matched the unit. It was
+      // outside, keyed on open[0] — whichever attempt happened to be first — so with
+      // two exercises open on different units it snapshotted a unit the student was
+      // not touching and wrote the empty result onto the wrong attempt, losing the
+      // work entirely. Silent loss is worse than no resume at all, because the
+      // student has been told their progress persists.
+      saveProgress(a.exerciseId, operator);
     });
+    var B = be();
+    if (B) {
+      var mine = listAttempts().filter(function (a) { return a.operator === operator; });
+      var latest = mine[mine.length - 1];
+      if (latest) B.pushAttempt(latest);
+    }
   }
 
   // ─── Goal checking ──────────────────────────────────────────────────────────
@@ -275,6 +341,17 @@
       attempt.passed = true;
       attempt.completedAt = new Date().toISOString();
       saveAttempt(attempt);
+      // The pass is the thing an instructor's report is built from, so it goes to
+      // the server the moment it happens rather than waiting for the next sync.
+      var Bp = be();
+      if (Bp) {
+        Bp.pushAttempt({
+          exerciseId: attempt.exerciseId,
+          startedAt: attempt.startedAt,
+          passedAt: attempt.completedAt,
+          actions: attempt.actions || []
+        });
+      }
       passed = true;
     }
     return { ok: true, value: res.value, heldMs: heldMs, passed: passed };
@@ -285,10 +362,19 @@
     var label = ex.goal.label || ex.goal.key;
     var c = COMPARATORS[ex.goal.comparator] || COMPARATORS.within;
     var unit = ex.goal.unit || '';
-    if (ex.goal.comparator === 'within') {
-      return label + ' within \u00b1' + (ex.goal.tolerance || 0.5) + ' of ' + ex.goal.target + unit;
-    }
-    return label + ' ' + c.label + ' ' + ex.goal.target + unit;
+    var body = (ex.goal.comparator === 'within')
+      ? label + ' within \u00b1' + (ex.goal.tolerance || 0.5) + ' of ' + ex.goal.target + unit
+      : label + ' ' + c.label + ' ' + ex.goal.target + unit;
+    // An ASHRAE-linked goal carries its standard, so every surface showing the
+    // goal shows what the number comes from.
+    var AC = window.ASHRAECriteria;
+    if (ex.goal.standard && AC) return body + ' \u00b7 ' + AC.badge(ex.goal.standard);
+    return body;
+  }
+
+  /** The standard behind a goal, or null for a hand-set target. */
+  function goalStandard(ex) {
+    return (ex && ex.goal && ex.goal.standard) ? ex.goal.standard : null;
   }
 
   function durationOf(attempt) {
@@ -337,7 +423,11 @@
         weather: null,
         goal: {
           key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
-          comparator: 'within', target: 60, tolerance: 1.5
+          comparator: 'within', target: 60, tolerance: 1.5,
+          standard: '36', criterionId: 'soo-supply-air-setpoint',
+          criterionLabel: 'Supply air at its active setpoint',
+          citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU supply air temperature control',
+          basis: 'requirement'
         },
         assignedTo: seats.slice(),
         published: true,
@@ -356,7 +446,11 @@
         weather: null,
         goal: {
           key: 'cfm', label: 'Supply Airflow', unit: ' CFM',
-          comparator: 'above', target: 1000, tolerance: 0
+          comparator: 'above', target: 1000, tolerance: 0,
+          standard: '62.1', criterionId: 'iaq-min-oa-airflow',
+          criterionLabel: 'Minimum outdoor airflow maintained',
+          citation: 'ASHRAE 62.1 \u00a76.2 \u2014 Ventilation Rate Procedure, minimum outdoor air intake',
+          basis: 'requirement'
         },
         assignedTo: seats.slice(),
         published: true,
@@ -382,6 +476,12 @@
 
   seedIfEmpty();
 
+  /** The backend, when one is configured. */
+  function be() {
+    var B = window.SupabaseBackend;
+    return (B && B.isConfigured()) ? B : null;
+  }
+
   window.ExerciseStore = {
     HOLD_MS: HOLD_MS,
     COMPARATORS: COMPARATORS,
@@ -399,10 +499,12 @@
     attemptFor: attemptFor,
     saveAttempt: saveAttempt,
     startAttempt: startAttempt,
+    saveProgress: saveProgress,
     logAction: logAction,
     evaluate: evaluate,
     check: check,
     goalText: goalText,
+    goalStandard: goalStandard,
     durationOf: durationOf,
     statusFor: statusFor,
     controllerFor: controllerFor,

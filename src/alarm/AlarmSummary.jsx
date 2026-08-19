@@ -29,17 +29,14 @@
     } else if (lifecycle === 'active' && acknowledged) {
       // Active + Acknowledged → solid filled
       return { background: colors.fill, border: 'none', flashing: false };
-    } else if (lifecycle === 'inactive' && acknowledged) {
-      // Inactive + Acknowledged → outline with a muted centre. v1.3 had no icon
-      // for this because such alarms were filtered off the Summary; they now
-      // stay on the list, so they need to read differently from a cleared alarm
-      // still awaiting acknowledgment.
-      return { background: colors.fill, border: '2px solid ' + colors.outline,
-               flashing: false, opacity: 0.45 };
-    } else {
-      // Inactive + Unacknowledged → outline only
-      return { background: 'transparent', border: '2px solid ' + colors.outline, flashing: false };
     }
+    // Inactive + Unacknowledged → outline, still blinking. The blink is what says
+    // "this still needs you": the condition has cleared but nobody has signed for
+    // it. Previously drawn steady, which made it read as already handled.
+    //
+    // Inactive + Acknowledged never reaches here — acknowledging a cleared alarm
+    // removes the row (see the Summary filter below), so there is no fourth icon.
+    return { background: 'transparent', border: '2px solid ' + colors.outline, flashing: true };
   }
 
   // ─── Alarm Icon Component ─────────────────────────────────────────────────────
@@ -80,6 +77,15 @@
       id: 'preload-F01-1',
       timestamp: new Date('2026-05-15T14:30:00'),
       source: 'AO103@DEV4004',
+      // Live point this alarm reports. Without it the Value column showed a frozen
+      // number that contradicted the unit's own panel.
+      unitId: 'AHU-4-4', pointKey: 'phtValvePosition',
+      // Both coils conditioning the same air stream. Dehumidification is the
+      // legitimate exception, so a unit that is deliberately reheating dried air
+      // is not in alarm.
+      test: function (st) {
+        return st.phtValvePosition > 0 && st.chwValvePosition > 0 && !st.dehumidifying;
+      },
       condition: 'F-01',
       priority: 'urgent',
       description: 'Simultaneous heating and cooling — PHT and CHW both active',
@@ -94,6 +100,13 @@
       id: 'preload-F02-1',
       timestamp: new Date('2026-05-16T09:15:00'),
       source: 'AI301@DEV4004',
+      unitId: 'AHU-4-4', pointKey: 'supplyAirTemp',
+      // Deviation from whichever setpoint is currently in control, so the test
+      // follows a reset schedule or season change instead of a fixed number.
+      test: function (st) {
+        var sp = (typeof st.activeSetpoint === 'number') ? st.activeSetpoint : 60;
+        return st.fanRunning && Math.abs(st.supplyAirTemp - sp) > 5;
+      },
       condition: 'F-02',
       priority: 'high',
       description: 'Supply air temperature deviation exceeds 5°F from setpoint',
@@ -105,25 +118,35 @@
       subsystem: 'AHU-4-4'
     },
     {
-      // Acknowledged AND returned to normal — the finished state. Seeded on
-      // AHU-4-3 so its tree node has something to filter to.
+      // Returned to normal but NOT yet acknowledged — outline, blinking. Seeded on
+      // AHU-4-3 so its tree node has something to filter to, and so the
+      // acknowledge-then-retire behaviour is demonstrable out of the box.
       id: 'preload-F02-3',
       timestamp: new Date('2026-05-15T14:42:00'),
       source: 'AI301@DEV4003',
+      unitId: 'AHU-4-3', pointKey: 'supplyAirTemp',
+      test: function (st) {
+        var sp = (typeof st.activeSetpoint === 'number') ? st.activeSetpoint : 60;
+        return st.fanRunning && Math.abs(st.supplyAirTemp - sp) > 5;
+      },
       condition: 'F-02',
       priority: 'high',
-      description: 'Supply air temperature deviation cleared after coil valve reset',
+      description: 'Supply air temperature deviation exceeds 5\u00b0F from setpoint',
       value: 55.4,
       lifecycle: 'inactive',
-      acknowledged: true,
-      operator: 'cta_instructor',
-      action: 'Solved',
+      acknowledged: false,
+      operator: '',
+      action: '',
       subsystem: 'AHU-4-3'
     },
     {
       id: 'preload-F03-1',
       timestamp: new Date('2026-05-18T02:00:00'),
       source: 'BI601@DEV4004',
+      unitId: 'AHU-4-4', pointKey: 'fanRunning',
+      // Running outside the Schedule Manager's occupied window. Trips by advancing
+      // the clock past 18:00 with the unit still commanded on.
+      test: function (st) { return !!st.fanRunning && !isOccupiedNow(); },
       condition: 'F-03',
       priority: 'high',
       description: 'AHU-4-4 running during unoccupied hours',
@@ -138,6 +161,17 @@
       id: 'preload-F04-1',
       timestamp: new Date('2026-05-20T10:45:00'),
       source: 'AO104@DEV4004',
+      unitId: 'AHU-4-4', pointKey: 'oaDamperPosition',
+      // Fully closed while occupied — distinct from AHU44NewFaultEngine's N-04,
+      // which trips on the damper being anywhere below the unit's ASHRAE 62.1
+      // minimum. Two rules on one condition would put two alarms on the screen for
+      // one fault, so this one is reserved for the more severe case: shut, not
+      // merely low. Threshold read from the unit's own minimum rather than a number
+      // picked here, so it cannot disagree with how the unit is configured.
+      test: function (st) {
+        var minPos = (typeof st.economizerMinPosition === 'number') ? st.economizerMinPosition : 20;
+        return st.fanRunning && isOccupiedNow() && st.oaDamperPosition < Math.min(1, minPos);
+      },
       condition: 'F-04',
       priority: 'urgent',
       description: 'Outdoor air damper fully closed during occupied hours',
@@ -152,6 +186,8 @@
       id: 'preload-F06-1',
       timestamp: new Date('2026-05-22T11:30:00'),
       source: 'AI401@DEV4004',
+      unitId: 'AHU-4-4', pointKey: 'co2Sensor',
+      test: function (st) { return st.co2Sensor > 1100; },
       condition: 'F-06',
       priority: 'urgent',
       description: 'CO2 exceeds ventilation threshold (>1,100 ppm)',
@@ -166,6 +202,13 @@
       id: 'preload-F05-1',
       timestamp: new Date('2026-06-01T08:00:00'),
       source: 'AI701@DEV5000',
+      unitId: 'AHU-4-4', pointKey: 'oaTemperature',
+      // Free cooling available and unused. Trips by setting a mild outdoor
+      // condition while the economizer stays disabled.
+      test: function (st) {
+        return st.fanRunning && !st.economizerActive &&
+               st.oaTemperature >= 45 && st.oaTemperature <= 65;
+      },
       condition: 'F-05',
       priority: 'high',
       description: 'Economizer not active when OAT permits free cooling',
@@ -309,8 +352,11 @@
         valB = priorityOrder[b.priority] !== undefined ? priorityOrder[b.priority] : 99;
         break;
       case 'value':
-        valA = typeof a.value === 'number' ? a.value : 0;
-        valB = typeof b.value === 'number' ? b.value : 0;
+        // Sort on what is displayed — a column sorted by a hidden frozen number
+        // while showing live readings is worse than not sorting at all.
+        var lvA = liveReading(a), lvB = liveReading(b);
+        valA = Number(lvA !== undefined ? lvA : a.value) || 0;
+        valB = Number(lvB !== undefined ? lvB : b.value) || 0;
         break;
       default:
         valA = (a[sortColumn] || '').toString().toLowerCase();
@@ -346,6 +392,194 @@
   function actionLabelFor(alarm) { return ACTION_LABELS[actionStateFor(alarm)]; }
   function actionTitleFor(alarm) { return ACTION_TITLES[actionStateFor(alarm)]; }
   function actionColorFor(alarm) { return ACTION_COLORS[actionStateFor(alarm)]; }
+
+  // ─── Event history: the backlog of acknowledged alarms ───────────────────────
+  // An alarm that has cleared AND been acknowledged leaves the Summary, which is
+  // right — there is nothing left to act on. But it was leaving with no record at
+  // all, so there was no way to answer "what has been acknowledged, by whom, and
+  // when". Real Station retires these to Event history; this is that list.
+  var HISTORY_KEY = 'cta_alarm_history';
+  var HISTORY_CAP = 200;   // newest kept; a training session never needs more
+
+  function readHistory() {
+    try {
+      var raw = localStorage.getItem(HISTORY_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  }
+
+  function retireToHistory(alarm, operator) {
+    try {
+      var hist = readHistory();
+      // Keyed by alarm id so a condition that trips, clears and trips again does
+      // not overwrite its own earlier record.
+      var stamp = new Date().toISOString();
+      hist.unshift({
+        id: alarm.id + '@' + stamp,
+        alarmId: alarm.id,
+        source: alarm.source,
+        condition: alarm.condition,
+        priority: alarm.priority,
+        description: alarm.description,
+        subsystem: alarm.subsystem || alarm.unitId,
+        raisedAt: alarm.timestamp ? String(alarm.timestamp) : null,
+        acknowledgedBy: operator || alarm.operator || 'operator',
+        retiredAt: stamp
+      });
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, HISTORY_CAP)));
+    } catch (e) {}
+  }
+
+  // ─── Are these conditions actually true right now? ───────────────────────────
+  // The preloaded rows came from the legacy screenshots and were displayed
+  // unconditionally: every one of them was always in the list whether or not the
+  // condition existed in the running model. That is why an alarm could claim
+  // simultaneous heating and cooling while both coil valves read closed.
+  //
+  // Each now carries a test against its unit's live state, and the list is derived
+  // from those tests. An alarm appears when its condition becomes true, stays
+  // (cleared, awaiting acknowledgment) when it goes false, and leaves once it has
+  // been both cleared and acknowledged.
+  var OCCUPIED_START_HOUR = 8;   // Schedule Manager's AHU-4-4 occupied window,
+  var OCCUPIED_END_HOUR = 18;    // 08:00–18:00. Unoccupied is anything outside it.
+
+  function isOccupiedNow() {
+    var eng = window.SimulationEngine;
+    var d = (eng && typeof eng.getCurrentTimestamp === 'function')
+      ? eng.getCurrentTimestamp() : new Date();
+    if (!d || typeof d.getHours !== 'function') return true;
+    var h = d.getHours();
+    var day = d.getDay();
+    if (day === 0 || day === 6) return false;   // weekends are unoccupied
+    return h >= OCCUPIED_START_HOUR && h < OCCUPIED_END_HOUR;
+  }
+
+  function stateOf(unitId) {
+    var name = UNIT_CONTROLLERS[unitId];
+    var c = name && window[name];
+    return (c && typeof c.getState === 'function') ? c.getState() : null;
+  }
+
+  // ─── Alarm value ─────────────────────────────────────────────────────────────
+  // A bare "45.2" or "1" tells an operator nothing: no unit, and for a binary
+  // point no meaning at all. Worse, the number was frozen at authoring time, so an
+  // alarm could report a valve at 25% while the unit's own panel read 0% — the
+  // alarm list and the diagram disagreeing is the fastest way to lose a student's
+  // trust in both.
+  //
+  // The value is now read from the unit's controller wherever the alarm names a
+  // point, and formatted with that point's own unit and precision from the shared
+  // point metadata. The frozen value is the fallback for alarms that report
+  // something with no live equivalent.
+  var UNIT_CONTROLLERS = {
+    'AHU-4-6': 'AHU46Controller', 'AHU-4-4': 'AHU44NewController',
+    'AHU-4-3': 'AHU43Controller', 'AHU-23-1': 'AHU23Controller'
+  };
+
+  /**
+   * The controller field an alarm reports on, from whichever of three places
+   * carries it: preloaded alarms name it outright, AHU46FaultEngine copies
+   * sourceField onto the alarm, and AHU44NewFaultEngine leaves it only inside the
+   * source string as "supplyAirTemp@AHU-4-4". Resolved in one place so the value,
+   * its unit and its tooltip can never disagree about which point is being shown.
+   */
+  function pointKeyFor(alarm) {
+    if (!alarm) return null;
+    if (alarm.pointKey) return alarm.pointKey;
+    if (alarm.sourceField) return alarm.sourceField;
+    if (alarm.source && alarm.source.indexOf('@') > 0) {
+      var head = alarm.source.split('@')[0];
+      // A controller field name, never a BACnet address like AI301.
+      if (/^[a-z][A-Za-z0-9]*$/.test(head)) return head;
+    }
+    return null;
+  }
+
+  function unitIdFor(alarm) {
+    return (alarm && (alarm.unitId || alarm.subsystem)) || null;
+  }
+
+  function liveReading(alarm) {
+    var key = pointKeyFor(alarm);
+    if (!key) return undefined;
+    var ctrlName = UNIT_CONTROLLERS[unitIdFor(alarm)];
+    var ctrl = ctrlName && window[ctrlName];
+    if (!ctrl || typeof ctrl.getState !== 'function') return undefined;
+    var v = ctrl.getState()[key];
+    return (v === undefined || v === null) ? undefined : v;
+  }
+
+  function pointMeta(alarm) {
+    var BP = window.SymmetreBoardPoints;
+    var key = pointKeyFor(alarm);
+    if (!BP || !key) return null;
+    // meta(key, unitId), not POINTS[key] — the accessor also applies each unit's
+    // own label/unit overrides, so CO₂ reads PPM on the units that name it that
+    // way. Reaching for a raw POINTS map found nothing, which made the whole
+    // unit/precision branch below dead code.
+    if (typeof BP.meta === 'function') {
+      return BP.meta(key, unitIdFor(alarm)) || null;
+    }
+    return (BP.META && BP.META[key]) || null;
+  }
+
+  /** Display string for the Value column: live where possible, always with a unit. */
+  function formatAlarmValue(alarm) {
+    var BP = window.SymmetreBoardPoints;
+    var key = pointKeyFor(alarm);
+    var live = liveReading(alarm);
+    var v = (live !== undefined) ? live : alarm.value;
+    if (v === undefined || v === null) return '—';
+
+    // Use the board's own formatter so the alarm list and the diagram chips cannot
+    // drift apart in how they render the same point. It already resolves each
+    // point's precision and its ON/OFF (or Open/Closed) option labels — which is
+    // what turns a stored "1" into a reading instead of a bare digit.
+    if (key && BP && typeof BP.format === 'function') {
+      var formatted = BP.format(key, v);
+      if (formatted !== undefined && formatted !== null && formatted !== '') {
+        var text = String(formatted);
+        var meta = pointMeta(alarm);
+        var unit = meta && meta.unit ? String(meta.unit) : '';
+        // A state word (ON, Open, Manual) carries no unit; a number takes one.
+        var isNumeric = /^-?[\d,]+(\.\d+)?$/.test(text);
+        if (!unit || !isNumeric) return text;
+        // °F sits tight against the number; PPM and CFM read as words after a space.
+        return unit.charAt(0) === '\u00b0' ? text + unit : text + ' ' + unit.trim();
+      }
+    }
+
+    // Fallback for anything with no point behind it — engine strings such as
+    // "DPS-2 (Supply Suction)", or a preloaded value naming no live point.
+    if (typeof v === 'boolean') return v ? 'ON' : 'OFF';
+
+    // A comma-joined list of raw camelCase state keys, which is what the
+    // manual-overrides rule produces. Rendered bare it read
+    // "oaTemperature,oaRelH…" — internal identifiers, truncated mid-word, in an
+    // 80px right-aligned numeric column. A count fits and means something; the
+    // full list, in readable point labels, goes to the tooltip.
+    var text = String(v);
+    if (text.indexOf(',') > 0 && /^[a-z][A-Za-z0-9]*(,[a-z][A-Za-z0-9]*)+$/.test(text)) {
+      var n = text.split(',').length;
+      return n + ' points';
+    }
+    return text;
+  }
+
+  /** Readable point labels for a comma-joined key list, for the tooltip. */
+  function expandKeyList(v) {
+    var BP = window.SymmetreBoardPoints;
+    var text = String(v == null ? '' : v);
+    if (!(text.indexOf(',') > 0) || !BP || typeof BP.meta !== 'function') return text;
+    return text.split(',').map(function (k) {
+      var m = BP.meta(k.trim());
+      return (m && m.label) ? m.label : k.trim();
+    }).join(', ');
+  }
+
+  /** True when the number shown is coming from the running model. */
+  function isLiveValue(alarm) { return liveReading(alarm) !== undefined; }
 
   // ─── Format timestamp for display ────────────────────────────────────────────
 
@@ -484,7 +718,20 @@
       React.createElement('div', {
         className: 'w-20 truncate text-right',
         style: { padding: '6px ' + CELL_PAD_X + 'px', fontVariantNumeric: 'tabular-nums' }
-      }, alarm.value !== undefined && alarm.value !== null ? String(alarm.value) : '—')
+      },
+        React.createElement('span', {
+          // A live reading is marked, because an operator needs to know whether a
+          // number is the point's reading now or the value recorded at trip time.
+          title: isLiveValue(alarm)
+            ? 'Live reading from ' + unitIdFor(alarm) + ' \u00b7 ' + pointKeyFor(alarm)
+            // The full list of overridden points, in readable labels, since the cell
+            // itself only has room for the count.
+            : (String(alarm.value || '').indexOf(',') > 0
+                ? 'Overridden: ' + expandKeyList(alarm.value)
+                : 'Value recorded when the alarm was raised'),
+          style: isLiveValue(alarm) ? null : { opacity: 0.72, fontStyle: 'italic' }
+        }, formatAlarmValue(alarm))
+      )
     );
   }
 
@@ -587,6 +834,19 @@
     // Context menu state
     var [contextMenu, setContextMenu] = useState(null);
 
+    // id -> { acknowledged, operator, action }. Outlives the rows themselves, so a
+    // retired alarm cannot be resurrected as unacknowledged by the next poll.
+    var ackStateRef = useRef({});
+
+    // id -> { tripped } for the condition-driven rows. A condition that has never
+    // been true has no alarm at all; once it has tripped, the row persists through
+    // the condition clearing so the operator still has something to acknowledge.
+    var trippedRef = useRef({});
+
+    // Active alarms, or the acknowledged backlog.
+    var [view, setView] = useState('active');
+    var [history, setHistory] = useState(readHistory);
+
     // Refresh alarms from FaultEngine periodically
     useEffect(function () {
       // SCENARIO_TRACKING.md items #17, #19, #20: FaultEngine.js's F-01
@@ -643,22 +903,58 @@
           }
 
           setAlarms(function (currentAlarms) {
-            // Build a map of current acknowledged/operator/action states to preserve them
-            var ackMap = {};
+            // Seed the persistent record from anything already acknowledged on
+            // screen (covers alarms acknowledged before this ref existed, and the
+            // preloaded records that seed as acknowledged).
             currentAlarms.forEach(function (a) {
-              if (a.acknowledged) {
-                ackMap[a.id] = { acknowledged: a.acknowledged, operator: a.operator, action: a.action };
+              if (a.acknowledged && !ackStateRef.current[a.id]) {
+                ackStateRef.current[a.id] = {
+                  acknowledged: true, operator: a.operator, action: a.action
+                };
               }
             });
+            var ackMap = ackStateRef.current;
 
             // Start from preloaded as base
             var existingIds = new Set(PRELOADED_ALARMS.map(function (a) { return a.id; }));
-            var merged = PRELOADED_ALARMS.map(function (a) {
-              // Preserve acknowledged state from current alarms
-              if (ackMap[a.id]) {
-                return Object.assign({}, a, ackMap[a.id]);
+            // Evaluate each preloaded condition against its unit's live state, and
+            // build the row only where there is something real to report. An alarm
+            // with no test at all is left as-is rather than silently dropped.
+            var merged = [];
+            PRELOADED_ALARMS.forEach(function (a) {
+              var row = ackMap[a.id] ? Object.assign({}, a, ackMap[a.id]) : Object.assign({}, a);
+
+              if (typeof a.test === 'function') {
+                var st = stateOf(a.unitId);
+                var isTrue = false;
+                if (st) { try { isTrue = !!a.test(st); } catch (e) { isTrue = false; } }
+
+                if (isTrue) {
+                  if (!trippedRef.current[a.id]) {
+                    trippedRef.current[a.id] = { tripped: true };
+                    // A fresh trip is unacknowledged and stamped now, not at the
+                    // authoring date the legacy row carried.
+                    delete ackStateRef.current[a.id];
+                    row = Object.assign({}, a, { timestamp: new Date() });
+                  }
+                  row.lifecycle = 'active';
+                  row.acknowledged = !!(ackMap[a.id] && ackMap[a.id].acknowledged);
+                } else if (trippedRef.current[a.id]) {
+                  // Condition gone but not yet signed for: stays, cleared.
+                  row.lifecycle = 'inactive';
+                  row.acknowledged = !!(ackMap[a.id] && ackMap[a.id].acknowledged);
+                  if (row.acknowledged) {
+                    // Cleared and acknowledged — retire it and stop tracking, so it
+                    // can trip cleanly again later.
+                    delete trippedRef.current[a.id];
+                    delete ackStateRef.current[a.id];
+                    return;
+                  }
+                } else {
+                  return;   // never tripped: not an alarm
+                }
               }
-              return Object.assign({}, a);
+              merged.push(row);
             });
 
             for (var i = 0; i < engineAlarms.length; i++) {
@@ -689,14 +985,19 @@
                 }
               }
             }
-            // Acknowledging is the operator recording "I have seen this" — it is
-            // not a claim the condition is fixed, so an acknowledged alarm stays
-            // on the Summary and reads Acknowledged rather than disappearing.
-            // (Real Station retires a cleared+acknowledged alarm to Event
-            // history; here the row is the teaching artifact, so it remains.)
-            // The engines keep full history via getAllAlarms() regardless.
+            // An alarm that has BOTH returned to normal and been acknowledged is
+            // finished with, and leaves the Summary — the operator has signed for
+            // a condition that is no longer present, so there is nothing left to
+            // act on. Acknowledging a still-active alarm does NOT remove it: that
+            // row stays, filled and steady, because the condition persists.
+            //
+            // This is the SymmetrE behaviour the icon legend implies (three
+            // states, no icon for cleared-and-acknowledged) and matches real
+            // Station, which retires such alarms to Event history. The engines
+            // keep the full record via getAllAlarms() either way.
             return merged.filter(function (a) {
               if (a.priority === 'journal') return false;
+              if (a.lifecycle === 'inactive' && a.acknowledged) return false;
               return true;
             });
           });
@@ -765,6 +1066,20 @@
       // be acknowledged at all"). Real BMS practice allows acknowledging an
       // alarm whether it's still active or has already cleared; only
       // "already acknowledged" should block it.
+      var ackOperator = (auth && auth.operator) || 'operator';
+      // Record it where the poll will find it, whether or not the row survives.
+      ackStateRef.current[alarm.id] = {
+        acknowledged: true,
+        operator: ackOperator,
+        action: 'Acknowledged'
+      };
+      // Acknowledging a cleared alarm finishes it, so it is written to the event
+      // history on the way out. Previously it simply vanished, leaving no record of
+      // what had been acknowledged or by whom.
+      if (alarm.lifecycle === 'inactive') {
+        retireToHistory(alarm, ackOperator);
+        setHistory(readHistory());
+      }
       setAlarms(function (prev) {
         return prev.map(function (a) {
           if (a.id === alarm.id && !a.acknowledged) {
@@ -775,6 +1090,11 @@
             });
           }
           return a;
+        // An alarm that has cleared AND is now acknowledged is finished with, so it
+        // leaves the Summary on the click rather than lingering until the next
+        // 2-second poll happens to filter it.
+        }).filter(function (a) {
+          return !(a.lifecycle === 'inactive' && a.acknowledged);
         });
       });
 
@@ -863,10 +1183,83 @@
 
         // Right: Sortable alarm list (Requirement 13.2)
         React.createElement('div', { className: 'flex-1 flex flex-col overflow-hidden' },
+          // Active alarms, or the acknowledged backlog. Two views rather than one
+          // list, because they answer different questions: "what needs me now" and
+          // "what has been signed for". Retired alarms used to disappear with no
+          // record of either the acknowledgment or who made it.
+          React.createElement('div', {
+            className: 'flex items-center gap-1 px-3 py-2',
+            style: { borderBottom: '1px solid #2b3850', flexShrink: 0 }
+          },
+            ['active', 'history'].map(function (v) {
+              var on = view === v;
+              var label = v === 'active'
+                ? 'Active Alarms (' + alarms.length + ')'
+                : 'Acknowledged History (' + history.length + ')';
+              return React.createElement('button', {
+                key: v,
+                type: 'button',
+                onClick: function () {
+                  setView(v);
+                  if (v === 'history') setHistory(readHistory());
+                },
+                style: {
+                  padding: '5px 12px', borderRadius: '5px', fontSize: '11px',
+                  fontWeight: 800, letterSpacing: '.3px', cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  background: on ? 'rgba(53,189,211,.16)' : 'transparent',
+                  border: '1px solid ' + (on ? '#2b8fa3' : 'transparent'),
+                  color: on ? '#cfe6ea' : '#9db0c8'
+                }
+              }, label);
+            })
+          ),
+
+          view === 'history' ? React.createElement('div', {
+            className: 'flex-1 overflow-auto',
+            style: { padding: '10px 12px' }
+          },
+            history.length === 0
+              ? React.createElement('div', {
+                  style: { fontSize: '12px', color: '#6f7f97', padding: '14px 2px', lineHeight: 1.5 }
+                }, 'Nothing here yet. An alarm arrives in this list once it has both returned to normal and been acknowledged \u2014 at that point it has left the active list, and this is the record of it.')
+              : history.map(function (h) {
+                  return React.createElement('div', {
+                    key: h.id,
+                    style: {
+                      display: 'flex', alignItems: 'baseline', gap: '10px',
+                      padding: '7px 9px', marginBottom: '4px', borderRadius: '5px',
+                      background: '#1b2230', border: '1px solid #2b3850', fontSize: '11.5px'
+                    }
+                  },
+                    React.createElement('span', {
+                      style: { width: '92px', flexShrink: 0, color: '#7f8ea6',
+                               fontVariantNumeric: 'tabular-nums' }
+                    }, h.subsystem || '\u2014'),
+                    React.createElement('span', {
+                      style: { width: '52px', flexShrink: 0, fontWeight: 700, color: '#9db0c8' }
+                    }, h.condition || ''),
+                    React.createElement('span', {
+                      style: { flex: 1, color: '#c3cfdd', lineHeight: 1.35 }
+                    }, h.description || ''),
+                    // Who signed for it and when — the whole point of keeping this.
+                    React.createElement('span', {
+                      style: { flexShrink: 0, color: '#8ff0b5', fontWeight: 700 }
+                    }, h.acknowledgedBy || 'operator'),
+                    React.createElement('span', {
+                      style: { width: '132px', flexShrink: 0, textAlign: 'right',
+                               color: '#6f7f97', fontVariantNumeric: 'tabular-nums' }
+                    }, h.retiredAt ? new Date(h.retiredAt).toLocaleString('en-US', {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                      }) : '')
+                  );
+                })
+          ) : null,
+
           // Table scroller — ONE scroller for both axes, so the sticky header
           // scrolls sideways in lockstep with the rows and every row's
           // background spans all columns instead of stopping at the viewport.
-          React.createElement('div', { className: 'flex-1 overflow-auto' },
+          view === 'active' ? React.createElement('div', { className: 'flex-1 overflow-auto' },
             // Column headers
             React.createElement(AlarmTableHeader, {
               sortColumn: sortColumn,
@@ -896,7 +1289,7 @@
                     });
                   })
             )
-          ),
+          ) : null,
 
           // Footer status
           // Footer ack bar — the selected alarm's acknowledge action sits with

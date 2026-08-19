@@ -442,46 +442,15 @@ const AHU44NewControlsSidebar = (() => {
       React.createElement(SectionHeader, { title: 'Reset' }),
       React.createElement('div', { className: 'px-2 py-2 flex flex-col gap-2' },
 
-        // Reset All to Defaults — clears every manual override and restores starting values
-        React.createElement('button', {
-          className: 'w-full px-3 py-1 text-[10px] bg-amber-100 border border-amber-500 rounded hover:bg-amber-200 text-amber-900 font-bold',
-          title: 'Clear all manual overrides and restore default setpoints',
-          onClick: function() {
-            var ctrl = window[ACTIVE_CTRL];
-            if (!ctrl) return;
-            // Restore every editable setpoint to its starting value
-            var defaults = {
-              runSchedule:            true,
-              systemStarting:         false,
-              startingTimeSetpoint:   240,
-              coolingCoilSetpoint:    60.0,
-              heatingCoilSetpoint:    55.0,
-              plenumMinSetpoint:      40.0,
-              lowOATLockout:          false,
-              enthalpyOKForEconomizer: false,
-              economizerMinPosition:  20,
-              minPositionFanSpeedLock: 5,
-              economizerTempControlSP: 58.0,
-              co2Sensor:              538,
-              co2Setpoint:            900,
-              minOAAirflowSetpoint:   4900,
-              fanSpeedSetpoint:       75,
-              fireAlarmShutdown:      false,
-              fireAlarmSmokePurge:    false,
-              interlockOn:            true,
-              exhaustFanOn:           true,
-              commonDamperOpen:       true,
-              freezePumpOn:           true,
-              oaDamperPosition:       20,
-            };
-            Object.keys(defaults).forEach(function(key) {
-              ctrl.setValue(key, defaults[key]);
-            });
-            // Clear all manual mode flags so M badges disappear
-            if (ctrl.clearModes) ctrl.clearModes();
-            ctrl.recalculate();
-          }
-        }, '↺  RESET ALL TO DEFAULTS')
+// Was a hardcoded table of every starting value, rewritten by hand whenever a
+        // setpoint was added — the same pattern that let the toolbar reload miss
+        // three units. clearModes() restores each point's own pre-override value, so
+        // this needs no per-unit knowledge and cannot fall behind the model.
+        window.ResetControls
+          ? React.createElement(window.ResetControls.ResetAllButton, {
+              controller: ACTIVE_CTRL, faultEngine: 'AHU44NewFaultEngine'
+            })
+          : null
       )
     );
   }
