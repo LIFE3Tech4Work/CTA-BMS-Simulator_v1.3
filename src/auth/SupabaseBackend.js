@@ -353,6 +353,20 @@
   function syncDown() {
     return getClient().then(function (c) {
       if (!c) return { ok: false, local: true };
+      return c.auth.getSession().then(function (sess) {
+        // No Supabase session means a demo/local account. Nothing to sync, and
+        // querying anyway would fail as anon — reported as a permission error that
+        // looks like a misconfigured database.
+        if (!(sess && sess.data && sess.data.session)) {
+          return { ok: false, noSession: true };
+        }
+        return syncDownAuthed(c);
+      });
+    }).catch(function (e) { fail('syncDown', e); return { ok: false }; });
+  }
+
+  function syncDownAuthed(c) {
+    return Promise.resolve().then(function () {
       return Promise.all([
         c.from('exercises').select('*'),
         c.from('attempts').select('*'),

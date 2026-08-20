@@ -463,6 +463,15 @@
                            border: '1px solid #8a2018', color: '#ffb3aa' }
                 }, 'Clear the local record and try again') : null
               ) : null,
+              // The submit button. This went missing when the browser-only caveat below
+              // was made conditional — the edit took the button with it, leaving a fully
+              // validated form with no way to submit it.
+              React.createElement('button', {
+                type: 'submit',
+                disabled: signUpDisabled || isLoading,
+                className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
+                style: primaryButtonStyle(signUpDisabled || isLoading)
+              }, isLoading ? 'Creating Account\u2026' : 'Create Account'),
               // The browser-only caveat is a real limitation someone would otherwise
               // discover on a second machine, so it stays. With a backend there is no
               // caveat to give, and a line saying so was just noise under the button.

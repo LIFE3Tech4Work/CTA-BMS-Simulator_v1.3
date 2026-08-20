@@ -26,6 +26,53 @@
     var backendOn = !!(B && B.isConfigured());
     var [syncing, setSyncing] = useState(false);
     var [syncedAt, setSyncedAt] = useState(null);
+    var [syncNote, setSyncNote] = useState(null);
+    var [uploading, setUploading] = useState(false);
+
+    // Local exercises that the server has no record of yet.
+    function unpushed() {
+      if (!backendOn) return [];
+      return (ES.listExercises() || []).filter(function (ex) {
+        // createdBy is a uuid once pushed by a signed-in account; a demo operator name
+        // means it was authored without a session and never reached the server.
+        return !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(String(ex.createdBy || ''));
+      });
+    }
+
+    function uploadLocal() {
+      var B2 = window.SupabaseBackend;
+      if (!B2 || uploading) return;
+      var pending = unpushed();
+      if (!pending.length) return;
+      setUploading(true);
+      B2.getClient().then(function (c) {
+        if (!c) { setUploading(false); return; }
+        return c.auth.getUser().then(function (u) {
+          var uid = u && u.data && u.data.user && u.data.user.id;
+          if (!uid) {
+            setUploading(false);
+            setSyncNote('Sign in with your email account before uploading.');
+            return;
+          }
+          // Re-stamp ownership so the server rows belong to the signed-in instructor;
+          // the RLS policy keys on created_by, so a row pushed under a demo name would
+          // be invisible even to its author.
+          var chain = Promise.resolve();
+          pending.forEach(function (ex) {
+            chain = chain.then(function () {
+              var owned = Object.assign({}, ex, { createdBy: uid });
+              ES.saveExercise(owned);
+              return B2.pushExercise(owned);
+            });
+          });
+          return chain.then(function () {
+            setUploading(false);
+            setSyncNote(null);
+            refresh();
+          });
+        });
+      });
+    }
 
     function refresh() {
       if (!backendOn || syncing) return;
@@ -35,9 +82,13 @@
         setSyncedAt(new Date());
         // Roster, groups, exercises and attempts all landed — redraw from the cache.
         bump(function (n) { return n + 1; });
+        // A demo account has no server session, which is expected rather than an
+        // error — say so inline instead of throwing an alert at every refresh.
+        if (res && res.noSession) { setSyncNote('demo'); return; }
+        setSyncNote(null);
         if (res && res.ok === false) {
           var st = B.getStatus();
-          if (st && st.lastError) window.alert('Could not refresh: ' + st.lastError);
+          if (st && st.lastError) setSyncNote(st.lastError);
         }
       });
     }
@@ -675,8 +726,23 @@
                    background: '#1b2230', border: '1px solid #38445c',
                    color: syncing ? '#6f7f97' : '#c3cfdd' }
         }, syncing ? 'Refreshing\u2026' : '\u21bb Refresh from server'),
-        React.createElement('span', { style: { fontSize: '10.5px', color: '#6f7f97' } },
-          syncedAt
+        // Only shown when there is something to upload, so it is not a permanent
+        // button inviting a no-op.
+        (backendOn && unpushed().length) ? React.createElement('button', {
+          type: 'button', onClick: uploadLocal, disabled: uploading,
+          title: 'Send exercises authored in this browser to the server so students on other machines can be assigned them',
+          style: { padding: '5px 11px', borderRadius: '5px', fontSize: '11px', fontWeight: 700,
+                   cursor: uploading ? 'default' : 'pointer', fontFamily: 'inherit',
+                   background: 'linear-gradient(180deg,#3f8f5a,#2d7346)',
+                   border: '1px solid #2f7a52', color: '#fff' }
+        }, uploading ? 'Uploading\u2026' : '\u2191 Upload ' + unpushed().length + ' local to server') : null,
+        React.createElement('span', {
+          style: { fontSize: '10.5px', color: syncNote ? '#e6a23c' : '#6f7f97' }
+        },
+          syncNote === 'demo'
+            ? 'Signed in with a demo account \u2014 showing local data only. Sign in with your email to see server records.'
+          : syncNote ? 'Refresh failed: ' + syncNote
+          : syncedAt
             ? 'Updated ' + syncedAt.toLocaleTimeString('en-US',
                 { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             : 'Picks up new sign-ups and submitted work')
