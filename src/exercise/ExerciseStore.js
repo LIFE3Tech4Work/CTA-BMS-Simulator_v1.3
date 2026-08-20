@@ -802,36 +802,59 @@
       // A terminal box teaches something the AHUs cannot: the zone can be wrong while
       // the air handler upstream is behaving perfectly.
       ex({
-        id: 'ex-lib-vav-damper-v2',
+        id: 'ex-lib-vav-damper-v3',
         title: 'Ballroom zone starved of air',
         unit: 'VAV-4-4-02',
-        brief: 'The ballroom is stuffy and warm, but AHU-4-4 upstream looks healthy \u2014 ' +
-          'its fan is running and its discharge air is on setpoint.\n\n' +
+        brief: 'The ballroom is stuffy and occupants are complaining, but AHU-4-4 upstream ' +
+          'looks healthy \u2014 its fan is running and its discharge air is on setpoint.\n\n' +
           'Three readings at this box tell you what is wrong. Take them in order:\n\n' +
           '\u2022 Zone airflow \u2014 how much air is actually reaching the room\n' +
           '\u2022 Zone CO\u2082 \u2014 whether the room is occupied and being ventilated\n' +
           '\u2022 Damper position \u2014 what the box is doing about it\n\n' +
-          'Restore airflow to the zone, then say what each reading told you and how they ' +
-          'fit together. Name the ASHRAE standard the starting state violated and why that ' +
-          'standard exists.\n\n' +
+          'The damper is throttled rather than shut. In a real plant a terminal damper ' +
+          'driven fully closed against a running fan builds duct static until the ' +
+          'high-pressure safety trips and stops the unit \u2014 so a starved zone you can ' +
+          'actually stand and diagnose is a throttled one, not a closed one.\n\n' +
+          'Put the box back on its own sequence and airflow will recover; CO\u2082 falling is ' +
+          'how you know it worked. Then say what each reading told you and how they fit ' +
+          'together.\n\n' +
+          'Two things worth being precise about in your answer. The box never drops below ' +
+          'its 200 CFM minimum, so this is not a minimum-airflow violation. And CO\u2082 never ' +
+          'reaches the 1,100 ppm figure 62.1 Appendix C cites \u2014 it is a rise well above ' +
+          'this zone\u0027s own normal reading, which is what tells you ventilation has fallen ' +
+          'behind the occupancy. Say which standard applies, and why a rising trend matters ' +
+          'before any published limit is crossed.\n\n' +
           'Hint: check the colour of the damper reading. A point in Auto is drawn in the ' +
           'normal panel colour; one somebody has overridden by hand is magenta.',
-        setup: { damperPosition: 0 },
+        // 5%, not 0%: deep enough that airflow (240 CFM) sits well under the 320 CFM pass
+        // threshold, so the exercise cannot be cleared by nudging the damper a percent —
+        // releasing the override to Auto is what passes it. And not 0%, because a terminal
+        // damper driven shut against a running fan would trip the high-static safety.
+        setup: { damperPosition: 5 },
         published: true,
         assigned: seats.slice(),
+        // Graded on airflow, reasoned with CO2. Grading on a CO2 number cannot work here:
+        // releasing the override lands at 705 ppm and 62.1's indicator is 1100, so any
+        // threshold that fails the fault also fails the correct fix, and any threshold
+        // matching the standard never trips at all. Airflow has real headroom either side —
+        // fault 240, Auto 360 — so releasing to Auto passes, which is the habit every other
+        // exercise in this set teaches. CO2 stays as the evidence, not the test.
         goal: { key: 'airflowCFM', label: 'Zone Airflow', unit: ' CFM',
-                comparator: 'above', target: 300, tolerance: 0,
-                standard: '62.1', criterionId: 'iaq-min-oa-airflow',
-                criterionLabel: 'Minimum outdoor airflow maintained',
-                citation: 'ASHRAE 62.1 \u00a76.2 \u2014 Ventilation Rate Procedure, minimum outdoor air intake',
-                basis: 'requirement' }
+                comparator: 'above', target: 320, tolerance: 0,
+                standard: '62.1', criterionId: 'iaq-co2-differential',
+                criterionLabel: 'Zone ventilation adequate for occupancy',
+                citation: 'ASHRAE 62.1 Appendix C \u2014 CO\u2082 as an indicator of ventilation rate per person',
+                basis: 'indicator' }
       })
     ];
   }
 
   // Bump when a seeded definition changes. Any stored copy seeded at a lower version is
   // refreshed, so a content fix reaches browsers that have already seeded.
-  var SEED_VERSION = 2;
+  // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
+  // stored copy already at this version, so an edit without a bump is silently inert —
+  // that is how the reworked VAV brief failed to reach a browser that had already seeded.
+  var SEED_VERSION = 4;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;
@@ -839,7 +862,9 @@
   // means a browser cannot end up holding both versions of the same exercise.
   var RETIRED_SEEDS = {
     'ex-starter-overcool': 'ex-starter-overcool-v2',
-    'ex-lib-vav-damper': 'ex-lib-vav-damper-v2'
+    'ex-lib-vav-damper': 'ex-lib-vav-damper-v2',
+    // Superseded again: the 0% damper tripped the high-static safety (SME review).
+    'ex-lib-vav-damper-v2': 'ex-lib-vav-damper-v3'
   };
 
   /**
