@@ -60,7 +60,11 @@
   function getStatus() { return Object.assign({}, status); }
 
   function fail(where, err) {
-    status.lastError = where + ': ' + ((err && err.message) || String(err));
+    var detail = (err && (err.message || err.details || err.hint || err.code)) || String(err);
+    status.lastError = where + ': ' + detail;
+    // Full object, not just the message: PostgREST puts the useful part in code/details
+    // (42501 is an RLS refusal, 23503 a missing foreign key), and those name the fix.
+    if (window.console) console.error('[Supabase] ' + where, err);
     // Logged rather than swallowed — a silent sync failure is how a class ends up
     // looking at stale data with no idea why.
     if (window.console) console.warn('[Supabase] ' + status.lastError);
@@ -475,15 +479,23 @@
    */
   function pushAssignments(c, ex) {
     var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    var ids = (ex.assignedTo || []).filter(function (s) { return UUID.test(String(s)); });
+    var all = ex.assignedTo || [];
+    var ids = all.filter(function (s) { return UUID.test(String(s)); });
+    var skipped = all.filter(function (s) { return !UUID.test(String(s)); });
+    if (skipped.length && window.console) {
+      console.warn('[Supabase] not real accounts, skipped: ' + skipped.join(', ') +
+        ' \u2014 these students will not see the exercise.');
+    }
     // Clear first so un-assigning actually removes access rather than only adding.
     return c.from('assignments').delete().eq('exercise_id', ex.id).then(function () {
       if (!ids.length) return { ok: true };
+      if (window.console) console.info('[Supabase] pushAssignments', { exercise: ex.id, students: ids });
       return c.from('assignments').insert(ids.map(function (sid) {
         return { exercise_id: ex.id, student_id: sid };
       })).then(function (r) {
-        if (r.error) fail('pushAssignments', r.error);
-        return { ok: !r.error };
+        if (r.error) { fail('pushAssignments', r.error); return { ok: false }; }
+        if (window.console) console.info('[Supabase] assignments inserted', ids.length);
+        return { ok: true };
       });
     });
   }
@@ -493,7 +505,13 @@
       if (!c) return { ok: false, local: true };
       return c.auth.getUser().then(function (u) {
         var uid = u && u.data && u.data.user && u.data.user.id;
-        if (!uid) return { ok: false, error: 'Not signed in.' };
+        if (window.console) console.info('[Supabase] pushExercise', { id: ex.id, authUid: uid });
+        if (!uid) {
+          // created_by must be auth.uid() or the RLS policy on assignments refuses the
+          // insert, which is the failure that leaves an exercise assigned to nobody.
+          fail('pushExercise', new Error('no Supabase session \u2014 sign in again'));
+          return { ok: false, error: 'Not signed in to the account server.' };
+        }
         var goal = Object.assign({}, ex.goal, {
           __assignment: ex.assignment || null,
           __assignedTo: ex.assignedTo || [],
@@ -513,6 +531,7 @@
           created_by: uid
         }).then(function (r) {
           if (r.error) { fail('pushExercise', r.error); return { ok: false, error: r.error.message }; }
+          if (window.console) console.info('[Supabase] exercise upserted', ex.id);
           // Assignment rows are what make the exercise VISIBLE to a student: the RLS
           // policy on exercises calls is_assigned_to_me(), which reads this table.
           // Without them a published exercise is readable only by its author, and

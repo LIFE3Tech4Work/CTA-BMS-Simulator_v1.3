@@ -54,6 +54,37 @@
 
   function ExerciseList() {
     var auth = useContext(window.AuthContext);
+    var B = window.SupabaseBackend;
+    var backendOn = !!(B && B.isConfigured());
+    var [syncing, setSyncing] = useState(false);
+
+    // Pull on mount, on tab focus, and on a slow timer. Without this a student had to
+    // sign out and back in to see work assigned while they were logged in.
+    useEffect(function () {
+      if (!backendOn) return;
+      var live = true;
+      function pull() {
+        if (!live) return;
+        setSyncing(true);
+        // `bump` belongs to useExerciseChanges' own closure, so it is not in scope here.
+        // syncDown writes localStorage directly and never calls the store's notify(),
+        // so nothing would redraw — dispatching the event the hook already listens for
+        // is what makes a newly synced assignment appear.
+        B.syncDown().then(function () {
+          if (!live) return;
+          setSyncing(false);
+          window.dispatchEvent(new Event('cta-exercise-changed'));
+        });
+      }
+      pull();
+      var iv = setInterval(pull, 30000);
+      window.addEventListener('focus', pull);
+      return function () {
+        live = false;
+        clearInterval(iv);
+        window.removeEventListener('focus', pull);
+      };
+    }, [backendOn]);
     useExerciseChanges();
     var ES = window.ExerciseStore;
 
@@ -187,9 +218,18 @@
     var ex = (ES && id) ? ES.getExercise(id) : null;
     var mine = !!(ex && auth && auth.operator &&
                   (ex.assignedTo || []).indexOf(auth.operator) !== -1);
+    // PREVIEW ON UNIT dropped an instructor onto the faulted diagram with no task panel,
+    // no goal readout and no diagnosis box — so the one thing preview exists for, seeing
+    // how the exercise READS to a student, was the thing it could not show. The banner
+    // refused because `mine` requires being in assignedTo, which an instructor never is.
+    // Preview renders the same panel and evaluates the goal live; every write below stays
+    // behind `mine`, so nothing is graded, saved or pushed.
+    var preview = !!(ex && !mine && window.AuthHelpers && window.AuthHelpers.hasPrivilege &&
+                     window.CTAAuthLevel &&
+                     window.AuthHelpers.hasPrivilege(window.CTAAuthLevel, 'Engr'));
 
     useEffect(function () {
-      if (!ex || !mine) return;
+      if (!ex || (!mine && !preview)) return;
       // Re-read by id on every tick rather than closing over the exercise object:
       // an instructor can retarget a published exercise while a student has it
       // open, and checking against the copy captured at mount would keep grading
@@ -203,7 +243,7 @@
       return function () { clearInterval(iv); };
     }, [id, mine, auth && auth.operator]);
 
-    if (!ex || !mine) return null;
+    if (!ex || (!mine && !preview)) return null;
 
     var passed = res.passed;
     var holdPct = Math.min(100, Math.round((res.heldMs / ES.HOLD_MS) * 100));
@@ -248,8 +288,9 @@
                  background: passed ? '#6ee7a8' : (res.ok ? '#e6a23c' : '#5b9bd5'),
                  boxShadow: passed ? '0 0 6px #6ee7a8' : 'none' }
       }),
-      React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, letterSpacing: '.3px' } },
-        passed ? 'COMPLETE' : 'EXERCISE'),
+      React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, letterSpacing: '.3px',
+                                             color: preview ? '#ffd79a' : undefined } },
+        preview ? 'STUDENT VIEW · PREVIEW' : (passed ? 'COMPLETE' : 'EXERCISE')),
       React.createElement('span', { style: { fontSize: '11.5px', fontWeight: 700 } }, ex.title),
       React.createElement('span', { style: { fontSize: '11px', opacity: .85 } },
         'Goal: ' + ES.goalText(ex)),
@@ -319,7 +360,9 @@
       }, '\u21ba RESTART'),
       React.createElement('button', {
         type: 'button',
-        title: 'Leave the exercise — your progress is kept',
+        title: preview
+          ? 'Leave preview — nothing was saved'
+          : 'Leave the exercise — your progress is kept',
         onClick: function () { setActiveId(null); },
         style: { padding: '3px 10px', borderRadius: '5px', fontSize: '10.5px', fontWeight: 800,
                  fontFamily: 'inherit', cursor: 'pointer', border: '1px solid rgba(255,255,255,.35)',
@@ -379,21 +422,27 @@
         },
           React.createElement('button', {
             type: 'button',
-            disabled: !diag.trim(),
+            // Disabled in preview: the diagnosis belongs to a student's attempt, and an
+            // instructor has none. Writing one would create an attempt row against the
+            // instructor's own account and show up in their results table as a submission.
+            disabled: !diag.trim() || preview,
             onClick: function () {
+              if (preview) return;
               if (ES.saveDiagnosis(ex.id, auth.operator, diag)) setDiagSaved(true);
             },
             style: { padding: '5px 13px', borderRadius: '5px', fontSize: '11px',
                      fontWeight: 800, fontFamily: 'inherit',
-                     cursor: diag.trim() ? 'pointer' : 'not-allowed',
-                     border: '1px solid ' + (diag.trim() ? '#2f7a52' : '#38445c'),
-                     background: diag.trim()
+                     cursor: (diag.trim() && !preview) ? 'pointer' : 'not-allowed',
+                     border: '1px solid ' + ((diag.trim() && !preview) ? '#2f7a52' : '#38445c'),
+                     background: (diag.trim() && !preview)
                        ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
-                     color: diag.trim() ? '#fff' : '#5d6b83' }
+                     color: (diag.trim() && !preview) ? '#fff' : '#5d6b83' }
           }, diagSaved ? '\u2713 SAVED' : 'SAVE ANSWER'),
           React.createElement('span', {
-            style: { fontSize: '10px', color: '#7f8ea6' }
-          }, 'Your instructor sees this with your results.')
+            style: { fontSize: '10px', color: preview ? '#ffd79a' : '#7f8ea6' }
+          }, preview
+              ? 'Preview \u2014 nothing you do here is saved or graded.'
+              : 'Your instructor sees this with your results.')
         )
       )
     ) : null,

@@ -126,19 +126,6 @@ const PointDialog = (function () {
           React.createElement('span', { style: { fontWeight: 800, fontSize: '12px', color: statusColor } }, statusText)
         )
       ),
-      cmdAnalog ? React.createElement('div', null,
-        React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Command Value'),
-        React.createElement('div', { style: { display: 'flex', alignItems: 'stretch', gap: '6px', marginBottom: '13px' } },
-          React.createElement('div', { style: stepBtn, onClick: () => onStep(-1), title: 'Decrease' }, '–'),
-          React.createElement('input', {
-            value: draft, onChange: (e) => onDraft(e.target.value), inputMode: 'decimal',
-            style: { flex: 1, textAlign: 'center', fontSize: '21px', fontWeight: 800,
-                     border: '1px solid #98a6bd', borderRadius: '6px', padding: '7px',
-                     color: '#12294f', background: '#fff' },
-          }),
-          React.createElement('div', { style: stepBtn, onClick: () => onStep(1), title: 'Increase' }, '+')
-        )
-      ) : null,
       cmdMode ? React.createElement('div', null,
         React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Control Mode'),
         React.createElement('div', { style: { display: 'flex', gap: '8px', marginBottom: '7px' } },
@@ -158,6 +145,19 @@ const PointDialog = (function () {
           }),
           'Not applied yet \u2014 press SET below to command this value.'
         ) : React.createElement('div', { style: { marginBottom: '13px' } })
+      ) : null,
+      cmdAnalog ? React.createElement('div', null,
+        React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Command Value'),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'stretch', gap: '6px', marginBottom: '13px' } },
+          React.createElement('div', { style: stepBtn, onClick: () => onStep(-1), title: 'Decrease' }, '–'),
+          React.createElement('input', {
+            value: draft, onChange: (e) => onDraft(e.target.value), inputMode: 'decimal',
+            style: { flex: 1, textAlign: 'center', fontSize: '21px', fontWeight: 800,
+                     border: '1px solid #98a6bd', borderRadius: '6px', padding: '7px',
+                     color: '#12294f', background: '#fff' },
+          }),
+          React.createElement('div', { style: stepBtn, onClick: () => onStep(1), title: 'Increase' }, '+')
+        )
       ) : null,
       (cmdOptions && cmdOptions.length) ? React.createElement('div', null,
         React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Command'),
@@ -787,7 +787,10 @@ const PointDialog = (function () {
             },
               tab === 'general' ? React.createElement(GeneralTab, {
                 rows: rows, statusText: statusText, statusColor: statusColor,
-                cmdAnalog: !isBinary && (kind === 'sp' || mode === 'man'),
+                // Only in Manual. A setpoint in Auto is written by the schedule or zone
+                // reset, so an entry box there is inert — it reads as a field that will
+                // not take, rather than a mode that has to be chosen first.
+                cmdAnalog: !isBinary && mode === 'man',
                 // Every kind gets Control Mode, setpoints included: the reset schedule
                 // and zone control write them, so there is an Auto to go back to.
                 cmdMode: true,

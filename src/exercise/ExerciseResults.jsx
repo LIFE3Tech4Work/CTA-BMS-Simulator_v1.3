@@ -130,7 +130,10 @@
         instructions: ex.instructions || '',
         target: String((ex.goal && ex.goal.target) != null ? ex.goal.target : ''),
         tolerance: String((ex.goal && ex.goal.tolerance) != null ? ex.goal.tolerance : ''),
-        published: !!ex.published
+        published: !!ex.published,
+        // Copied, not referenced, so editing a value does not mutate the saved record
+        // before SAVE CHANGES is pressed.
+        setup: Object.assign({}, ex.setup || {})
       });
       setEditingId(ex.id);
     }
@@ -140,6 +143,17 @@
       // assignment and criterion citation all survive an edit to the wording.
       var G = window.StudentGroups;
       var assignment = { mode: draft.mode, groupIds: draft.groupIds, seatIds: draft.seatIds };
+
+      // Was the targeting touched at all? Editing a brief or a setpoint must not
+      // recompute who is assigned — resolveSeats drops any id that is not a live
+      // account, and every seeded exercise names placeholder seats.
+      var prevAsg = ex.assignment || {};
+      var sameSeats = JSON.stringify((prevAsg.seatIds || []).slice().sort()) ===
+                      JSON.stringify((draft.seatIds || []).slice().sort());
+      var sameGroups = JSON.stringify((prevAsg.groupIds || []).slice().sort()) ===
+                       JSON.stringify((draft.groupIds || []).slice().sort());
+      var targetingUnchanged = (prevAsg.mode || 'students') === draft.mode &&
+                               sameSeats && sameGroups;
       // Flattened here for the same reason the author dialog flattens it: everything
       // downstream reads assignedTo, and resolving in one place keeps the two screens
       // from disagreeing about who an exercise reached.
@@ -155,6 +169,33 @@
           tolerance: draft.tolerance === '' ? ex.goal.tolerance : Number(draft.tolerance)
         })
       });
+      // Numeric-looking values go back as numbers. Left as strings, a setpoint would be
+      // compared against text and the fault would silently not apply.
+      var setupOut = {};
+      Object.keys(draft.setup || {}).forEach(function (k) {
+        var v = draft.setup[k];
+        if (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) {
+          setupOut[k] = Number(v);
+        } else if (v === 'true' || v === 'false') {
+          setupOut[k] = (v === 'true');
+        } else {
+          setupOut[k] = v;
+        }
+      });
+      next.setup = setupOut;
+      // Keep the existing recipients when the instructor did not touch targeting. When
+      // they did, keep any named id the resolver could not account for rather than
+      // dropping a student who simply has no account yet.
+      if (targetingUnchanged) {
+        next.assignedTo = (ex.assignedTo || []).slice();
+      } else {
+        var resolved = next.assignedTo || [];
+        var named = (draft.mode === 'students') ? (draft.seatIds || []) : [];
+        var union = resolved.slice();
+        named.forEach(function (s) { if (union.indexOf(s) < 0) union.push(s); });
+        next.assignedTo = union;
+      }
+
       ES.saveExercise(next);
       setEditingId(null);
       bump(function (n) { return n + 1; });
@@ -562,12 +603,46 @@
 
             // The detail an instructor could not see anywhere: what the exercise breaks,
             // and whether it carries an authored history.
-            React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '10px' }) }, 'STARTING STATE'),
+            React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '10px' }) },
+              'STARTING STATE \u2014 WHAT THE EXERCISE BREAKS'),
+            Object.keys(draft.setup || {}).length
+              ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '5px' } },
+                  Object.keys(draft.setup).map(function (k) {
+                    return React.createElement('div', {
+                      key: k, style: { display: 'flex', alignItems: 'center', gap: '7px' }
+                    },
+                      React.createElement('span', {
+                        style: { flex: 1, fontSize: '11px', color: '#c3cfdd', fontFamily: 'monospace' }
+                      }, k),
+                      React.createElement('input', {
+                        value: String(draft.setup[k]),
+                        onChange: function (e) {
+                          var next = Object.assign({}, draft.setup);
+                          next[k] = e.target.value;
+                          setDraft(Object.assign({}, draft, { setup: next }));
+                        },
+                        style: Object.assign({}, EDIT_IN, { width: '110px', textAlign: 'right' })
+                      }),
+                      React.createElement('button', {
+                        type: 'button', title: 'Drop this from the starting state',
+                        onClick: function () {
+                          var next = Object.assign({}, draft.setup);
+                          delete next[k];
+                          setDraft(Object.assign({}, draft, { setup: next }));
+                        },
+                        style: { padding: '4px 8px', borderRadius: '4px', fontSize: '10px',
+                                 fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+                                 border: '1px solid #46536b', background: '#1b2230', color: '#9db0c8' }
+                      }, 'REMOVE')
+                    );
+                  })
+                )
+              : React.createElement('div', {
+                  style: { fontSize: '11px', color: '#9db0c8', lineHeight: 1.5 }
+                }, 'Nothing faulted \u2014 the unit starts at its defaults.'),
             React.createElement('div', {
-              style: { fontSize: '11px', color: '#9db0c8', lineHeight: 1.5 }
-            }, Object.keys(ex.setup || {}).length
-                ? Object.keys(ex.setup).map(function (k) { return k + ' = ' + ex.setup[k]; }).join('  \u00b7  ')
-                : 'Nothing faulted \u2014 the unit starts at its defaults.'),
+              style: { fontSize: '10px', color: '#6f7f97', marginTop: '5px', lineHeight: 1.45 }
+            }, 'Applied to the unit when a student starts. Numbers stay numbers and ON/OFF stays text, so both work.'),
             (ex.trends && Object.keys(ex.trends).length) ? React.createElement('div', {
               style: { fontSize: '11px', color: '#7fd4e2', lineHeight: 1.5, marginTop: '4px' }
             }, 'Authored history on: ' + Object.keys(ex.trends).join(', ')) : null,

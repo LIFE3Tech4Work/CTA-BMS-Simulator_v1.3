@@ -130,12 +130,25 @@
     if (idx >= 0) all[idx] = ex; else all.push(ex);
     writeJSON(EX_KEY, all);
     notify();
-    return ex;
-    // Background push. The local copy is already written, so a failed network call
-    // leaves the instructor's own view intact and getStatus().lastError explains why
-    // students have not seen it yet.
+    // Push BEFORE returning. An earlier edit left `return ex;` above this block, so the
+    // Supabase write was unreachable dead code: every exercise saved locally, nothing
+    // ever reached public.exercises, and no assignment rows were written either — which
+    // is why students saw none of it.
     var B = be();
-    if (B) B.pushExercise(ex);
+    if (B) {
+      B.pushExercise(ex).then(function (res) {
+        if (res && res.ok) return;
+        // Reported, not swallowed. An instructor who believes an exercise was published
+        // when it only exists in their browser has no way to discover that otherwise —
+        // the students simply never see it.
+        var st = (B.getStatus && B.getStatus()) || {};
+        var why = (res && res.error) || st.lastError || 'unknown error';
+        if (window.console) console.error('[ExerciseStore] NOT saved to server:', why);
+        window.alert('Saved on this computer only — the server rejected it.\n\n' + why +
+          '\n\nStudents will not see this exercise until it reaches the server.');
+      });
+    }
+    return ex;
   }
 
   function deleteExercise(id) {

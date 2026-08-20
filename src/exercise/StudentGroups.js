@@ -178,8 +178,17 @@
       if (!names.length) return 'No group selected';
       return names.join(', ');
     }
-    var n = (a.seatIds || []).length;
-    if (!n) return 'Nobody selected';
+    // Counted through resolveSeats, not off the raw list: describing "6 students" while
+    // only two have accounts is how an instructor believes an exercise landed when it
+    // did not.
+    var named = (a.seatIds || []).length;
+    var live = resolveSeats(a).length;
+    if (!named) return 'Nobody selected';
+    if (live < named) {
+      return live + ' of ' + named + ' student' + (named === 1 ? '' : 's') +
+             ' \u2014 ' + (named - live) + ' have no account yet';
+    }
+    var n = named;
     var R = window.StudentRoster;
     if (n <= 2 && R) {
       return (a.seatIds || []).map(function (s) { return R.displayName(s); }).join(', ');
