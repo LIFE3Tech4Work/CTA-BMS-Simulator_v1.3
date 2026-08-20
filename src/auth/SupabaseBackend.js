@@ -337,6 +337,7 @@
       weather: row.weather,
       goal: row.goal,
       assignment: (row.goal && row.goal.__assignment) || row.assignment || null,
+      trends: (row.goal && row.goal.__trends) || null,
       assignedTo: (row.goal && row.goal.__assignedTo) || [],
       published: !!row.published,
       createdBy: row.created_by,
@@ -390,7 +391,13 @@
               exerciseId: a.exercise_id,
               operator: a.student_id,
               startedAt: a.started_at,
+              // completedAt is what statusFor and durationOf read; passed_at is the
+              // column. Mapping only one of them made every synced attempt look unfinished.
               passedAt: a.passed_at,
+              completedAt: a.passed_at,
+              passed: !!a.passed_at,
+              diagnosis: a.diagnosis || '',
+              progress: a.progress || {},
               actions: a.actions || []
             };
           }));
@@ -475,7 +482,10 @@
         if (!uid) return { ok: false, error: 'Not signed in.' };
         var goal = Object.assign({}, ex.goal, {
           __assignment: ex.assignment || null,
-          __assignedTo: ex.assignedTo || []
+          __assignedTo: ex.assignedTo || [],
+          // Rides in goal for the same reason assignment does: no column of its own yet,
+          // and without this an authored trend is lost on the next sync.
+          __trends: ex.trends || null
         });
         return c.from('exercises').upsert({
           id: ex.id,
@@ -523,8 +533,13 @@
           exercise_id: attempt.exerciseId,
           student_id: uid,
           started_at: attempt.startedAt || new Date().toISOString(),
-          passed_at: attempt.passedAt || null,
-          actions: attempt.actions || []
+          passed_at: attempt.passedAt || attempt.completedAt || null,
+          actions: attempt.actions || [],
+          // The written answer and the saved diagram state. Without these the server
+          // holds only whether a student passed, so a diagnosis exercise — where the
+          // reasoning IS the work — would sync as an empty pass or nothing at all.
+          diagnosis: attempt.diagnosis || null,
+          progress: attempt.progress || {}
         }, { onConflict: 'exercise_id,student_id' }).then(function (r) {
           if (r.error) { fail('pushAttempt', r.error); return { ok: false }; }
           return { ok: true };

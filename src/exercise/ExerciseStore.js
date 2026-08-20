@@ -225,6 +225,37 @@
    * logged action, so progress is saved continuously rather than needing a Save
    * button nobody would remember to press before signing out.
    */
+  /**
+   * Capture progress for whatever exercise is currently open. Used by the exit paths
+   * (page unload, sign-out, tab switch), which know a student is leaving but not which
+   * exercise they were on.
+   */
+  function saveActiveProgress() {
+    var id = null;
+    try { id = localStorage.getItem('cta_exercise_active'); } catch (e) {}
+    var op = window.CTAAuthOperator;
+    if (!id || !op) return;
+    saveProgress(id, op);
+  }
+
+  /**
+   * The student's written answer. Several scenarios ask them to explain what happened
+   * — Lev's diagnosis exercises are about reading evidence, not moving a number — and
+   * there was nowhere to write it, so the brief asked for something the screen could
+   * not accept. Kept on the attempt so it travels with their work and reaches the
+   * instructor's report.
+   */
+  function saveDiagnosis(exerciseId, operator, text) {
+    var attempt = attemptFor(exerciseId, operator);
+    if (!attempt) return false;
+    attempt.diagnosis = String(text || '');
+    attempt.diagnosisAt = new Date().toISOString();
+    saveAttempt(attempt);
+    var B = be();
+    if (B) B.pushAttempt(attempt);
+    return true;
+  }
+
   function saveProgress(exerciseId, operator) {
     var ex = getExercise(exerciseId);
     var attempt = attemptFor(exerciseId, operator);
@@ -390,7 +421,12 @@
   function statusFor(ex, operator) {
     var a = attemptFor(ex.id, operator);
     if (!a) return 'not-started';
-    return a.passed ? 'passed' : 'in-progress';
+    if (a.passed) return 'passed';
+    // Started but nothing changed yet is a different situation from started and
+    // actively working, and the instructor's report reads better for the distinction.
+    var touched = (a.actions && a.actions.length) ||
+                  (a.progress && Object.keys(a.progress).length);
+    return touched ? 'in-progress' : 'started';
   }
 
   // ─── Starter exercises ──────────────────────────────────────────────────────
@@ -407,8 +443,212 @@
   function starterExercises() {
     var seats = (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||
                 ['student_a', 'student_b', 'student_c', 'student_d', 'student_e', 'student_f'];
+    // Include the shared demo student, so the seeded scenarios are visible to whoever
+    // signs in with the credentials on the sign-on card rather than only to the
+    // lettered seats an instructor would assign by hand.
+    if (seats.indexOf('cta_student') < 0) seats = seats.concat(['cta_student']);
     var now = new Date().toISOString();
+
+    // Occupied window these scenarios are judged against — the same 08:00-18:00 the
+    // Schedule Manager and the F-03 unoccupied alarm both use, so the three agree.
+    function trend(preset, pattern) { return { preset: preset, pattern: pattern }; }
+
     return [
+      {
+        // 1. Ran all weekend with nobody in the building.
+        id: 'ex-lev-weekend-override',
+        title: 'Unit ran through the weekend',
+        unitId: 'AHU-4-4',
+        instructions:
+          'Check the weekly schedule for this unit, then look at the supply fan run ' +
+          'status in its History tab.\n\n' +
+          'The schedule says weekdays 08:00\u201318:00, but the fan tells a different ' +
+          'story. Compare it against zone CO\u2082 over the same days and decide whether ' +
+          'anyone was actually in the space.\n\n' +
+          'Write down what you think happened, then set the unit so it follows its ' +
+          'schedule again.',
+        setup: { runSchedule: true },
+        weather: null,
+        trends: {
+          fanRunning: trend('fan-weekend-override', {
+            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+            overrides: [
+              { dayOffset: 4, startHour: 0, endHour: 24, value: 1 },
+              { dayOffset: 3, startHour: 0, endHour: 24, value: 1 }
+            ]
+          }),
+          co2Sensor: trend('co2-occupancy', {
+            days: 10, startHour: 8, endHour: 18, weekends: false,
+            onValue: 850, offValue: 420,
+            // CO2 stays at baseline right through the weekend: the space was empty.
+            overrides: []
+          })
+        },
+        goal: {
+          key: 'runSchedule', label: 'Run Schedule', unit: '',
+          comparator: 'above', target: 0.5, tolerance: 0,
+          standard: '36', criterionId: 'soo-supply-air-setpoint',
+          criterionLabel: 'Unit follows its occupancy schedule',
+          citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU scheduling and occupancy',
+          basis: 'requirement'
+        },
+        assignedTo: seats.slice(), published: true,
+        createdBy: 'cta_instructor', createdAt: now
+      },
+      {
+        // 2. Late running that WAS justified — the control case.
+        id: 'ex-lev-extended-occupied',
+        title: 'Late running \u2014 was it justified?',
+        unitId: 'AHU-4-4',
+        instructions:
+          'This unit ran until 23:00 on Monday and Tuesday instead of stopping at ' +
+          '18:00.\n\n' +
+          'Before deciding that is a fault, check zone CO\u2082 over those same evenings. ' +
+          'Does the data support someone having been in the space?\n\n' +
+          'Say whether the override was justified, and what you would do about it.',
+        setup: {},
+        weather: null,
+        trends: {
+          fanRunning: trend('fan-weekend-override', {
+            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+            overrides: [
+              { dayOffset: 1, startHour: 18, endHour: 23, value: 1 },
+              { dayOffset: 0, startHour: 18, endHour: 23, value: 1 }
+            ]
+          }),
+          co2Sensor: trend('co2-occupancy', {
+            days: 10, startHour: 8, endHour: 18, weekends: false,
+            onValue: 850, offValue: 420,
+            // CO2 stays high into the evening: the room was genuinely in use.
+            overrides: [
+              { dayOffset: 1, startHour: 18, endHour: 23, value: 900 },
+              { dayOffset: 0, startHour: 18, endHour: 23, value: 880 }
+            ]
+          })
+        },
+        goal: {
+          key: 'co2Sensor', label: 'Zone CO\u2082', unit: ' PPM',
+          comparator: 'below', target: 1100, tolerance: 0,
+          standard: '62.1', criterionId: 'iaq-co2-differential',
+          criterionLabel: 'Zone CO\u2082 within ventilation indicator',
+          citation: 'ASHRAE 62.1 Appendix C \u2014 CO\u2082 as an indicator of ventilation rate per person',
+          basis: 'indicator'
+        },
+        assignedTo: seats.slice(), published: true,
+        createdBy: 'cta_instructor', createdAt: now
+      },
+      {
+        // 3. The same late running, one day later, with nobody there.
+        id: 'ex-lev-forgotten-override',
+        title: 'The override nobody reset',
+        unitId: 'AHU-4-4',
+        instructions:
+          'There was an evening event on Monday, so the unit was held on until 23:00. ' +
+          'It ran until 23:00 again on Tuesday.\n\n' +
+          'Compare zone CO\u2082 on the two evenings. What does Tuesday tell you that ' +
+          'Monday does not?\n\n' +
+          'Explain what went wrong and put the unit back on its schedule.',
+        setup: { runSchedule: true },
+        weather: null,
+        trends: {
+          fanRunning: trend('fan-weekend-override', {
+            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+            overrides: [
+              { dayOffset: 2, startHour: 18, endHour: 23, value: 1 },
+              { dayOffset: 1, startHour: 18, endHour: 23, value: 1 }
+            ]
+          }),
+          co2Sensor: trend('co2-occupancy', {
+            days: 10, startHour: 8, endHour: 18, weekends: false,
+            onValue: 850, offValue: 420,
+            // Monday evening occupied, Tuesday evening empty — the whole exercise.
+            overrides: [{ dayOffset: 2, startHour: 18, endHour: 23, value: 900 }]
+          })
+        },
+        goal: {
+          key: 'runSchedule', label: 'Run Schedule', unit: '',
+          comparator: 'above', target: 0.5, tolerance: 0,
+          standard: '36', criterionId: 'soo-supply-air-setpoint',
+          criterionLabel: 'Unit follows its occupancy schedule',
+          citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU scheduling and occupancy',
+          basis: 'requirement'
+        },
+        assignedTo: seats.slice(), published: true,
+        createdBy: 'cta_instructor', createdAt: now
+      },
+      {
+        // 4. Three signals, one conclusion — Lev's "prove it was mechanically cooling".
+        id: 'ex-lev-supply-temp-evidence',
+        title: 'Prove the unit was running',
+        unitId: 'AHU-4-4',
+        instructions:
+          'Someone insists this air handler was off over the weekend.\n\n' +
+          'Use three readings to test that claim: the supply fan run status, zone ' +
+          'CO\u2082, and the supply air temperature. A unit that is off cannot hold ' +
+          '60\u00b0F supply air \u2014 that only happens with the chilled water valve open.\n\n' +
+          'Set out what each reading tells you, and what the three together prove.',
+        setup: {},
+        weather: null,
+        trends: {
+          fanRunning: trend('fan-weekend-override', {
+            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+            overrides: [
+              { dayOffset: 4, startHour: 0, endHour: 24, value: 1 },
+              { dayOffset: 3, startHour: 0, endHour: 24, value: 1 }
+            ]
+          }),
+          co2Sensor: trend('co2-occupancy', {
+            days: 10, startHour: 8, endHour: 18, weekends: false,
+            onValue: 850, offValue: 420, overrides: []
+          }),
+          supplyAirTemp: trend('sat-mechanical-cooling', {
+            days: 10, startHour: 8, endHour: 18, weekends: false,
+            // 60 while conditioning, drifting to 74 when genuinely off.
+            onValue: 60, offValue: 74,
+            overrides: [
+              { dayOffset: 4, startHour: 0, endHour: 24, value: 60 },
+              { dayOffset: 3, startHour: 0, endHour: 24, value: 60 }
+            ]
+          })
+        },
+        goal: {
+          key: 'co2Sensor', label: 'Zone CO\u2082', unit: ' PPM',
+          comparator: 'below', target: 1100, tolerance: 0,
+          standard: '62.1', criterionId: 'iaq-co2-differential',
+          criterionLabel: 'Zone CO\u2082 within ventilation indicator',
+          citation: 'ASHRAE 62.1 Appendix C \u2014 CO\u2082 as an indicator of ventilation rate per person',
+          basis: 'indicator'
+        },
+        assignedTo: seats.slice(), published: true,
+        createdBy: 'cta_instructor', createdAt: now
+      },
+      {
+        // 5. ASHRAE violation on AHU-23-1 — the scenario that needed this unit to be
+        // able to raise an alarm at all. Boiler-room air handler, so the teaching point
+        // is that 62.1 ventilation applies wherever people work, not only to offices.
+        id: 'ex-lev-ashrae-ventilation',
+        title: 'Ventilation violation \u2014 ASHRAE 62.1',
+        unitId: 'AHU-23-1',
+        instructions:
+          'An alarm has been raised against this unit. Open the Alarm Summary, find it, ' +
+          'and work out which condition tripped.\n\n' +
+          'Then fix it on the diagram and say which ASHRAE standard the original state ' +
+          'violated, and why that standard exists.\n\n' +
+          'Hint: the outdoor air damper has a minimum position for a reason.',
+        setup: { oaDamperPosition: 0, co2Sensor: 1250 },
+        weather: null,
+        trends: null,
+        goal: {
+          key: 'oaDamperPosition', label: 'OA Damper Position', unit: '%',
+          comparator: 'above', target: 19.5, tolerance: 0,
+          standard: '62.1', criterionId: 'iaq-min-damper',
+          criterionLabel: 'OA damper at or above minimum position',
+          citation: 'ASHRAE 62.1 \u00a75.16 \u2014 outdoor air intake, minimum position during occupancy',
+          basis: 'requirement'
+        },
+        assignedTo: seats.slice(), published: true,
+        createdBy: 'cta_instructor', createdAt: now
+      },
       {
         id: 'ex-starter-overcool',
         title: 'Space is being overcooled',
@@ -436,21 +676,24 @@
       },
       {
         id: 'ex-starter-nostart',
-        title: 'Unit will not run during occupied hours',
+        title: 'Ventilation not keeping up with occupancy',
         unitId: 'AHU-4-4',
         instructions:
-          'The Ballroom air handler is delivering no air during occupied hours and the ' +
-          'space is going stale. Get the unit running and airflow restored.\n\n' +
-          'Hint: check what is commanding the unit before you touch the fan itself.',
-        setup: { runSchedule: false },
+          'The Ballroom is at high occupancy and zone CO\u2082 has climbed past the level ' +
+          'ASHRAE 62.1 uses to indicate adequate ventilation. Bring it back down.\n\n' +
+          'Hint: the sequence should be bringing in more outdoor air as CO\u2082 rises \u2014 ' +
+          'check the outdoor air damper and what is commanding the unit.',
+        setup: { co2Sensor: 1450, oaDamperPosition: 0 },
         weather: null,
+        // CO2 below the 62.1 Appendix C indicator, not a raw airflow number: 1000 CFM
+        // on a unit rated for 16,500 is not a fault, and reads as a typo for ppm.
         goal: {
-          key: 'cfm', label: 'Supply Airflow', unit: ' CFM',
-          comparator: 'above', target: 1000, tolerance: 0,
-          standard: '62.1', criterionId: 'iaq-min-oa-airflow',
-          criterionLabel: 'Minimum outdoor airflow maintained',
-          citation: 'ASHRAE 62.1 \u00a76.2 \u2014 Ventilation Rate Procedure, minimum outdoor air intake',
-          basis: 'requirement'
+          key: 'co2Sensor', label: 'Zone CO\u2082', unit: ' PPM',
+          comparator: 'below', target: 1100, tolerance: 0,
+          standard: '62.1', criterionId: 'iaq-co2-differential',
+          criterionLabel: 'Zone CO\u2082 within ventilation indicator',
+          citation: 'ASHRAE 62.1 Appendix C \u2014 CO\u2082 as an indicator of ventilation rate per person',
+          basis: 'indicator'
         },
         assignedTo: seats.slice(),
         published: true,
@@ -460,14 +703,123 @@
     ];
   }
 
+  /** Ids already seeded at some point, so a deliberately deleted starter stays gone. */
+  function seededIds() {
+    try {
+      var raw = localStorage.getItem(SEED_FLAG);
+      if (!raw || raw === '1') return [];          // legacy boolean marker
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  }
+
+  /**
+   * A library of ready-made exercises across the units the seeded scenarios miss.
+   * Saved as drafts so cta_instructor can review, retarget and publish them rather
+   * than finding them already live in front of a class.
+   */
+  function libraryExercises() {
+    var now = new Date().toISOString();
+    function ex(o) {
+      return {
+        id: o.id, title: o.title, unitId: o.unit, instructions: o.brief,
+        setup: o.setup, weather: o.weather || null, goal: o.goal,
+        assignedTo: [], assignment: { mode: 'students', groupIds: [], seatIds: [] },
+        published: false, createdBy: 'cta_instructor', createdAt: now
+      };
+    }
+    return [
+      // ── AHU-4-3 ───────────────────────────────────────────────────────────
+      ex({
+        id: 'ex-lib-43-overcool',
+        title: 'Ballroom running cold',
+        unit: 'AHU-4-3',
+        brief: 'The ballroom is being overcooled and staff are complaining. Supply air is well below where it should be for this unit. Find what is driving it and return supply air to its design setpoint.\n\nHint: a point left in Manual overrides the control program. The Point Attribute Report under View lists every override on the system.',
+        setup: { coolingCoilSetpoint: 46 },
+        goal: { key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
+                comparator: 'within', target: 60, tolerance: 1.5,
+                standard: '36', criterionId: 'soo-supply-air-setpoint',
+                criterionLabel: 'Supply air at its active setpoint',
+                citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU supply air temperature control',
+                basis: 'requirement' }
+      }),
+      ex({
+        id: 'ex-lib-43-damper',
+        title: 'Ventilation shut off during occupancy',
+        unit: 'AHU-4-3',
+        brief: 'Temperatures look correct but the space feels stuffy. Check whether the unit is actually bringing in outdoor air, and restore the minimum position required during occupied hours.\n\nThis is a fault a student will not catch by watching supply air alone.',
+        setup: { oaDamperPosition: 0 },
+        goal: { key: 'oaDamperPosition', label: 'OA Damper Position', unit: '%',
+                comparator: 'above', target: 19.5, tolerance: 0,
+                standard: '62.1', criterionId: 'iaq-min-damper',
+                criterionLabel: 'OA damper at or above minimum position',
+                citation: 'ASHRAE 62.1 \u00a75.16 \u2014 outdoor air intake, minimum position during occupancy',
+                basis: 'requirement' }
+      }),
+
+      // ── AHU-23-1 ──────────────────────────────────────────────────────────
+      ex({
+        id: 'ex-lib-231-fan',
+        title: 'Meeting rooms getting no air',
+        unit: 'AHU-23-1',
+        brief: 'Occupants on the 2nd level report no air movement during the working day. Work out what is stopping the unit and get airflow restored.\n\nHint: check what is commanding the unit before you touch the fan itself.',
+        setup: { runSchedule: false },
+        goal: { key: 'cfm', label: 'Supply Airflow', unit: ' CFM',
+                comparator: 'above', target: 1000, tolerance: 0,
+                standard: '62.1', criterionId: 'iaq-min-oa-airflow',
+                criterionLabel: 'Minimum outdoor airflow maintained',
+                citation: 'ASHRAE 62.1 \u00a76.2 \u2014 Ventilation Rate Procedure, minimum outdoor air intake',
+                basis: 'requirement' }
+      }),
+      ex({
+        id: 'ex-lib-231-freeze',
+        title: 'Preheat coil not protecting the plenum',
+        unit: 'AHU-23-1',
+        brief: 'It is a cold morning and the preheat coil is not doing its job. Find out why the plenum is running below its minimum and bring supply air back to setpoint.\n\nFreeze protection runs at all times, not only when the space calls for heat \u2014 work out what is preventing it.',
+        setup: { phtValvePosition: 0, oaTemperature: 28 },
+        goal: { key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
+                comparator: 'within', target: 60, tolerance: 2,
+                standard: '36', criterionId: 'soo-supply-air-setpoint',
+                criterionLabel: 'Supply air at its active setpoint',
+                citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU supply air temperature control',
+                basis: 'requirement' }
+      }),
+
+      // ── VAV-4-4-02 ────────────────────────────────────────────────────────
+      // A terminal box teaches something the AHUs cannot: the zone can be wrong while
+      // the air handler upstream is behaving perfectly.
+      ex({
+        id: 'ex-lib-vav-damper',
+        title: 'Ballroom zone starved of air',
+        unit: 'VAV-4-4-02',
+        brief: 'The ballroom is uncomfortable but the air handler upstream looks healthy. Work out what is happening at the terminal box and restore airflow to the zone.\n\nStart by comparing what the AHU is delivering with what this box is passing through.',
+        setup: { damperPosition: 0 },
+        goal: { key: 'airflowCFM', label: 'Zone Airflow', unit: ' CFM',
+                comparator: 'above', target: 300, tolerance: 0,
+                standard: '62.1', criterionId: 'iaq-min-oa-airflow',
+                criterionLabel: 'Minimum outdoor airflow maintained',
+                citation: 'ASHRAE 62.1 \u00a76.2 \u2014 Ventilation Rate Procedure, minimum outdoor air intake',
+                basis: 'requirement' }
+      })
+    ];
+  }
+
   function seedIfEmpty() {
     try {
-      if (localStorage.getItem(SEED_FLAG)) return;
-      localStorage.setItem(SEED_FLAG, '1');
+      var seen = seededIds();
       var existing = listExercises();
       var byId = {};
       existing.forEach(function (e) { byId[e.id] = true; });
-      var add = starterExercises().filter(function (e) { return !byId[e.id]; });
+      // Skip anything present OR previously seeded and since deleted.
+      var add = starterExercises().concat(libraryExercises()).filter(function (e) {
+        return !byId[e.id] && seen.indexOf(e.id) < 0;
+      });
+      // Record every starter as seen, so this run is the last chance to add these.
+      var nextSeen = seen.slice();
+      starterExercises().forEach(function (e) {
+        if (nextSeen.indexOf(e.id) < 0) nextSeen.push(e.id);
+      });
+      localStorage.setItem(SEED_FLAG, JSON.stringify(nextSeen));
       if (!add.length) return;
       writeJSON(EX_KEY, existing.concat(add));
       notify();
@@ -482,7 +834,40 @@
     return (B && B.isConfigured()) ? B : null;
   }
 
+  /**
+   * The exercise the signed-in student currently has open, or null. Used by the
+   * History tab to find authored trends — it has no other way to know an exercise is
+   * running.
+   */
+  function activeExercise() {
+    var op = window.CTAAuthOperator;
+    if (!op) return null;
+    var open = listAttempts().filter(function (a) {
+      return a.operator === op && !a.passed;
+    });
+    if (!open.length) return null;
+    return getExercise(open[open.length - 1].exerciseId);
+  }
+
+  // Closing the tab is the most common way a session ends, and it gave no chance to
+  // write anything. beforeunload is best-effort but localStorage is synchronous, so the
+  // local record lands even when the network push does not.
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('beforeunload', function () {
+      try { saveActiveProgress(); } catch (e) {}
+    });
+    // Fires when a tab is backgrounded or the browser is closed on mobile, where
+    // beforeunload is unreliable.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') {
+        try { saveActiveProgress(); } catch (e) {}
+      }
+    });
+  }
+
   window.ExerciseStore = {
+    activeExercise: activeExercise,
+    saveActiveProgress: saveActiveProgress,
     HOLD_MS: HOLD_MS,
     COMPARATORS: COMPARATORS,
     UNIT_CONTROLLERS: UNIT_CONTROLLERS,
@@ -500,6 +885,7 @@
     saveAttempt: saveAttempt,
     startAttempt: startAttempt,
     saveProgress: saveProgress,
+    saveDiagnosis: saveDiagnosis,
     logAction: logAction,
     evaluate: evaluate,
     check: check,

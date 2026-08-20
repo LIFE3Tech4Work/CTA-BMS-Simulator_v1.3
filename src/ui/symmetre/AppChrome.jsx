@@ -224,6 +224,19 @@ const SymmetreAppChrome = (function() {
       if (id === 'alarms') {
         window.location.hash = '#/alarms';
       } else if (id === 'reload') {
+        // For a student mid-exercise this clears the authored fault across every unit
+        // and solves the exercise in one click — more than the panel button that is
+        // already locked, and with no confirm step. Routed to the exercise's own
+        // starting state instead, which is what RESTART in the banner does.
+        var RC = window.ResetControls;
+        if (RC && RC.studentInExercise && RC.studentInExercise()) {
+          var ES = window.ExerciseStore;
+          var activeId = null;
+          try { activeId = localStorage.getItem('cta_exercise_active'); } catch (e) {}
+          var activeEx = (ES && activeId) ? ES.getExercise(activeId) : null;
+          if (activeEx && ES.applySetup) ES.applySetup(activeEx);
+          return;
+        }
         // ─── Full simulation reset ───────────────────────────────────────────
         // Previously this only reset AHU-4-4: the block hardcoded that unit's
         // defaults and named its controller directly, so pressing ↻ while looking

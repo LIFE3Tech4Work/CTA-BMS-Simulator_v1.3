@@ -144,6 +144,13 @@ create table if not exists public.attempts (
   unique (exercise_id, student_id)
 );
 
+-- The student's written answer, and the diagram state they left behind. Added after
+-- the diagnosis scenarios landed: those ask a student to explain what the evidence
+-- shows, so the reasoning is the graded artifact and storing only passed/not-passed
+-- would throw the work away.
+alter table public.attempts add column if not exists diagnosis text;
+alter table public.attempts add column if not exists progress jsonb not null default '{}';
+
 create index if not exists attempts_exercise_idx on public.attempts (exercise_id);
 
 -- ─── Groups (teams within a class) ────────────────────────────────────────

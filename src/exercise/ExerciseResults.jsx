@@ -22,8 +22,92 @@
 
   function ExerciseResults() {
     var ES = window.ExerciseStore;
+    var B = window.SupabaseBackend;
+    var backendOn = !!(B && B.isConfigured());
+    var [syncing, setSyncing] = useState(false);
+    var [syncedAt, setSyncedAt] = useState(null);
+
+    function refresh() {
+      if (!backendOn || syncing) return;
+      setSyncing(true);
+      B.syncDown().then(function (res) {
+        setSyncing(false);
+        setSyncedAt(new Date());
+        // Roster, groups, exercises and attempts all landed — redraw from the cache.
+        bump(function (n) { return n + 1; });
+        if (res && res.ok === false) {
+          var st = B.getStatus();
+          if (st && st.lastError) window.alert('Could not refresh: ' + st.lastError);
+        }
+      });
+    }
+
+    // Pull once on mount, then on a slow interval. New signups and freshly submitted
+    // work appear without the instructor doing anything, and the button is there for
+    // when they want it now.
+    useEffect(function () {
+      if (!backendOn) return;
+      refresh();
+      var iv = setInterval(refresh, 45000);
+      // A student submitting while the instructor watches should not wait 45s.
+      function onFocus() { refresh(); }
+      window.addEventListener('focus', onFocus);
+      return function () { clearInterval(iv); window.removeEventListener('focus', onFocus); };
+    }, [backendOn]);
     var [, bump] = useState(0);
     var [openId, setOpenId] = useState(null);
+    // Which exercise is being edited, and its in-progress values. Held apart from the
+    // saved record so CANCEL genuinely discards.
+    var [editingId, setEditingId] = useState(null);
+    var [draft, setDraft] = useState({});
+
+    var EDIT_LBL = { fontSize: '9.5px', fontWeight: 800, letterSpacing: '.4px',
+                     color: '#7f8ea6', marginBottom: '3px' };
+    var EDIT_IN = { padding: '5px 8px', borderRadius: '4px', fontSize: '11.5px',
+                    fontFamily: 'inherit', background: '#1b2536',
+                    border: '1px solid #46536b', color: '#e8edf6', boxSizing: 'border-box' };
+
+    function startEdit(ex) {
+      if (editingId === ex.id) { setEditingId(null); return; }
+      setDraft({
+        // Targeting travels in the draft too, so CANCEL discards a roster change the
+        // same way it discards a typo.
+        mode: (ex.assignment && ex.assignment.mode) || 'students',
+        groupIds: ((ex.assignment && ex.assignment.groupIds) || []).slice(),
+        seatIds: (ex.assignedTo || []).slice(),
+        title: ex.title || '',
+        instructions: ex.instructions || '',
+        target: String((ex.goal && ex.goal.target) != null ? ex.goal.target : ''),
+        tolerance: String((ex.goal && ex.goal.tolerance) != null ? ex.goal.tolerance : ''),
+        published: !!ex.published
+      });
+      setEditingId(ex.id);
+    }
+
+    function saveEdit(ex) {
+      // Merged onto the existing record rather than rebuilt, so the setup, trends,
+      // assignment and criterion citation all survive an edit to the wording.
+      var G = window.StudentGroups;
+      var assignment = { mode: draft.mode, groupIds: draft.groupIds, seatIds: draft.seatIds };
+      // Flattened here for the same reason the author dialog flattens it: everything
+      // downstream reads assignedTo, and resolving in one place keeps the two screens
+      // from disagreeing about who an exercise reached.
+      var resolved = G ? G.resolveSeats(assignment) : draft.seatIds;
+      var next = Object.assign({}, ex, {
+        assignment: assignment,
+        assignedTo: resolved,
+        title: draft.title.trim() || ex.title,
+        instructions: draft.instructions,
+        published: !!draft.published,
+        goal: Object.assign({}, ex.goal, {
+          target: draft.target === '' ? ex.goal.target : Number(draft.target),
+          tolerance: draft.tolerance === '' ? ex.goal.tolerance : Number(draft.tolerance)
+        })
+      });
+      ES.saveExercise(next);
+      setEditingId(null);
+      bump(function (n) { return n + 1; });
+    }
     var [openLog, setOpenLog] = useState(null);
     // The temporary password just issued, shown once under its own row. Held in
     // state rather than persisted: it is a hand-off to the person standing there,
@@ -97,6 +181,10 @@
 
     function renderStudentRow(ex, seat) {
       var attempt = ES.attemptFor(ex.id, seat);
+      // The written answer, shown under the row. On a diagnosis exercise this is the
+      // whole submission — a pass/fail column alone would grade the click and ignore
+      // the reasoning the exercise was set to elicit.
+      var diagnosis = attempt && attempt.diagnosis;
       var status = ES.statusFor(ex, seat);
       var logKey = ex.id + '|' + seat;
       var isOpen = openLog === logKey;
@@ -140,6 +228,22 @@
               }, (isOpen ? 'HIDE' : 'SHOW') + ' ' + actions.length + ' ACTION' + (actions.length === 1 ? '' : 'S'))
             : React.createElement('span', { style: { fontSize: '10px', color: '#5d6b83' } }, 'no changes yet')
         ),
+        // The written answer sits above the action log and outside the expander: on a
+        // diagnosis exercise it IS the submission, and hiding it behind a click meant an
+        // instructor marking a class would never see the reasoning they set the task for.
+        diagnosis ? React.createElement('div', {
+          style: { margin: '0 10px 8px', padding: '8px 10px', borderRadius: '5px',
+                   background: 'rgba(127,212,226,.08)', border: '1px solid #2b6f7d' }
+        },
+          React.createElement('div', {
+            style: { fontSize: '9.5px', fontWeight: 800, letterSpacing: '.4px',
+                     color: '#7fd4e2', marginBottom: '4px' }
+          }, 'STUDENT DIAGNOSIS'),
+          React.createElement('div', {
+            style: { fontSize: '11.5px', color: '#e8edf6', lineHeight: 1.5,
+                     whiteSpace: 'pre-line' }
+          }, diagnosis)
+        ) : null,
         isOpen ? React.createElement('div', {
           style: { background: '#141b28', borderTop: '1px solid rgba(53,64,90,.6)',
                    maxHeight: '190px', overflowY: 'auto' }
@@ -261,6 +365,177 @@
                 style: { padding: '10px 12px', fontSize: '11px', color: '#9db0c8',
                          borderTop: '1px solid rgba(53,64,90,.6)' }
               }, 'Saved as a draft — nobody is assigned yet.'),
+          editingId === ex.id ? React.createElement('div', {
+            style: { padding: '11px 12px', borderTop: '1px solid rgba(53,64,90,.6)',
+                     background: '#141a26' }
+          },
+            React.createElement('div', { style: EDIT_LBL }, 'TITLE'),
+            React.createElement('input', {
+              value: draft.title, onChange: function (e) { setDraft(Object.assign({}, draft, { title: e.target.value })); },
+              style: Object.assign({}, EDIT_IN, { width: '100%' })
+            }),
+            React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '8px' }) }, 'BRIEF FOR STUDENTS'),
+            React.createElement('textarea', {
+              value: draft.instructions, rows: 4,
+              onChange: function (e) { setDraft(Object.assign({}, draft, { instructions: e.target.value })); },
+              style: Object.assign({}, EDIT_IN, { width: '100%', resize: 'vertical', lineHeight: 1.45 })
+            }),
+            React.createElement('div', { style: { display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap' } },
+              React.createElement('div', null,
+                React.createElement('div', { style: EDIT_LBL }, 'TARGET'),
+                React.createElement('input', {
+                  type: 'number', step: 'any', value: draft.target,
+                  onChange: function (e) { setDraft(Object.assign({}, draft, { target: e.target.value })); },
+                  style: Object.assign({}, EDIT_IN, { width: '90px' })
+                })
+              ),
+              React.createElement('div', null,
+                React.createElement('div', { style: EDIT_LBL }, 'TOLERANCE'),
+                React.createElement('input', {
+                  type: 'number', step: 'any', value: draft.tolerance,
+                  onChange: function (e) { setDraft(Object.assign({}, draft, { tolerance: e.target.value })); },
+                  style: Object.assign({}, EDIT_IN, { width: '90px' })
+                })
+              ),
+              React.createElement('label', {
+                style: { display: 'flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-end',
+                         fontSize: '11px', color: '#c3cfdd', fontWeight: 700 }
+              },
+                React.createElement('input', {
+                  type: 'checkbox', checked: !!draft.published,
+                  onChange: function (e) { setDraft(Object.assign({}, draft, { published: e.target.checked })); }
+                }),
+                'Published'
+              )
+            ),
+            // ── Who gets it ────────────────────────────────────────────────────
+            React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '10px' }) }, 'ASSIGNED TO'),
+            React.createElement('div', { style: { display: 'flex', gap: '4px', marginBottom: '7px' } },
+              [['class', 'Whole class'], ['groups', 'Groups'], ['students', 'Individuals']]
+                .map(function (mo) {
+                  var on = draft.mode === mo[0];
+                  return React.createElement('button', {
+                    key: mo[0], type: 'button',
+                    onClick: function () { setDraft(Object.assign({}, draft, { mode: mo[0] })); },
+                    style: { flex: 1, padding: '5px 4px', borderRadius: '5px', fontSize: '10.5px',
+                             fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                             background: on ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
+                             border: '1px solid ' + (on ? '#2f7a52' : '#46536b'),
+                             color: on ? '#fff' : '#c3cfdd' }
+                  }, mo[1]);
+                })
+            ),
+
+            draft.mode === 'class' ? React.createElement('div', {
+              style: { fontSize: '10.5px', color: '#9db0c8', lineHeight: 1.45 }
+            }, 'Every student account gets this, including anyone who signs up later.') : null,
+
+            draft.mode === 'groups' ? React.createElement('div', {
+              style: { display: 'flex', flexWrap: 'wrap', gap: '5px' }
+            },
+              (window.StudentGroups ? window.StudentGroups.all() : []).map(function (g) {
+                var on = draft.groupIds.indexOf(g.id) >= 0;
+                return React.createElement('button', {
+                  key: g.id, type: 'button',
+                  onClick: function () {
+                    var nx = on ? draft.groupIds.filter(function (x) { return x !== g.id; })
+                               : draft.groupIds.concat([g.id]);
+                    setDraft(Object.assign({}, draft, { groupIds: nx }));
+                  },
+                  style: { padding: '4px 10px', borderRadius: '999px', fontSize: '11px',
+                           fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                           background: on ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
+                           border: '1px solid ' + (on ? '#2f7a52' : '#46536b'),
+                           // An empty team assigns to nobody, so it is called out.
+                           color: on ? '#fff' : (g.seatIds.length ? '#c3cfdd' : '#e6a23c') }
+                }, window.StudentGroups.label(g));
+              }),
+              (window.StudentGroups && !window.StudentGroups.all().length)
+                ? React.createElement('span', { style: { fontSize: '10.5px', color: '#9db0c8' } },
+                    'No groups yet — create them in Save as Exercise on the station.')
+                : null
+            ) : null,
+
+            draft.mode === 'students' ? React.createElement('div', {
+              style: { display: 'flex', flexWrap: 'wrap', gap: '5px' }
+            },
+              (window.StudentRoster ? window.StudentRoster.seats() : []).map(function (seat) {
+                var on = draft.seatIds.indexOf(seat) >= 0;
+                var R = window.StudentRoster;
+                return React.createElement('button', {
+                  key: seat, type: 'button',
+                  onClick: function () {
+                    var nx = on ? draft.seatIds.filter(function (x) { return x !== seat; })
+                               : draft.seatIds.concat([seat]);
+                    setDraft(Object.assign({}, draft, { seatIds: nx }));
+                  },
+                  title: R ? R.displayLong(seat) : seat,
+                  style: { padding: '4px 10px', borderRadius: '999px', fontSize: '11px',
+                           fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                           background: on ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
+                           border: '1px solid ' + (on ? '#2f7a52' : '#46536b'),
+                           color: on ? '#fff' : '#c3cfdd' }
+                }, R ? R.displayName(seat) : seat);
+              })
+            ) : null,
+
+            // What the change will actually do, before it is saved. Adding a student
+            // mid-exercise must not read as if it wiped everyone else's attempts.
+            (function () {
+              var G = window.StudentGroups;
+              var willReach = G ? G.resolveSeats({
+                mode: draft.mode, groupIds: draft.groupIds, seatIds: draft.seatIds
+              }) : draft.seatIds;
+              var current = ex.assignedTo || [];
+              var added = willReach.filter(function (x) { return current.indexOf(x) < 0; });
+              var removed = current.filter(function (x) { return willReach.indexOf(x) < 0; });
+              // A removed student's attempt is kept, not deleted — it is a record of work
+              // they did, and losing it because a roster was corrected would be wrong.
+              var withWork = removed.filter(function (x) {
+                return ES.statusFor(ex, x) !== 'not-started';
+              });
+              return React.createElement('div', {
+                style: { marginTop: '7px', fontSize: '10px', lineHeight: 1.5,
+                         color: willReach.length ? '#8ff0b5' : '#e6a23c' }
+              },
+                willReach.length
+                  ? willReach.length + ' student' + (willReach.length === 1 ? '' : 's') + ' will see this' +
+                    (added.length ? '  \u00b7  +' + added.length + ' added' : '') +
+                    (removed.length ? '  \u00b7  \u2212' + removed.length + ' removed' : '')
+                  : 'Nobody will see this \u2014 pick a group with students in it, or choose individuals.',
+                withWork.length ? React.createElement('div', {
+                  style: { color: '#ffd79a', marginTop: '3px' }
+                }, withWork.length + ' of those removed already started \u2014 their results are kept.') : null
+              );
+            })(),
+
+            // The detail an instructor could not see anywhere: what the exercise breaks,
+            // and whether it carries an authored history.
+            React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '10px' }) }, 'STARTING STATE'),
+            React.createElement('div', {
+              style: { fontSize: '11px', color: '#9db0c8', lineHeight: 1.5 }
+            }, Object.keys(ex.setup || {}).length
+                ? Object.keys(ex.setup).map(function (k) { return k + ' = ' + ex.setup[k]; }).join('  \u00b7  ')
+                : 'Nothing faulted \u2014 the unit starts at its defaults.'),
+            (ex.trends && Object.keys(ex.trends).length) ? React.createElement('div', {
+              style: { fontSize: '11px', color: '#7fd4e2', lineHeight: 1.5, marginTop: '4px' }
+            }, 'Authored history on: ' + Object.keys(ex.trends).join(', ')) : null,
+            React.createElement('div', { style: { display: 'flex', gap: '7px', marginTop: '11px' } },
+              React.createElement('button', {
+                type: 'button', onClick: function () { saveEdit(ex); },
+                style: { padding: '6px 14px', borderRadius: '5px', fontSize: '11px', fontWeight: 800,
+                         fontFamily: 'inherit', cursor: 'pointer', border: '1px solid #2f7a52',
+                         background: 'linear-gradient(180deg,#3f8f5a,#2d7346)', color: '#fff' }
+              }, 'SAVE CHANGES'),
+              React.createElement('button', {
+                type: 'button', onClick: function () { setEditingId(null); },
+                style: { padding: '6px 14px', borderRadius: '5px', fontSize: '11px', fontWeight: 800,
+                         fontFamily: 'inherit', cursor: 'pointer', border: '1px solid #46536b',
+                         background: '#1b2230', color: '#c3cfdd' }
+              }, 'CANCEL')
+            )
+          ) : null,
+
           React.createElement('div', {
             style: { display: 'flex', gap: '8px', padding: '10px 12px',
                      borderTop: '1px solid rgba(53,64,90,.6)' }
@@ -276,6 +551,14 @@
                        fontFamily: 'inherit', cursor: 'pointer', border: '1px solid #46536b',
                        background: '#242e42', color: '#c3cfdd' }
             }, 'PREVIEW ON UNIT'),
+            React.createElement('button', {
+              type: 'button',
+              title: 'Edit this exercise',
+              onClick: function () { startEdit(ex); },
+              style: { padding: '5px 11px', borderRadius: '5px', fontSize: '11px', fontWeight: 800,
+                       fontFamily: 'inherit', cursor: 'pointer', border: '1px solid #46536b',
+                       background: '#242e42', color: '#c3cfdd' }
+            }, editingId === ex.id ? 'CLOSE EDITOR' : 'EDIT'),
             React.createElement('div', { style: { flex: 1 } }),
             React.createElement('button', {
               type: 'button',
@@ -379,6 +662,25 @@
     }
 
     return React.createElement('div', { style: { fontFamily: FONT, marginBottom: '22px' } },
+      // Refresh control first: everything below it is a snapshot of the last sync, and
+      // a stale screen that looks live is how an instructor concludes a student never
+      // submitted anything.
+      backendOn ? React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '12px' }
+      },
+        React.createElement('button', {
+          type: 'button', onClick: refresh, disabled: syncing,
+          style: { padding: '5px 11px', borderRadius: '5px', fontSize: '11px', fontWeight: 700,
+                   cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit',
+                   background: '#1b2230', border: '1px solid #38445c',
+                   color: syncing ? '#6f7f97' : '#c3cfdd' }
+        }, syncing ? 'Refreshing\u2026' : '\u21bb Refresh from server'),
+        React.createElement('span', { style: { fontSize: '10.5px', color: '#6f7f97' } },
+          syncedAt
+            ? 'Updated ' + syncedAt.toLocaleTimeString('en-US',
+                { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            : 'Picks up new sign-ups and submitted work')
+      ) : null,
       renderAccounts(),
       React.createElement('div', {
         style: { display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '10px' }

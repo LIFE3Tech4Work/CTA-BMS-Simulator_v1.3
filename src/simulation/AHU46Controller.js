@@ -441,6 +441,24 @@
   // passed to setValue() appear here. oaDamperPosition is the one output
   // field that can also be flagged Manual (see file header).
   var modes = {};
+  /**
+   * The air temperature leaving a coil whose valve the operator is holding.
+   * Returns null when that valve is not in Manual, so callers fall through to the
+   * normal setpoint-driven sizing.
+   *
+   *   entering  air temperature entering the coil
+   *   key       'phtValvePosition' | 'chwValvePosition'
+   *   capacity  full-open swing in degF (MAX_COIL_RISE / MAX_COIL_DROP)
+   *   heating   true adds, false subtracts
+   */
+  function honourCommandedValve(entering, key, capacity, heating) {
+    if (modes[key] !== 'Manual') return null;
+    var pos = state[key];
+    if (typeof pos !== 'number') return null;
+    var frac = Math.max(0, Math.min(100, pos)) / 100;
+    return heating ? entering + frac * capacity : entering - frac * capacity;
+  }
+
 
   // Operator-commanded values for every key currently in Manual. A real BMS
   // point override sits at priority 8 and OUTRANKS the control program: the
@@ -1104,7 +1122,8 @@
         state.phtValvePosition = 0;
         state.phtValveStatus = 'OFF';
       }
-      state.preheatTemp = oaLeaving;
+      var phtCmd46 = honourCommandedValve(state.oaTemperature, 'phtValvePosition', MAX_COIL_RISE, true);
+      state.preheatTemp = (phtCmd46 !== null) ? phtCmd46 : oaLeaving;
     } else {
       state.phtValvePosition = 0;
       state.phtValveStatus = 'OFF';
@@ -1192,9 +1211,16 @@
         // exceeds coil capacity.
         var dropNeeded = state.mixedAirTemp - state.coolingCoilSetpoint;
         var drop = Math.min(MAX_COIL_DROP, dropNeeded);
-        state.chwValvePosition = Math.min(100, Math.round((drop / MAX_COIL_DROP) * 100));
-        state.chwValveStatus = 'ON';
-        state.supplyAirTemp = state.mixedAirTemp - drop;
+        var chwCmd46 = honourCommandedValve(state.mixedAirTemp, 'chwValvePosition', MAX_COIL_DROP, false);
+        if (chwCmd46 === null) {
+          state.chwValvePosition = Math.min(100, Math.round((drop / MAX_COIL_DROP) * 100));
+        }
+        state.chwValveStatus = state.chwValvePosition > 0 ? 'ON' : 'OFF';
+        state.supplyAirTemp = (chwCmd46 !== null) ? chwCmd46 : (state.mixedAirTemp - drop);
+      } else if (honourCommandedValve(state.mixedAirTemp, 'chwValvePosition', MAX_COIL_DROP, false) !== null) {
+        // Held open with no demand — overcooling.
+        state.chwValveStatus = state.chwValvePosition > 0 ? 'ON' : 'OFF';
+        state.supplyAirTemp = honourCommandedValve(state.mixedAirTemp, 'chwValvePosition', MAX_COIL_DROP, false);
       } else {
         state.chwValvePosition = 0;
         state.chwValveStatus = 'OFF';

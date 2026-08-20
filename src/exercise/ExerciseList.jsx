@@ -43,6 +43,9 @@
 
   var STATUS = {
     'not-started': { label: 'Not started', color: '#9db0c8', bg: 'rgba(157,176,200,.14)' },
+    // Opened but nothing changed yet — worth separating, because "I started and got
+    // nowhere" and "I have not looked at it" need different help from an instructor.
+    started: { label: 'Opened', color: '#9db0c8', bg: 'rgba(157,176,200,.14)' },
     'in-progress': { label: 'In progress', color: '#e6a23c', bg: 'rgba(230,162,60,.16)' },
     passed: { label: 'Complete', color: '#6ee7a8', bg: 'rgba(110,231,168,.16)' }
   };
@@ -99,15 +102,23 @@
                      border: '1px dashed #35405a', color: '#9db0c8', fontSize: '12.5px' }
           }, 'Nothing assigned to you yet. Your instructor publishes exercises from the station screens.')
         : React.createElement('div', { style: { marginTop: '16px', display: 'grid', gap: '10px' } },
-            mine.map(function (ex) {
+            // Outstanding work first. A finished exercise sitting above an untouched one
+            // buries the thing the student still has to do.
+            mine.slice().sort(function (a, b) {
+              var pa = ES.statusFor(a, auth.operator) === 'passed' ? 1 : 0;
+              var pb = ES.statusFor(b, auth.operator) === 'passed' ? 1 : 0;
+              return pa - pb;
+            }).map(function (ex) {
               var status = ES.statusFor(ex, auth.operator);
-              var st = STATUS[status];
+              var st = STATUS[status] || STATUS['not-started'];
               var attempt = ES.attemptFor(ex.id, auth.operator);
               var isCurrent = current === ex.id;
               return React.createElement('div', {
                 key: ex.id,
-                style: { border: '1px solid ' + (isCurrent ? '#5b9bd5' : '#35405a'),
-                         borderRadius: '8px', background: '#1b2536', padding: '12px 14px' }
+                style: { border: '1px solid ' + (isCurrent ? '#5b9bd5'
+                           : (status === 'passed' ? '#2f7a52' : '#35405a')),
+                         borderRadius: '8px', padding: '12px 14px',
+                         background: status === 'passed' ? 'rgba(63,143,90,.10)' : '#1b2536' }
               },
                 React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '10px' } },
                   React.createElement('div', { style: { flex: 1 } },
@@ -160,6 +171,17 @@
     useExerciseChanges();
     var ES = window.ExerciseStore;
     var [res, setRes] = useState({ ok: false, value: null, heldMs: 0, passed: false });
+    var [showTask, setShowTask] = useState(false);
+    var [diag, setDiag] = useState('');
+    var [diagSaved, setDiagSaved] = useState(false);
+    // Seeded from the saved attempt when the panel opens, so reopening shows what they
+    // already wrote rather than an empty box that looks like lost work.
+    useEffect(function () {
+      if (!showTask || !ex || !auth) return;
+      var a = ES.attemptFor(ex.id, auth.operator);
+      setDiag((a && a.diagnosis) || '');
+      setDiagSaved(false);
+    }, [showTask, ex && ex.id]);
 
     var id = activeId();
     var ex = (ES && id) ? ES.getExercise(id) : null;
@@ -186,14 +208,40 @@
     var passed = res.passed;
     var holdPct = Math.min(100, Math.round((res.heldMs / ES.HOLD_MS) * 100));
     var unitLabel = (ex.goal && ex.goal.unit) || '';
+    var g = ex.goal || {};
+
+    /**
+     * How far off, in words. "now 63.4°F" against "within ±1.5 of 60" makes the student
+     * do arithmetic before they can act; "3.4°F too warm" is the same fact already
+     * turned into a direction to move in — which is what they are actually deciding.
+     */
+    function gapText() {
+      if (res.value == null || typeof res.value !== 'number') return null;
+      if (res.ok) return null;
+      var t = Number(g.target);
+      if (!isFinite(t)) return null;
+      var d = res.value - t;
+      var mag = Math.abs(Math.round(d * 10) / 10);
+      var u = unitLabel.trim();
+      // Temperature reads naturally as warm/cold; everything else as high/low.
+      var warm = /\u00b0F/.test(unitLabel);
+      var dir = d > 0 ? (warm ? 'too warm' : 'too high') : (warm ? 'too cold' : 'too low');
+      if (g.comparator === 'above') return d < 0 ? mag + u + ' below target' : null;
+      if (g.comparator === 'below') return d > 0 ? mag + u + ' above target' : null;
+      return mag + u + ' ' + dir;
+    }
+    var gap = gapText();
 
     return React.createElement('div', {
       style: {
-        display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 12px',
         background: passed ? 'rgba(63,143,90,.22)' : 'rgba(91,155,213,.16)',
         borderBottom: '1px solid ' + (passed ? '#2f7a52' : '#3d6f9e'),
         fontFamily: FONT, color: passed ? '#8ff0b5' : '#cfe2f7'
       }
+    },
+    React.createElement('div', {
+      style: { display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 12px',
+               flexWrap: 'wrap' }
     },
       React.createElement('span', {
         style: { width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
@@ -219,6 +267,13 @@
       React.createElement('span', {
         style: { fontSize: '11px', fontFamily: 'monospace', fontWeight: 700 }
       }, 'now ' + (res.value == null ? '\u2014' : (Math.round(res.value * 10) / 10) + unitLabel)),
+      // The actionable half of the reading: which way to move, not just where it is.
+      gap ? React.createElement('span', {
+        style: { fontSize: '10.5px', fontWeight: 800, letterSpacing: '.2px',
+                 padding: '2px 7px', borderRadius: '999px', whiteSpace: 'nowrap',
+                 background: 'rgba(230,162,60,.18)', border: '1px solid #a5721f',
+                 color: '#ffd79a' }
+      }, gap) : null,
 
       // While the goal is met but not yet held long enough, say so rather than
       // leaving the student wondering why nothing happened.
@@ -237,6 +292,16 @@
       ) : null,
 
       React.createElement('div', { style: { flex: 1 } }),
+      React.createElement('button', {
+        type: 'button',
+        onClick: function () { setShowTask(!showTask); },
+        title: 'Read the task again',
+        style: { padding: '3px 10px', borderRadius: '5px', fontSize: '10.5px', fontWeight: 800,
+                 fontFamily: 'inherit', cursor: 'pointer',
+                 border: '1px solid ' + (showTask ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.35)'),
+                 background: showTask ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.1)',
+                 color: 'inherit' }
+      }, showTask ? '\u25b4 TASK' : '\u25be TASK'),
       React.createElement('button', {
         type: 'button',
         onClick: function () { window.location.hash = '#/exercises'; },
@@ -260,6 +325,92 @@
                  fontFamily: 'inherit', cursor: 'pointer', border: '1px solid rgba(255,255,255,.35)',
                  background: 'transparent', color: 'inherit' }
       }, 'EXIT')
+    ),
+
+    // The task, on the same screen as the unit. Collapsed by default so it never
+    // competes with the board, one click away when the student loses the thread.
+    showTask ? React.createElement('div', {
+      style: { padding: '12px 16px 14px', borderTop: '1px solid rgba(255,255,255,.14)',
+               background: 'rgba(0,0,0,.18)', display: 'flex', gap: '22px',
+               alignItems: 'flex-start', flexWrap: 'wrap' }
+    },
+      // Left: what to do. Capped at 62ch — long lines are what made this hard to read,
+      // not lack of room.
+      React.createElement('div', { style: { flex: '1 1 420px', maxWidth: '62ch', minWidth: '280px' } },
+      ex.instructions ? React.createElement('div', {
+        style: { fontSize: '12px', lineHeight: 1.55, color: '#e8edf6', whiteSpace: 'pre-line' }
+      }, ex.instructions) : null,
+      React.createElement('div', {
+        style: { marginTop: ex.instructions ? '9px' : 0, fontSize: '11px',
+                 color: '#9db0c8', lineHeight: 1.5 }
+      },
+        React.createElement('strong', { style: { color: '#c3cfdd' } }, 'Complete when: '),
+        ES.goalText(ex)
+      ),
+      // The citation, in full. On the collapsed row there is only room for the badge,
+      // and "why is 1100 ppm the number" is the question the standard answers.
+      (g.citation) ? React.createElement('div', {
+        style: { marginTop: '6px', fontSize: '10.5px', color: '#7fd4e2', lineHeight: 1.5 }
+      }, g.citation) : null
+      ),
+
+      // Right: where the written answer goes. The diagnosis scenarios ask students to explain
+      // what the evidence shows, which is the part that demonstrates understanding —
+      // fixing the value proves they can act, not that they know why.
+      React.createElement('div', {
+        style: { flex: '1 1 340px', minWidth: '300px', maxWidth: '520px',
+                 paddingLeft: '20px', borderLeft: '1px solid rgba(255,255,255,.12)' }
+      },
+        React.createElement('div', {
+          style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.4px',
+                   color: '#9db0c8', marginBottom: '5px' }
+        }, 'YOUR DIAGNOSIS'),
+        React.createElement('textarea', {
+          value: diag, rows: 6,
+          placeholder: 'What do you think happened, and what evidence tells you that?',
+          onChange: function (e) { setDiag(e.target.value); setDiagSaved(false); },
+          style: { width: '100%', boxSizing: 'border-box', padding: '7px 9px',
+                   borderRadius: '5px', fontSize: '12px', lineHeight: 1.45,
+                   fontFamily: 'inherit', resize: 'vertical',
+                   background: '#141a26', border: '1px solid #38445c', color: '#e8edf6' }
+        }),
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: '9px', marginTop: '6px' }
+        },
+          React.createElement('button', {
+            type: 'button',
+            disabled: !diag.trim(),
+            onClick: function () {
+              if (ES.saveDiagnosis(ex.id, auth.operator, diag)) setDiagSaved(true);
+            },
+            style: { padding: '5px 13px', borderRadius: '5px', fontSize: '11px',
+                     fontWeight: 800, fontFamily: 'inherit',
+                     cursor: diag.trim() ? 'pointer' : 'not-allowed',
+                     border: '1px solid ' + (diag.trim() ? '#2f7a52' : '#38445c'),
+                     background: diag.trim()
+                       ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
+                     color: diag.trim() ? '#fff' : '#5d6b83' }
+          }, diagSaved ? '\u2713 SAVED' : 'SAVE ANSWER'),
+          React.createElement('span', {
+            style: { fontSize: '10px', color: '#7f8ea6' }
+          }, 'Your instructor sees this with your results.')
+        )
+      )
+    ) : null,
+
+    // Completion is the moment the exercise teaches something, so it says what was
+    // achieved rather than only that it ended.
+    passed ? React.createElement('div', {
+      style: { padding: '8px 14px', borderTop: '1px solid rgba(47,122,82,.5)',
+               background: 'rgba(63,143,90,.14)', fontSize: '11.5px',
+               color: '#8ff0b5', lineHeight: 1.5 }
+    },
+      React.createElement('strong', null, 'Goal met and held. '),
+      'You brought ' + ((g.label || 'the reading')) + ' to ' + ES.goalText(ex) + '.',
+      (g.standard && window.ASHRAECriteria)
+        ? ' That is the ' + window.ASHRAECriteria.badge(g.standard) + ' criterion for this unit.'
+        : ''
+    ) : null
     );
   }
 

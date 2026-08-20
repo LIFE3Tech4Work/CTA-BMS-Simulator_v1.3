@@ -52,9 +52,43 @@
    * Release every override on a unit.
    * props: { controller, zoneId, faultEngine }
    */
+  /** True when a student (not an instructor) has an exercise open on this station. */
+  function studentInExercise() {
+    var A = window.AuthHelpers, level = window.CTAAuthLevel;
+    var isInstructor = !!(A && A.hasPrivilege && level && A.hasPrivilege(level, 'Engr'));
+    if (isInstructor) return false;
+    var ES = window.ExerciseStore, op = window.CTAAuthOperator;
+    if (!ES || !op) return false;
+    var id = null;
+    try { id = localStorage.getItem('cta_exercise_active'); } catch (e) {}
+    if (!id) return false;
+    var ex = ES.getExercise(id);
+    if (!ex) return false;
+    var attempt = ES.attemptFor(id, op);
+    // Only while the work is still live. Once passed, the shortcut costs nothing.
+    return !!(attempt && !attempt.passed);
+  }
+
   function ResetAllButton(props) {
     var [armed, setArmed] = useState(false);
     var [done, setDone] = useState(false);
+    // Re-checked on a timer rather than at mount: a student can start an exercise
+    // while this panel is already on screen, and a control that only disappears on
+    // remount would stay clickable for the rest of the session.
+    var [locked, setLocked] = useState(studentInExercise);
+    useEffect(function () {
+      function refresh() { setLocked(studentInExercise()); }
+      // Both signals matter: the event fires when an exercise is started or exited,
+      // the store subscription when an attempt passes. Polling left the control
+      // clickable for up to a second after START — long enough to use.
+      window.addEventListener('cta-exercise-changed', refresh);
+      var un = window.ExerciseStore ? window.ExerciseStore.subscribe(refresh) : null;
+      refresh();
+      return function () {
+        window.removeEventListener('cta-exercise-changed', refresh);
+        if (un) un();
+      };
+    }, []);
 
     // Arming expires on its own — a button left mid-confirm is a trap for whoever
     // clicks next.
@@ -82,6 +116,14 @@
       }
       setArmed(false);
       setDone(true);
+    }
+
+    if (locked) {
+      return React.createElement('div', {
+        style: { padding: '7px 9px', borderRadius: '5px', fontSize: '9.5px',
+                 lineHeight: 1.45, textAlign: 'center', color: '#5a6f8e',
+                 background: '#eef2f8', border: '1px dashed #a9b6c9' }
+      }, 'Unavailable during an exercise \u2014 use RESTART in the exercise bar to return to its starting state.');
     }
 
     var label = done ? '\u2713  DEFAULTS RESTORED'
@@ -151,6 +193,10 @@
   }
 
   window.ResetControls = {
+    // Shared so every reset affordance answers to one rule. The toolbar had its own
+    // ungated reload doing strictly more than this panel button, which made locking
+    // only the panel a half-fix.
+    studentInExercise: studentInExercise,
     ResetAllButton: ResetAllButton,
     AlarmResetButton: AlarmResetButton
   };

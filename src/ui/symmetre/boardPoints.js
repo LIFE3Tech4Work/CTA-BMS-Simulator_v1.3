@@ -280,7 +280,9 @@
         ['chwValvePosition', 'box', 700, 494, 34],
         ['plenumMinSetpoint', 'box', 766, 494, 46],
         ['coolingCoilSetpoint', 'box', 766, 540, 46],
-        ['fanSpeedSetpoint', 'box', 1055, 487, 34],
+        // fanSpeedSetpoint removed from this board: this unit drives measured speed
+        // directly from it, so both chips always showed the same number and looked like
+        // a rendering fault. The setpoint remains editable in the left panel.
       ],
       fans: [
         { key: 'fanRunning', cmdKey: 'runSchedule', interlockKey: null, x: 878, y: 528, pills: 'u23', pillY: 282 },
@@ -325,10 +327,10 @@
       ahu: 'VAV-4-4-02', board: 'VAV', controller: 'VAV4402Controller', faultEngine: null,
       dev: 'DEV4402', bacPrefix: 'VAV04_4002',
       art: {
-        vavTag: 'VAV-4-4-02',
+        vavTag: 'VAV-4-4',
         vavService: 'Ballroom \u00b7 Zone 2',
         vavLocation: 'Level 4 \u00b7 served by AHU-4-4',
-        vavBoxLabel: 'VAV-4-4-02 \u00b7 14\u201d INLET \u00b7 REHEAT',
+        vavBoxLabel: 'VAV-4-4 \u00b7 14\u201d INLET \u00b7 REHEAT',
         vavReheat: true,
       },
       chips: [

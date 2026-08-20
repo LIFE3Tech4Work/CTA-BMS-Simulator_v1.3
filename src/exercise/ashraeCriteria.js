@@ -248,6 +248,132 @@
     }
   ];
 
+  // What to break so that each criterion is violated, and how to describe it. Written
+  // per criterion rather than per unit: the same violation reads the same whichever air
+  // handler it is set on, and a scenario that only worked on one unit would be a trap.
+  var SCENARIOS = {
+    'iaq-co2-differential': {
+      title: 'Ventilation not keeping up with occupancy',
+      brief: 'The space is at high occupancy and zone CO₂ has climbed past the level ASHRAE 62.1 uses to indicate adequate ventilation. Work out why the unit is not bringing in enough outdoor air, and bring CO₂ back down.',
+      setup: { co2Sensor: 1450, oaDamperPosition: 0 }
+    },
+    'iaq-min-oa-airflow': {
+      title: 'Outdoor airflow below the design minimum',
+      brief: 'The unit is not delivering its design minimum outdoor airflow while the space is occupied. Find what is restricting it and restore the required rate.',
+      setup: { oaDamperPosition: 5 }
+    },
+    'iaq-min-damper': {
+      title: 'Outdoor air damper closed during occupancy',
+      brief: 'Temperatures look correct but the space is being starved of ventilation air. Find out why the outdoor air damper is shut and restore its minimum position.',
+      setup: { oaDamperPosition: 0 }
+    },
+    'comfort-zone-winter': {
+      title: 'Zone below the winter comfort range',
+      brief: 'Occupants report the space is too cold for the season. Diagnose the cause and bring the zone back into the comfort range ASHRAE 55 describes.',
+      // spaceTemp is what this criterion measures, and neither the heating setpoint nor
+      // outdoor air moved it out of the 68-75 band on their own — the fault has to reach
+      // the measured point, so it is set directly alongside the cause.
+      setup: { spaceTemp: 62, heatingCoilSetpoint: 45, oaTemperature: 28 }
+    },
+    'comfort-zone-summer': {
+      title: 'Zone above the summer comfort range',
+      brief: 'Occupants report the space is too warm. Diagnose the cause and bring the zone back into the comfort range ASHRAE 55 describes.',
+      setup: { coolingCoilSetpoint: 74, oaTemperature: 88 }
+    },
+    'comfort-humidity-cap': {
+      title: 'Supply air too humid',
+      brief: 'Supply air humidity is above the upper limit ASHRAE 55 sets. Work out why the unit is not drying the air and bring it back under the limit.',
+      setup: { chwValvePosition: 0, oaTemperature: 82, oaRelHumidity: 90 }
+    },
+    'energy-no-simultaneous': {
+      title: 'Heating and cooling at the same time',
+      brief: 'Both coils are conditioning the same air stream, which wastes each against the other. Find out why and stop it — unless the unit is legitimately reheating air it has cooled to dry.',
+      setup: { phtValvePosition: 60, chwValvePosition: 60 }
+    },
+    'energy-economizer-active': {
+      title: 'Free cooling available but unused',
+      brief: 'Outdoor conditions are suitable for free cooling, but the unit is running mechanical cooling instead. Work out why the economizer is not engaging.',
+      setup: { oaTemperature: 55, economizerActive: false, oaDamperPosition: 20 }
+    },
+    'soo-supply-air-setpoint': {
+      title: 'Supply air off its setpoint',
+      brief: 'Supply air is running well above the setpoint currently in control and the cooling coil is shut. Work out why the unit is not holding setpoint and bring supply air back.',
+      // Overrides supplyAirTemp itself, not the valve. Under the current coil model
+      // supply air is computed FROM the active setpoint, so a valve at 100% reads the
+      // same as one at 56% — no valve fault can move it. Setting the measured point is
+      // the only setup that fails today; revisit once valve position drives temperature.
+      setup: { supplyAirTemp: 74, chwValvePosition: 0 }
+    },
+    'soo-duct-static': {
+      title: 'Duct static pressure off setpoint',
+      brief: 'The supply fan is not holding duct static where it should. Find what is driving it and restore control.',
+      setup: { fanSpeedSetpoint: 35 }
+    }
+  };
+
+  /** The scenario for a criterion, or null where none is defined. */
+  function scenarioFor(id) {
+    var s = SCENARIOS[id];
+    if (!s) return null;
+    return { title: s.title, brief: s.brief, setup: Object.assign({}, s.setup) };
+  }
+
+  /**
+   * Apply a setup to the unit's own controller, read what it settles into, then put the
+   * unit back. A flat overlay cannot be used here: it only reflects keys the setup
+   * writes directly, so it is blind to every fault whose effect is computed — including
+   * a valve fault the coil model quietly corrects back to setpoint.
+   */
+  function settleWith(state, setup, unitId) {
+    var ES = window.ExerciseStore;
+    var ctrl = (ES && ES.controllerFor && unitId) ? ES.controllerFor(unitId) : null;
+    if (!ctrl || !ctrl.setValue || !ctrl.getState) return Object.assign({}, state, setup);
+    var keys = Object.keys(setup);
+    try {
+      keys.forEach(function (k) { ctrl.setValue(k, setup[k]); });
+      if (ctrl.recalculate) { for (var i = 0; i < 12; i++) ctrl.recalculate(); }
+      return Object.assign({}, ctrl.getState());
+    } catch (e) {
+      return Object.assign({}, state, setup);
+    } finally {
+      // Never leave the probe's fault on the unit the instructor is looking at.
+      keys.forEach(function (k) {
+        if (ctrl.clearMode) { try { ctrl.clearMode(k); } catch (e2) {} }
+      });
+      if (ctrl.recalculate) { try { ctrl.recalculate(); } catch (e3) {} }
+    }
+  }
+
+  /**
+   * Criteria that can generate a WORKING scenario on this unit.
+   *
+   * Two tests, and the second matters more: every setup key must exist on the unit, and
+   * the scenario must leave its own criterion FAILING. A scenario whose goal is already
+   * met produces an exercise a student passes without touching anything — worse than
+   * offering nothing, because appearing in the dropdown makes it look vetted.
+   */
+  function scenariosFor(state, unitId) {
+    if (!state) return [];
+    return CRITERIA.filter(function (cr) {
+      var s = SCENARIOS[cr.id];
+      if (!s) return false;
+      if (!Object.keys(s.setup).every(function (k) { return state[k] !== undefined; })) return false;
+
+      var after = settleWith(state, s.setup, unitId);
+      var g;
+      try { g = cr.goalFor(after); } catch (e) { return false; }
+      var v = after[g.key];
+      if (typeof v !== 'number' && typeof v !== 'boolean') return true;
+      var n = (typeof v === 'boolean') ? (v ? 1 : 0) : v;
+      var passes =
+        g.comparator === 'within' ? Math.abs(n - g.target) <= (g.tolerance || 0.5)
+        : g.comparator === 'above' ? n > g.target
+        : g.comparator === 'below' ? n < g.target
+        : false;
+      return !passes;   // only offer scenarios that start unsolved
+    });
+  }
+
   /** Criteria whose measured point exists on this unit's state. */
   function forState(state) {
     if (!state) return [];
@@ -298,6 +424,8 @@
     OUTDOOR_CO2_PPM: OUTDOOR_CO2_PPM,
     all: CRITERIA,
     forState: forState,
+    scenarioFor: scenarioFor,
+    scenariosFor: scenariosFor,
     byId: byId,
     goalFrom: goalFrom,
     badge: badge

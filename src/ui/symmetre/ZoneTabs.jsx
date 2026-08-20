@@ -121,7 +121,7 @@ const ZoneTabs = (function () {
     // VAV-02-03 is built and reachable by URL, but hidden from the tab bar until
     // its content is ready to put in front of students.
     { id: 'VAV-02-03',  label: 'VAV-02-03 (Mtg Rm 214)', icon: '🌬️', route: '#/symmetre/VAV-02-03',  isZone: false, hidden: true },
-    { id: 'VAV-4-4-02', label: 'VAV-4-4-02 (Ballroom)', icon: '🌬️', route: '#/symmetre/VAV-4-4-02', isZone: false },
+    { id: 'VAV-4-4-02', label: 'VAV-4-4 (Ballroom)', icon: '🌬️', route: '#/symmetre/VAV-4-4-02', isZone: false },
     { id: 'AHU-23-1',   label: 'AHU-23-1',              icon: '🌀', route: '#/symmetre/AHU-23-1',   isZone: false },
     { id: 'AHU-4-6',    label: 'AHU-4-6',               icon: '🌀', route: '#/symmetre/AHU-4-6',    isZone: false },
     { id: 'AHU-4-4',    label: 'AHU-4-4',               icon: '🌀', route: '#/symmetre/AHU-4-4',    isZone: false },

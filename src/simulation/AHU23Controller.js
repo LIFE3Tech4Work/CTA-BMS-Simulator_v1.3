@@ -242,7 +242,8 @@
         state.phtValveStatus = state.phtValvePosition > 0 ? 'ON' : 'OFF';
         // Discharge never exceeds the setpoint the coil is chasing; when the coil
         // is saturated it lands short, which is the honest reading.
-        state.preheatTemp = Math.min(
+        var phtCmd23 = honourCommandedValve(state.oaTemperature, 'phtValvePosition', MAX_COIL_RISE, true);
+        state.preheatTemp = (phtCmd23 !== null) ? phtCmd23 : Math.min(
           state.heatingCoilSetpoint,
           state.oaTemperature + (state.phtValvePosition / 100) * MAX_COIL_RISE
         );
@@ -286,15 +287,24 @@
         state.chwValvePosition = Math.max(0, Math.min(100,
           Math.round((neededDrop / MAX_COIL_DROP) * 100)));
         state.chwValveStatus = state.chwValvePosition > 0 ? 'ON' : 'OFF';
-        state.supplyAirTemp = Math.max(
+        var chwCmd23 = honourCommandedValve(state.mixedAirTemp, 'chwValvePosition', MAX_COIL_DROP, false);
+        state.supplyAirTemp = (chwCmd23 !== null) ? chwCmd23 : Math.max(
           state.coolingCoilSetpoint,
           state.mixedAirTemp - (state.chwValvePosition / 100) * MAX_COIL_DROP
         );
       } else {
         // No cooling needed: valve closed, SAT = mixed air temp
-        state.chwValvePosition = 0;
-        state.chwValveStatus = 'OFF';
-        state.supplyAirTemp = state.mixedAirTemp;
+        var chwIdle23 = honourCommandedValve(state.mixedAirTemp, 'chwValvePosition', MAX_COIL_DROP, false);
+        if (chwIdle23 === null) {
+          state.chwValvePosition = 0;
+          state.chwValveStatus = 'OFF';
+          state.supplyAirTemp = state.mixedAirTemp;
+        } else {
+          // Valve held open with nothing asking for cooling — overcooling, which is a
+          // fault worth being able to author.
+          state.chwValveStatus = state.chwValvePosition > 0 ? 'ON' : 'OFF';
+          state.supplyAirTemp = chwIdle23;
+        }
       }
     } else {
       state.chwValvePosition = 0;
@@ -367,6 +377,28 @@
   // point-detail dialog can show and release overrides on this unit too;
   // setValue()'s existing behaviour is unchanged apart from recording the flag.
   var modes = {};
+  /**
+   * The air temperature leaving a coil whose valve the operator is holding.
+   * Returns null when that valve is not in Manual, so callers fall through to the
+   * normal setpoint-driven sizing.
+   *
+   *   entering  air temperature entering the coil
+   *   key       'phtValvePosition' | 'chwValvePosition'
+   *   capacity  full-open swing in degF (MAX_COIL_RISE / MAX_COIL_DROP)
+   *   heating   true adds, false subtracts
+   */
+  function honourCommandedValve(entering, key, capacity, heating) {
+    if (modes[key] !== 'Manual') return null;
+    // Read the COMMANDED value, not state[key]: the sequence overwrites that a line or
+    // two earlier in the same pass, so state[key] is its number rather than the
+    // operator's, and the override silently had no effect.
+    var pos = manualValues[key];
+    if (typeof pos !== 'number') pos = state[key];
+    if (typeof pos !== 'number') return null;
+    var frac = Math.max(0, Math.min(100, pos)) / 100;
+    return heating ? entering + frac * capacity : entering - frac * capacity;
+  }
+
 
   // Operator-commanded values for every key currently in Manual. A real BMS
   // point override sits at priority 8 and OUTRANKS the control program: the

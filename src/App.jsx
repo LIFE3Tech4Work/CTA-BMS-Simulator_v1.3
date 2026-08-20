@@ -154,9 +154,13 @@ function SymmetreScreen({ params }) {
             // own sidebar instead, which put it above that panel's reset sections while
             // every other tab had it at the bottom. Injected here for all units so the
             // placement is the same on every tab.
-            window.LL97Panel
-              ? React.createElement(window.LL97Panel, null)
-              : null
+            // LL97 panel commented out — it was visible to every user type, and the
+            // penalty exposure figures are building-owner data rather than something a
+            // student working a unit should be reading. Restore by uncommenting.
+            // window.LL97Panel
+            //   ? React.createElement(window.LL97Panel, null)
+            //   : null
+            null
           ),
           // AHU Graphic area — the three AHU views render the SymmetrE vector
           // board (fixed 1613x878 stage, scaled to fit); VAV keeps its own graphic.
@@ -258,7 +262,7 @@ function ScheduleScreen() {
     { id: 'AHU-4-4', label: 'AHU-4-4 Schedule', parent: null },
     { id: 'AHU-4-3', label: 'AHU-4-3 Schedule', parent: null },
     { id: 'AHU-23-1', label: 'AHU-23-1 Schedule', parent: null },
-    { id: 'VAV-4-4-02', label: 'VAV-4-4-02 Schedule', parent: null }
+    { id: 'VAV-4-4-02', label: 'VAV-4-4 Schedule', parent: null }
     // VAV-02-03 is hidden here for the same reason it is hidden from the Station tab
     // bar — a schedule object for a unit an operator cannot open is just clutter.
   ];

@@ -122,6 +122,15 @@
     // and an exercise assigned to "student_a" cannot reach a Supabase account.
     var Roster = window.StudentRoster;
     var Groups = window.StudentGroups;
+    // Pull the roster when the dialog opens, so someone who registered five minutes ago
+    // is offered rather than silently absent from the only screen that can assign to them.
+    var [rosterSynced, setRosterSynced] = useState(0);
+    useEffect(function () {
+      var B = window.SupabaseBackend;
+      if (!B || !B.isConfigured()) return;
+      B.syncDown().then(function () { setRosterSynced(function (n) { return n + 1; }); });
+    }, []);
+
     var seats = (Roster && typeof Roster.seats === 'function')
       ? Roster.seats()
       : ((window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) || []);
@@ -354,6 +363,26 @@
       }
     }, [setupKeys.join(','), hint && hint.title]);
 
+    // Apply a criterion's scenario to the live unit, then let the existing capture and
+    // prefill do the rest. Writing to the controller rather than straight into the
+    // exercise means the instructor SEES the fault on the diagram before saving it, and
+    // can adjust it by hand like any other authored fault.
+    function generateFromStandard(id) {
+      if (!AC || !AC.scenarioFor) return;
+      var sc = AC.scenarioFor(id);
+      var ctrl = ES.controllerFor && ES.controllerFor(unitId);
+      if (!sc || !ctrl) return;
+      Object.keys(sc.setup).forEach(function (k) {
+        try { ctrl.setValue(k, sc.setup[k]); } catch (e) {}
+      });
+      if (ctrl.recalculate) ctrl.recalculate();
+      // The scenario's own words win over the fault-hint guess, and over a blank field —
+      // but never over something the instructor has already typed.
+      if (!touched.title) setTitle(sc.title);
+      if (!touched.brief) setBrief(sc.brief);
+      applyCriterion(id);
+    }
+
     function metaFor(k) {
       var found = null;
       goalOptions.forEach(function (o) { if (o.key === k) found = o; });
@@ -392,6 +421,10 @@
         createdBy: operator,
         createdAt: new Date().toISOString(),
         setup: snap.setup,
+        // Authored history chosen in the point dialog's History tab, so a student's
+        // trend can show a past that disagrees with the present.
+        trends: (window.TrendAuthoring && window.TrendAuthoring.draftAll())
+          ? window.TrendAuthoring.draftAll() : null,
         weather: snap.weather,
         goal: {
           // Criterion fields travel with the goal so the student brief and the
@@ -410,8 +443,17 @@
         // results table can show what was chosen.
         assignedTo: resolvedSeats,
         assignment: assignment,
+        // Authored history from the point dialog's History tab. Without this the
+        // instructor builds the weekend-override trend, watches it preview, and loses
+        // it the moment they publish.
+        trends: (window.TrendAuthoring && window.TrendAuthoring.draftAll()) || null,
         published: !!publish
       });
+      // The draft belongs to the exercise just saved, not the next one an instructor
+      // authors — otherwise the following exercise silently inherits these trends.
+      if (window.TrendAuthoring && window.TrendAuthoring.clearDraft) {
+        window.TrendAuthoring.clearDraft();
+      }
       onClose(true);
     }
 
@@ -501,6 +543,38 @@
           React.createElement('div', null,
             // Criterion first, then the fields it fills. Choosing the standard
             // before the number is the order the exercise is actually reasoned in.
+            // Offered only before anything has been captured: once a fault exists on the
+            // diagram, generating a different one would silently discard it.
+            (setupKeys.length === 0 && AC && AC.scenariosFor)
+              ? React.createElement('div', {
+                  style: { marginBottom: '10px', padding: '9px 10px', borderRadius: '6px',
+                           background: 'rgba(53,189,211,.08)', border: '1px solid #2b6f7d' }
+                },
+                  React.createElement('div', {
+                    style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.5px',
+                             color: '#7fd4e2', marginBottom: '5px' }
+                  }, 'START FROM A STANDARD'),
+                  React.createElement('div', {
+                    style: { fontSize: '10.5px', color: '#9db0c8', lineHeight: 1.45, marginBottom: '7px' }
+                  }, 'Pick what the exercise should test and the fault is set up on this unit for you. You can adjust it on the diagram afterwards.'),
+                  React.createElement('select', {
+                    value: '',
+                    onChange: function (e) { if (e.target.value) generateFromStandard(e.target.value); },
+                    style: Object.assign({}, fieldStyle(), { width: '100%' })
+                  },
+                    [React.createElement('option', { key: '', value: '' }, 'Choose a standard to test\u2026')]
+                      .concat(['62.1', '55', '90.1', '36'].map(function (std) {
+                        var group = AC.scenariosFor(state, unitId).filter(function (x) { return x.standard === std; });
+                        if (!group.length) return null;
+                        return React.createElement('optgroup', { key: std, label: AC.badge(std) },
+                          group.map(function (x) {
+                            return React.createElement('option', { key: x.id, value: x.id }, x.label);
+                          }));
+                      }))
+                  )
+                )
+              : null,
+
             React.createElement('div', { style: labelStyle() }, 'SUCCESS CRITERION'),
             React.createElement('select', {
               value: criterionId,

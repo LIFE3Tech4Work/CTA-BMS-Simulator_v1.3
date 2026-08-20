@@ -198,6 +198,24 @@ function CTA_createAHU44Controller(seed) {
   // that can also be flagged — see the Manual-output note in the file
   // header for why recalculate() honors that flag instead of overwriting it.
   var modes = {};
+  /**
+   * The air temperature leaving a coil whose valve the operator is holding.
+   * Returns null when that valve is not in Manual, so callers fall through to the
+   * normal setpoint-driven sizing.
+   *
+   *   entering  air temperature entering the coil
+   *   key       'phtValvePosition' | 'chwValvePosition'
+   *   capacity  full-open swing in degF (MAX_COIL_RISE / MAX_COIL_DROP)
+   *   heating   true adds, false subtracts
+   */
+  function honourCommandedValve(entering, key, capacity, heating) {
+    if (modes[key] !== 'Manual') return null;
+    var pos = state[key];
+    if (typeof pos !== 'number') return null;
+    var frac = Math.max(0, Math.min(100, pos)) / 100;
+    return heating ? entering + frac * capacity : entering - frac * capacity;
+  }
+
 
   // Operator-commanded values for every key currently in Manual. A real BMS
   // point override sits at priority 8 and OUTRANKS the control program: the
@@ -507,7 +525,8 @@ function CTA_createAHU44Controller(seed) {
         var rise44 = Math.min(MAX_COIL_RISE, riseNeeded);
         state.phtValvePosition = Math.min(100, Math.round((rise44 / MAX_COIL_RISE) * 100));
         state.phtValveStatus = 'ON';
-        state.preheatTemp = state.oaTemperature + rise44;
+        var phtCmd44 = honourCommandedValve(state.oaTemperature, 'phtValvePosition', MAX_COIL_RISE, true);
+        state.preheatTemp = (phtCmd44 !== null) ? phtCmd44 : (state.oaTemperature + rise44);
       } else {
         state.phtValvePosition = 0;
         state.phtValveStatus = 'OFF';
@@ -536,13 +555,24 @@ function CTA_createAHU44Controller(seed) {
 
       if (coolingAllowed44 && state.mixedAirTemp > state.coolingCoilSetpoint) {
         var drop44 = Math.min(MAX_COIL_DROP, state.mixedAirTemp - state.coolingCoilSetpoint);
-        state.chwValvePosition = Math.min(100, Math.round((drop44 / MAX_COIL_DROP) * 100));
-        state.chwValveStatus = 'ON';
-        state.supplyAirTemp = state.mixedAirTemp - drop44;
+        var chwCmd44 = honourCommandedValve(state.mixedAirTemp, 'chwValvePosition', MAX_COIL_DROP, false);
+        if (chwCmd44 === null) {
+          state.chwValvePosition = Math.min(100, Math.round((drop44 / MAX_COIL_DROP) * 100));
+        }
+        state.chwValveStatus = state.chwValvePosition > 0 ? 'ON' : 'OFF';
+        state.supplyAirTemp = (chwCmd44 !== null) ? chwCmd44 : (state.mixedAirTemp - drop44);
       } else {
-        state.chwValvePosition = 0;
-        state.chwValveStatus = 'OFF';
-        state.supplyAirTemp = state.mixedAirTemp;
+        // Held open with no cooling call: the air still gets cooled, which is the
+        // overcooling fault an exercise wants to be able to set.
+        var chwIdle44 = honourCommandedValve(state.mixedAirTemp, 'chwValvePosition', MAX_COIL_DROP, false);
+        if (chwIdle44 === null) {
+          state.chwValvePosition = 0;
+          state.chwValveStatus = 'OFF';
+          state.supplyAirTemp = state.mixedAirTemp;
+        } else {
+          state.chwValveStatus = state.chwValvePosition > 0 ? 'ON' : 'OFF';
+          state.supplyAirTemp = chwIdle44;
+        }
       }
     } else {
       state.chwValvePosition = 0;

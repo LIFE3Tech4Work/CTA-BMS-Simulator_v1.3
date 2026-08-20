@@ -382,6 +382,35 @@ const PointDialog = (function () {
       const n = typeof raw === 'number' ? raw : 0;
       return String(m.dec ? n.toFixed(m.dec) : Math.round(n));
     })();
+    // Authored history for this point, chosen while building an exercise. Held on a
+    // module-level draft rather than in this component, because the dialog closes
+    // before the exercise is saved and the choice has to outlive it.
+    var authoringNow = !!(window.ExerciseAuthoring && window.ExerciseAuthoring.isArmed &&
+                          window.ExerciseAuthoring.isArmed());
+    var trendPresets = (window.TrendAuthoring && window.TrendAuthoring.presetsFor)
+      ? window.TrendAuthoring.presetsFor(stateKey) : [];
+    const [trendPreset, setTrendPreset] = useState(function () {
+      var d = window.TrendAuthoring && window.TrendAuthoring.draftFor;
+      return (d && d(stateKey)) || '';
+    });
+    function setTrendFor(key, id) {
+      if (window.TrendAuthoring && window.TrendAuthoring.setDraft) {
+        window.TrendAuthoring.setDraft(key, id);
+      }
+    }
+    var chosenTrend = trendPresets.filter(function (t) { return t.id === trendPreset; })[0];
+    // Bumped on every pattern edit: the pattern lives outside React, so the chart needs
+    // telling that its cached series was discarded.
+    const [trendRev, setTrendRev] = useState(0);
+    var TA = window.TrendAuthoring;
+    var trendPattern = (TA && TA.patternFor) ? TA.patternFor(stateKey) : null;
+    function editTrend(field, v) { if (TA) { TA.editDraft(stateKey, field, v); setTrendRev(trendRev + 1); } }
+    function editOv(i, field, v) { if (TA) { TA.editOverride(stateKey, i, field, v); setTrendRev(trendRev + 1); } }
+
+    var numSt = { width: '52px', padding: '2px 5px', borderRadius: '4px', fontSize: '11px',
+                  fontFamily: 'inherit', border: '1px solid #a9b6c9', background: '#fff', color: '#12294f' };
+    var lblSt = { fontSize: '10.5px', fontWeight: 700, color: '#5a6f8e' };
+
     const [histPeriod, setHistPeriod] = useState(240);
     const [histIvl, setHistIvl] = useState(1);
     const [cur, setCur] = useState(null);
@@ -433,12 +462,19 @@ const PointDialog = (function () {
 
     // ── history series ──
     const series = useMemo(function () {
+      // An exercise may carry authored history for this point, so the trend can show a
+      // past that disagrees with the present.
+      var TA = window.TrendAuthoring;
+      if (TA && TA.seriesFor) {
+        var authored = TA.seriesFor(stateKey);
+        if (authored && authored.length) return authored;
+      }
       if (bac.history && bac.history.length) return bac.history;
       if (isBinary) return binaryHistory(!!raw && raw !== 'OFF' && raw !== 'Off');
       const n = typeof raw === 'number' ? raw : 0;
       return seedHistory(stateKey, n, m.unit);
       // eslint-disable-next-line
-    }, [stateKey, bac.history, isBinary, Math.round((typeof raw === 'number' ? raw : 0) * 10)]);
+    }, [stateKey, bac.history, isBinary, trendRev, Math.round((typeof raw === 'number' ? raw : 0) * 10)]);
 
     const hist = useMemo(function () {
       const rawSer = series.slice(-histPeriod);
@@ -790,7 +826,7 @@ const PointDialog = (function () {
                 currentValue: display, statusText: statusText,
               }) : null,
               tab === 'hist' ? React.createElement('div', null,
-                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' } },
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px', flexWrap: 'wrap' } },
                   React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, color: '#3f5170' } }, 'Period'),
                   React.createElement('select', {
                     value: String(histPeriod), onChange: (e) => setHistPeriod(+e.target.value), style: selectSt,
@@ -804,6 +840,96 @@ const PointDialog = (function () {
                   },
                     ivlOpts.map((o) => React.createElement('option', { key: o.v, value: o.v, disabled: o.dis }, o.label))
                   ),
+                  // Instructor-only, and only while authoring: choosing a trend is part
+                  // of building an exercise, not something to offer a student mid-task.
+                  authoringNow ? React.createElement('span', {
+                    style: { fontSize: '11px', fontWeight: 700, color: '#3f5170', marginLeft: '8px' }
+                  }, 'Exercise trend') : null,
+                  authoringNow ? React.createElement('select', {
+                    value: trendPreset,
+                    onChange: function (e) { setTrendPreset(e.target.value); setTrendFor(stateKey, e.target.value); },
+                    style: selectSt,
+                    title: 'Give this point an authored history, so the past can disagree with the present'
+                  },
+                    [React.createElement('option', { key: '', value: '' }, 'Live (no authored trend)')]
+                      .concat(trendPresets.map(function (t) {
+                        return React.createElement('option', { key: t.id, value: t.id }, t.label);
+                      }))
+                  ) : null,
+                  (authoringNow && trendPattern) ? React.createElement('div', {
+                    style: { flexBasis: '100%', marginTop: '6px', padding: '9px 10px', borderRadius: '6px',
+                             background: '#eef3fa', border: '1px solid #c3d2e6' }
+                  },
+                    React.createElement('div', {
+                      style: { display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap', marginBottom: '7px' }
+                    },
+                      React.createElement('span', { style: lblSt }, 'Normally runs'),
+                      React.createElement('input', {
+                        type: 'number', min: 0, max: 23, value: String(trendPattern.startHour != null ? trendPattern.startHour : 8),
+                        onChange: function (e) { editTrend('startHour', +e.target.value); }, style: numSt, title: 'Occupied start hour'
+                      }),
+                      React.createElement('span', { style: lblSt }, 'to'),
+                      React.createElement('input', {
+                        type: 'number', min: 1, max: 24, value: String(trendPattern.endHour != null ? trendPattern.endHour : 18),
+                        onChange: function (e) { editTrend('endHour', +e.target.value); }, style: numSt, title: 'Occupied end hour'
+                      }),
+                      React.createElement('label', { style: Object.assign({ display: 'flex', alignItems: 'center', gap: '4px' }, lblSt) },
+                        React.createElement('input', {
+                          type: 'checkbox', checked: !!trendPattern.weekends,
+                          onChange: function (e) { editTrend('weekends', e.target.checked); }
+                        }), 'incl. weekends'),
+                      React.createElement('span', { style: Object.assign({ marginLeft: 'auto' }, lblSt) },
+                        (trendPattern.days || 10) + ' days shown')
+                    ),
+                    // Each override is the anomaly the student is meant to find, so the
+                    // day is labelled with its real date rather than an offset integer.
+                    (trendPattern.overrides || []).map(function (o, i) {
+                      return React.createElement('div', {
+                        key: i,
+                        style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '5px' }
+                      },
+                        React.createElement('span', { style: Object.assign({ width: '54px' }, lblSt) }, 'Except'),
+                        React.createElement('select', {
+                          value: String(o.dayOffset),
+                          onChange: function (e) { editOv(i, 'dayOffset', +e.target.value); },
+                          style: Object.assign({}, numSt, { width: '120px' })
+                        },
+                          Array.apply(null, Array(trendPattern.days || 10)).map(function (_, d) {
+                            return React.createElement('option', { key: d, value: String(d) },
+                              (TA && TA.dayLabel) ? TA.dayLabel(d) : (d + ' d ago'));
+                          })
+                        ),
+                        React.createElement('input', {
+                          type: 'number', min: 0, max: 23, value: String(o.startHour),
+                          onChange: function (e) { editOv(i, 'startHour', +e.target.value); }, style: numSt, title: 'From hour'
+                        }),
+                        React.createElement('span', { style: lblSt }, 'to'),
+                        React.createElement('input', {
+                          type: 'number', min: 1, max: 24, value: String(o.endHour),
+                          onChange: function (e) { editOv(i, 'endHour', +e.target.value); }, style: numSt, title: 'To hour'
+                        }),
+                        React.createElement('span', { style: lblSt }, isBinary ? 'state' : 'reads'),
+                        React.createElement('input', {
+                          type: 'number', value: String(o.value),
+                          onChange: function (e) { editOv(i, 'value', +e.target.value); }, style: numSt,
+                          title: isBinary ? '1 = ON, 0 = OFF' : 'Value during this window'
+                        }),
+                        React.createElement('button', {
+                          type: 'button',
+                          onClick: function () { TA.removeOverride(stateKey, i); setTrendRev(trendRev + 1); },
+                          style: { background: 'none', border: 'none', cursor: 'pointer', color: '#8a97ab', fontSize: '13px' },
+                          title: 'Remove this window'
+                        }, '\u00d7')
+                      );
+                    }),
+                    React.createElement('button', {
+                      type: 'button',
+                      onClick: function () { TA.addOverride(stateKey); setTrendRev(trendRev + 1); },
+                      style: { padding: '3px 9px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700,
+                               cursor: 'pointer', fontFamily: 'inherit', background: '#fff',
+                               border: '1px solid #a9b6c9', color: '#3f5170' }
+                    }, '+ Add a window')
+                  ) : null,
                   React.createElement('div', {
                     style: { marginLeft: 'auto', padding: '3px 9px', borderRadius: '4px', fontSize: '10px',
                              fontWeight: 800, letterSpacing: '.4px', cursor: 'pointer', color: '#fff',

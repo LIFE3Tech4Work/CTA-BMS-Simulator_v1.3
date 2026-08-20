@@ -121,7 +121,12 @@
   /** Human label: "Team A (3)" — the count is what tells an instructor it is set up. */
   function label(g) {
     if (!g) return '';
-    return g.name + ' (' + (g.seatIds ? g.seatIds.length : 0) + ')';
+    var total = g.seatIds ? g.seatIds.length : 0;
+    var live = resolvableMembers(g).length;
+    // "Team B (0 of 3)" makes a stale team visible instead of silently assigning to
+    // nobody while claiming three.
+    if (live !== total) return g.name + ' (' + live + ' of ' + total + ')';
+    return g.name + ' (' + total + ')';
   }
 
   /**
@@ -133,17 +138,32 @@
    */
   function resolveSeats(assignment) {
     var a = assignment || {};
-    if (a.mode === 'class') return seats().slice();
+    var valid = seats();
+    // A group built before real accounts existed still holds placeholder ids like
+    // student_c. Those are exactly what seats() filters out, so returning them would
+    // assign an exercise to three people who cannot sign in — and report "3 students
+    // will see this" while doing it. Membership is filtered against the live seat list.
+    function keep(list) {
+      return list.filter(function (s) { return valid.indexOf(s) >= 0; });
+    }
+    if (a.mode === 'class') return valid.slice();
     if (a.mode === 'groups') {
       var out = [];
       (a.groupIds || []).forEach(function (gid) {
-        var g = get(gid);
-        if (!g) return;
-        g.seatIds.forEach(function (s) { if (out.indexOf(s) < 0) out.push(s); });
+        var grp = get(gid);
+        if (!grp) return;
+        grp.seatIds.forEach(function (s) { if (out.indexOf(s) < 0) out.push(s); });
       });
-      return out;
+      return keep(out);
     }
-    return (a.seatIds || []).slice();
+    return keep(a.seatIds || []);
+  }
+
+  /** Members of a group that are still real accounts. */
+  function resolvableMembers(grp) {
+    if (!grp) return [];
+    var valid = seats();
+    return grp.seatIds.filter(function (s) { return valid.indexOf(s) >= 0; });
   }
 
   /** What the assignment says, in words, for the author dialog and the report. */
@@ -170,6 +190,7 @@
   window.StudentGroups = {
     KEY: KEY,
     seats: seats,
+    resolvableMembers: resolvableMembers,
     all: all,
     get: get,
     create: create,

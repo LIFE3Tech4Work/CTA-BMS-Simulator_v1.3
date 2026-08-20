@@ -42,6 +42,20 @@
         if (/^student_[a-f]$/.test(id)) return false;
         return map[id] && map[id].role !== 'instructor';
       });
+
+      // Locally-registered accounts are registrations too. They are keyed by email
+      // rather than by user id, which is what sign-in resolves them to, so they are
+      // valid assignment targets and belong in the same list.
+      var LA = window.LocalAccounts;
+      if (LA && LA.all) {
+        LA.all().forEach(function (a) {
+          var key = a.username || a.email;
+          if (!key) return;
+          if (/^student_[a-f]$/.test(key)) return;
+          if (a.securityLevel && a.securityLevel !== 'Oper') return;   // instructors
+          if (ids.indexOf(key) < 0) ids.push(key);
+        });
+      }
       if (ids.length) return ids;
     }
     var fixed = (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||

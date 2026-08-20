@@ -11,5 +11,3 @@ npm-debug.log*
 # OS noise
 .DS_Store
 Thumbs.db
-src/config.js
-.DS_Store
