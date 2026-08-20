@@ -224,6 +224,10 @@
       (state.dischargeAirTemp + (state.reheatValvePosition / 100) * REHEAT_MAX_RISE) * 10
     ) / 10;
 
+    // Zone CO2 last, since it depends on the airflow just computed above. It was defined
+    // but never called, so it had no effect and the reading stayed a constant.
+    updateZoneCO2(state);
+
     notifySubscribers(zoneId);
   }
 
@@ -241,6 +245,28 @@
   function getState(zoneId) {
     var state = zoneStates[zoneId];
     return state ? Object.assign({}, state) : undefined;
+  }
+
+  // ─── Zone CO2 ────────────────────────────────────────────────────────────────
+  // Outdoor baseline plus a rise that grows as ventilation per person falls. At design
+  // airflow the zone sits near its normal reading; throttle the box and CO2 climbs,
+  // which is the evidence 62.1 Appendix C uses as a proxy for ventilation rate.
+  var OUTDOOR_CO2 = 420;            // PPM — conventional outdoor baseline
+  var CO2_AT_DESIGN = 130;          // PPM above outdoor when airflow is at design
+  var CO2_MAX_RISE = 1100;          // PPM above outdoor when the box delivers nothing
+
+  function updateZoneCO2(state) {
+    // An unoccupied zone decays toward outdoor whatever the damper does — that is what
+    // makes CO2 able to DISPROVE occupancy in the weekend-override exercises.
+    if (!state.runSchedule) {
+      state.co2Sensor = Math.round(OUTDOOR_CO2 + 10);
+      return;
+    }
+    var design = Math.max(1, state.maxAirflowSetpoint * 0.6);
+    var ratio = Math.max(0, Math.min(1, (state.airflowCFM || 0) / design));
+    // Inverse relationship: halve the air, roughly double the rise above outdoor.
+    var rise = CO2_AT_DESIGN + (CO2_MAX_RISE - CO2_AT_DESIGN) * Math.pow(1 - ratio, 2);
+    state.co2Sensor = Math.round(Math.max(OUTDOOR_CO2, Math.min(2000, OUTDOOR_CO2 + rise)));
   }
 
   function getZoneIds() {
