@@ -1,7 +1,15 @@
+# ── Local Supabase credentials, injected at runtime — never committed ────────
+# server.js generates /config.js from these env vars, so the keys live in
+# Railway's environment (and in this file locally) rather than in the repo.
+.env
+src/config.js
+
+# Node
 node_modules/
+npm-debug.log*
+
+# OS noise
 .DS_Store
-screenshots/
-BMS Exports/
-BMS Images/
-BMS Slides/
-BMS TMY/
+Thumbs.db
+src/config.js
+.DS_Store

@@ -1,0 +1,187 @@
+[
+  {
+    "file": "00_signin.png",
+    "section": "sign-on",
+    "caption": "Sign-on screen. Use cta_instructor / bms2026 for classroom facilitation."
+  },
+  {
+    "file": "01a_AHU44_normal.png",
+    "section": "ahu44",
+    "caption": "AHU-4-4 — healthy baseline state. Read the OA Strip and Controls Sidebar before any diagnosis."
+  },
+  {
+    "file": "01b_AHU44_OA_strip.png",
+    "section": "ahu44",
+    "caption": "OA Strip close-up — OAT, RH, dewpoint, wetbulb, enthalpy. Read this first on every screen load."
+  },
+  {
+    "file": "01c_AHU44_controls_sidebar.png",
+    "section": "ahu44",
+    "caption": "AHU-4-4 Controls Sidebar — editable setpoints (white boxes) vs calculated read-only outputs."
+  },
+  {
+    "file": "01d_AHU44_manual_override.png",
+    "section": "ahu44",
+    "caption": "AHU-4-4 with M badge (manual override) on OA damper forced to 0%. First red flag to investigate."
+  },
+  {
+    "file": "01e_AHU44_fault_N01_SAT.png",
+    "section": "ahu44",
+    "caption": "N-01 fault — supply air temperature outside 52–58°F design band. CHW valve and setpoint mismatch."
+  },
+  {
+    "file": "01f_AHU44_fault_N02_CO2.png",
+    "section": "ahu44",
+    "caption": "N-02 fault — CO₂ exceeds 1,100 ppm (ASHRAE 62.1 upper threshold). Ventilation shortfall."
+  },
+  {
+    "file": "01g_AHU44_fault_N04_damper.png",
+    "section": "ahu44",
+    "caption": "N-04 fault — OA damper below 20% minimum while fan is running. Ventilation and IAQ concern."
+  },
+  {
+    "file": "01h_AHU44_schedule_off.png",
+    "section": "ahu44",
+    "caption": "AHU-4-4 with Run Schedule set to Off — unit stops, all outputs go to idle state."
+  },
+  {
+    "file": "01i_AHU44_fire_alarm.png",
+    "section": "ahu44",
+    "caption": "AHU-4-4 with fire alarm Shutdown active — unit forced off regardless of schedule."
+  },
+  {
+    "file": "02a_AHU46_normal.png",
+    "section": "ahu46",
+    "caption": "AHU-4-6 — Meeting Room 2nd Level. Real Honeywell SymmetrE screenshot with live overlay."
+  },
+  {
+    "file": "02b_AHU46_controls_sidebar.png",
+    "section": "ahu46",
+    "caption": "AHU-4-6 Controls Sidebar — key difference: minimum OA damper position defaults to 60% for meeting rooms."
+  },
+  {
+    "file": "02c_AHU46_fault_M02_CO2.png",
+    "section": "ahu46",
+    "caption": "M-02 fault — CO₂ > 1,100 ppm on AHU-4-6. Meeting rooms fill fast with occupants."
+  },
+  {
+    "file": "02d_AHU46_fault_M04_damper.png",
+    "section": "ahu46",
+    "caption": "M-04 fault — OA damper below 60% minimum (meeting room ASHRAE 62.1 requirement)."
+  },
+  {
+    "file": "03a_AHU231_normal.png",
+    "section": "ahu231",
+    "caption": "AHU-23-1 — SVG schematic view. Boiler room ventilation unit, no chilled water coils."
+  },
+  {
+    "file": "03b_AHU231_controls_sidebar.png",
+    "section": "ahu231",
+    "caption": "AHU-23-1 Controls Sidebar. Note: wrong setpoint for an unoccupied equipment space is a common fault."
+  },
+  {
+    "file": "04a_VAV_ballroom_normal.png",
+    "section": "vav",
+    "caption": "VAV-4-4-02 Ballroom — healthy baseline. Downstream of AHU-4-4. Damper in deadband."
+  },
+  {
+    "file": "04b_VAV_ballroom_cooling_call.png",
+    "section": "vav",
+    "caption": "VAV-4-4-02 with cooling call active — space temperature raised above cooling setpoint, damper opens."
+  },
+  {
+    "file": "04c_VAV_ballroom_fault_V01_reheat.png",
+    "section": "vav",
+    "caption": "V-01 fault — excessive reheat while cold discharge air is supplied. Classic energy waste pattern."
+  },
+  {
+    "file": "04d_VAV_ballroom_fault_V02_CO2.png",
+    "section": "vav",
+    "caption": "V-02 fault — CO₂ exceeds 1,100 ppm in the Ballroom. Ventilation response required per ASHRAE 62.1."
+  },
+  {
+    "file": "04e_VAV_ballroom_fault_V03_unoccupied.png",
+    "section": "vav",
+    "caption": "V-03 fault — airflow present during unoccupied hours due to manual damper override. Schedule waste."
+  },
+  {
+    "file": "04f_VAV_ballroom_M_badge.png",
+    "section": "vav",
+    "caption": "VAV-4-4-02 with M badge on reheat valve — manual override means the program sequence is bypassed."
+  },
+  {
+    "file": "05a_alarms_clean.png",
+    "section": "alarms",
+    "caption": "Alarm Summary — no active alarms. A well-run building keeps this page clear."
+  },
+  {
+    "file": "05b_alarms_with_faults.png",
+    "section": "alarms",
+    "caption": "Alarm Summary with active faults triggered across AHU-4-4, AHU-4-6, and VAV. Sort by priority, click source to inspect."
+  },
+  {
+    "file": "05c_alarms_acknowledged.png",
+    "section": "alarms",
+    "caption": "Alarm Summary — faults acknowledged but unresolved. Acknowledged ≠ fixed."
+  },
+  {
+    "file": "06a_ebi_general.png",
+    "section": "ebi",
+    "caption": "EBI Point Detail — General tab. Read: point name, type, units, technical address, present value, mode."
+  },
+  {
+    "file": "06b_ebi_history.png",
+    "section": "ebi",
+    "caption": "EBI History tab — trend chart. Confirm fault duration and recurrence before drawing conclusions."
+  },
+  {
+    "file": "06c_ebi_alarms_tab.png",
+    "section": "ebi",
+    "caption": "EBI Alarms tab — point-level alarm history. Use alongside Alarm Summary for root cause."
+  },
+  {
+    "file": "06d_ebi_recent_events.png",
+    "section": "ebi",
+    "caption": "EBI Recent Events tab — log of operator changes. Critical for tracing who set a manual override and when."
+  },
+  {
+    "file": "07a_schedule_weekly_normal.png",
+    "section": "schedule",
+    "caption": "Schedule Manager — normal weekday schedule (6 AM – 8 PM, off overnight and weekends)."
+  },
+  {
+    "file": "07b_schedule_weekly_fault.png",
+    "section": "schedule",
+    "caption": "Schedule Manager — 24/7 schedule fault. Unit running all day, every day, including Sunday 1 AM."
+  },
+  {
+    "file": "07c_schedule_exception.png",
+    "section": "schedule",
+    "caption": "Exception Schedule — holiday and one-time override entries. Check after events for forgotten overrides."
+  },
+  {
+    "file": "08a_reports_clean.png",
+    "section": "reports",
+    "caption": "Point Attribute Report — no overrides. All points in Auto mode: a clean building baseline."
+  },
+  {
+    "file": "08b_reports_with_overrides.png",
+    "section": "reports",
+    "caption": "Point Attribute Report — Manual mode points highlighted. Run this before finalising any diagnosis."
+  },
+  {
+    "file": "09a_capstone_blank.png",
+    "section": "capstone",
+    "caption": "Capstone Worksheet — blank. Students complete this with evidence from at least three simulator screens."
+  },
+  {
+    "file": "09b_capstone_in_progress.png",
+    "section": "capstone",
+    "caption": "Capstone Worksheet — partially filled. Each section must reference a specific screen and evidence type."
+  },
+  {
+    "file": "10_instructor_dashboard.png",
+    "section": "instructor",
+    "caption": "Instructor Dashboard — scenario controls, capstone unlock, and class progress overview."
+  }
+]

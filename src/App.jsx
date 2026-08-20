@@ -89,6 +89,9 @@ function parseRoute(hash) {
   if (parts[0] === 'exercises') {
     return { screen: 'exercises', params: {} };
   }
+  if (parts[0] === 'review') {
+    return { screen: 'review', params: {} };
+  }
   return { screen: 'auth', params: {} };
 }
 
@@ -247,10 +250,17 @@ function ScheduleScreen() {
   // System Configuration tree data (schedulable objects) — matches the two
   // current Station tabs (AHU-4-4, AHU-23-1). Legacy AHU-4-4/AHU-4-6 and
   // the demo-only AHU-9-2 fault schedule have been removed.
+  // One entry per Station tab. VAV boxes carry their own schedule in a real system —
+  // a terminal unit can be occupied when its air handler is not — so they are listed
+  // rather than assumed to follow the AHU.
   const scheduleTree = [
+    { id: 'AHU-4-6', label: 'AHU-4-6 Schedule', parent: null },
     { id: 'AHU-4-4', label: 'AHU-4-4 Schedule', parent: null },
+    { id: 'AHU-4-3', label: 'AHU-4-3 Schedule', parent: null },
     { id: 'AHU-23-1', label: 'AHU-23-1 Schedule', parent: null },
-    { id: 'AHU-4-6', label: 'AHU-4-6 Schedule', parent: null }
+    { id: 'VAV-4-4-02', label: 'VAV-4-4-02 Schedule', parent: null }
+    // VAV-02-03 is hidden here for the same reason it is hidden from the Station tab
+    // bar — a schedule object for a unit an operator cannot open is just clutter.
   ];
 
   // Tree item renderer
@@ -258,12 +268,16 @@ function ScheduleScreen() {
     const isActive = selectedSchedule === item.id;
     return React.createElement('div', {
       key: item.id,
-      className: 'flex items-center gap-2 px-3 py-2 cursor-pointer rounded text-sm transition-colors ' +
-        (isActive ? 'bg-blue-800 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'),
+      style: { display: 'flex', alignItems: 'center', gap: '8px',
+               padding: '7px 10px', borderRadius: '5px', cursor: 'pointer',
+               fontSize: '12.5px', fontWeight: isActive ? 800 : 600,
+               fontFamily: 'inherit',
+               background: isActive ? 'linear-gradient(180deg,#2f6fd0,#1f57c8)' : 'transparent',
+               color: isActive ? '#fff' : '#c3cfdd' },
+      onMouseEnter: function (e) { if (!isActive) e.currentTarget.style.background = '#18202e'; },
+      onMouseLeave: function (e) { if (!isActive) e.currentTarget.style.background = 'transparent'; },
       onClick: function() { setSelectedSchedule(item.id); }
     },
-      // Calendar icon
-      React.createElement('span', { className: 'text-base' }, '📅'),
       React.createElement('span', null, item.label)
     );
   }
@@ -273,22 +287,42 @@ function ScheduleScreen() {
     const isActive = activeTab === tabId;
     return React.createElement('button', {
       key: tabId,
-      className: 'px-4 py-2 text-sm font-medium border-b-2 transition-colors ' +
-        (isActive ? 'border-blue-400 text-white bg-gray-700' : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'),
+      style: { padding: '8px 15px', fontSize: '12px', fontWeight: 800,
+               letterSpacing: '.2px', cursor: 'pointer', fontFamily: 'inherit',
+               background: isActive ? 'rgba(53,189,211,.12)' : 'transparent',
+               border: 'none',
+               borderBottom: '2px solid ' + (isActive ? '#35bdd3' : 'transparent'),
+               color: isActive ? '#cfe6ea' : '#9db0c8' },
       onClick: function() { setActiveTab(tabId); }
     }, label);
   }
 
-  return React.createElement('div', { className: 'flex h-screen bg-gray-800' },
-    // Left sidebar: System Configuration tree
-    React.createElement('div', { className: 'w-64 bg-gray-900 border-r border-gray-700 flex flex-col' },
-      // Tree header
-      React.createElement('div', { className: 'px-3 py-3 border-b border-gray-700' },
-        React.createElement('h2', { className: 'text-white font-bold text-sm' }, 'System Configuration'),
-        React.createElement('p', { className: 'text-gray-500 text-xs mt-1' }, 'Schedule Objects')
+  return React.createElement('div', {
+    className: 'flex h-screen',
+    style: { background: '#141a26', color: '#e8edf6',
+             fontFamily: "'Barlow','Segoe UI',system-ui,sans-serif" },
+    'data-screen-label': 'Schedule Manager'
+  },
+    // Left sidebar: System Configuration tree — same width and palette as the
+    // Alarm Summary filter tree, which is the same kind of navigation.
+    React.createElement('div', {
+      style: { width: '230px', background: '#0e1420', borderRight: '1px solid #232c3d',
+               display: 'flex', flexDirection: 'column', flexShrink: 0 }
+    },
+      React.createElement('div', {
+        style: { padding: '11px 12px', borderBottom: '1px solid #232c3d' }
+      },
+        React.createElement('h2', {
+          style: { fontSize: '12.5px', fontWeight: 800, color: '#e8edf6', letterSpacing: '.2px' }
+        }, 'System Configuration'),
+        React.createElement('p', {
+          style: { fontSize: '10.5px', color: '#7f8fa6', marginTop: '3px' }
+        }, 'Schedule Objects')
       ),
-      // Tree items
-      React.createElement('div', { className: 'flex-1 overflow-auto py-2 px-1' },
+      React.createElement('div', {
+        style: { flex: 1, overflowY: 'auto', padding: '8px', display: 'flex',
+                 flexDirection: 'column', gap: '2px' }
+      },
         scheduleTree.map(renderTreeItem)
       )
     ),
@@ -296,20 +330,33 @@ function ScheduleScreen() {
     // Right content area: selected schedule
     React.createElement('div', { className: 'flex-1 flex flex-col overflow-hidden' },
       // Title bar
-      React.createElement('div', { className: 'px-4 py-3 bg-gray-750 border-b border-gray-600 flex items-center justify-between' },
-        React.createElement('div', null,
-          React.createElement('h2', { className: 'text-white font-bold text-lg' }, selectedSchedule + ' Schedule'),
-          React.createElement('p', { className: 'text-gray-400 text-xs mt-0.5' }, 'Normal operating pattern')
-        ),
-        // Back to SymmetrE button
+      React.createElement('div', {
+        style: { padding: '10px 14px', background: '#0e1420',
+                 borderBottom: '1px solid #232c3d', flexShrink: 0 }
+      },
         React.createElement('button', {
-          className: 'px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600 hover:text-white',
-          onClick: function() { window.location.hash = '#/symmetre'; }
-        }, '← Back to Station')
+          style: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                   borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                   background: '#1b2230', border: '1px solid #38445c', color: '#c3cfdd',
+                   fontFamily: 'inherit', marginBottom: '8px' },
+          onClick: function() { window.location.hash = '#/symmetre'; },
+          title: 'Return to SymmetrE Station'
+        }, '\u2190 Back'),
+        React.createElement('h2', {
+          style: { fontSize: '15px', fontWeight: 800, color: '#fff' }
+        }, selectedSchedule + ' Schedule'),
+        React.createElement('p', {
+          style: { fontSize: '11px', color: '#9db0c8', marginTop: '2px' }
+        }, (selectedSchedule && selectedSchedule.indexOf('VAV') === 0)
+            ? 'Terminal unit occupancy pattern'
+            : 'Normal operating pattern')
       ),
 
       // Tab bar
-      React.createElement('div', { className: 'flex border-b border-gray-600 bg-gray-800' },
+      React.createElement('div', {
+        style: { display: 'flex', borderBottom: '1px solid #232c3d',
+                 background: '#141a26', flexShrink: 0 }
+      },
         renderTab('weekly', 'Weekly Schedule'),
         renderTab('exception', 'Exception Schedule')
       ),
@@ -319,10 +366,10 @@ function ScheduleScreen() {
         activeTab === 'weekly'
           ? (window.WeeklySchedule
               ? React.createElement(window.WeeklySchedule, { scheduleId: selectedSchedule })
-              : React.createElement('div', { className: 'p-4 text-gray-400' }, 'Loading Weekly Schedule...'))
+              : React.createElement('div', { style: { padding: '16px', color: '#9db0c8', fontSize: '12px' } }, 'Loading Weekly Schedule\u2026'))
           : (window.ExceptionSchedule
               ? React.createElement(window.ExceptionSchedule, { scheduleId: selectedSchedule })
-              : React.createElement('div', { className: 'p-4 text-gray-400' }, 'Loading Exception Schedule...'))
+              : React.createElement('div', { style: { padding: '16px', color: '#9db0c8', fontSize: '12px' } }, 'Loading Exception Schedule\u2026'))
       )
     )
   );
@@ -392,6 +439,10 @@ function Router() {
       return window.ResetPassword
         ? React.createElement(window.ResetPassword, null)
         : React.createElement('div', { className: 'p-6 text-gray-300' }, 'Password reset unavailable.');
+    case 'review':
+      return window.ReviewQueueScreen
+        ? React.createElement(window.ReviewQueueScreen, null)
+        : React.createElement('div', { className: 'p-6 text-gray-300' }, 'Review queue unavailable.');
     case 'symmetre':
       return React.createElement(SymmetreScreen, { params: route.params });
     case 'ebi':
@@ -464,6 +515,10 @@ function App() {
   // Plain-JS modules (the exercise store, the board's action log) need the signed-in
   // operator but sit outside React's context, so the current name is mirrored here.
   window.CTAAuthOperator = (authState && authState.operator) || null;
+  // Same reason: the point-detail dialog gates its instructor-only tab on privilege
+  // level, and it is opened from the board, the panels and the alarm list — threading
+  // a prop through all three would leave whichever one forgot it showing the tab.
+  window.CTAAuthLevel = (authState && authState.securityLevel) || null;
   window.setAuthState = setAuthState;
   window.setModeState = setModeState;
   window.setSimulationState = setSimulationState;

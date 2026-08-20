@@ -99,7 +99,14 @@
 
     if (!EMAIL_RE.test(email)) return { ok: false, error: 'Enter a valid email address.' };
     if (isReserved(username)) return { ok: false, error: 'That address is reserved. Use another.' };
-    if (exists(username)) return { ok: false, error: 'An account with that email already exists.' };
+    if (exists(username)) {
+      return {
+        ok: false,
+        localDuplicate: true,
+        error: 'This browser already has a local account for that email, created while ' +
+               'the server was unreachable. Clear it below, or use a different email.'
+      };
+    }
     if (password.length < MIN_PASSWORD) {
       return { ok: false, error: 'Password must be at least ' + MIN_PASSWORD + ' characters.' };
     }
@@ -263,7 +270,24 @@
     });
   }
 
+  /** Remove one browser-only account. For the sign-on screen's "clear it" action. */
+  function forget(identifier) {
+    var map = read();
+    var key = normalise(identifier);
+    if (!map[key]) {
+      // Stored by username, but the identifier typed may be the email.
+      Object.keys(map).forEach(function (k) {
+        if (String(map[k].email || '').toLowerCase() === key) key = k;
+      });
+    }
+    if (!map[key]) return false;
+    delete map[key];
+    write(map);
+    return true;
+  }
+
   window.LocalAccounts = {
+    forget: forget,
     backendActive: function () { return !!backend(); },
     signUpAsync: signUpAsync,
     signInAsync: signInAsync,

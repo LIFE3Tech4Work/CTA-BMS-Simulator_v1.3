@@ -159,6 +159,13 @@
     var weather = window.TMY3Projector.getWeatherAtHour(d.month, d.day, PRESET_HOUR);
     if (!weather) return;
 
+    var presetDate = fiscalDateFor(d.month, d.day, PRESET_HOUR);
+    // Move the simulation itself, not just the reading. Without this the clock ran on
+    // from today's date while the weather claimed to be January.
+    if (window.SimulationEngine && typeof window.SimulationEngine.jumpToDate === 'function') {
+      window.SimulationEngine.jumpToDate(presetDate);
+    }
+
     applyToControllers(weather.dryBulb, weather.relHumidity, weather.enthalpy);
     propagateToVAVs();
     var hour12 = ((PRESET_HOUR + 11) % 12) + 1;
@@ -167,9 +174,8 @@
       active: true,
       presetKey: key,
       dateLabel: MONTH_NAMES[d.month] + ' ' + d.day + ', ' + hour12 + ':00 ' + ampm,
-      // Real date for the reading being held, so the station clock can show the
-      // day this weather actually comes from rather than the live sim date.
-      date: fiscalDateFor(d.month, d.day, PRESET_HOUR),
+      // The date the simulation was moved to, kept for the label.
+      date: presetDate,
       weather: weather
     };
     notify();

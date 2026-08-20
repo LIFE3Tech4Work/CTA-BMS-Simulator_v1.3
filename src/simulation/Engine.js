@@ -245,6 +245,10 @@ function dateForRow(row) {
     currentRow = Math.min(rowFromBase, TOTAL_ROWS);
     interpolationFraction = currentRow >= TOTAL_ROWS ? 0 : fraction;
     atEnd = currentRow >= TOTAL_ROWS;
+    // An explicit jump IS the resolved position. Left false, the next getter or tick
+    // calls resolveOpeningRow(), which overwrites currentRow with the seasonal start
+    // row — so a season preset could be silently undone one frame after being set.
+    openingRowResolved = true;
 
     // Notify listeners of the new position
     notifyListeners();

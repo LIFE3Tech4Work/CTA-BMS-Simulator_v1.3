@@ -98,6 +98,10 @@
 
     var [title, setTitle] = useState('');
     var [brief, setBrief] = useState('');
+    // Tracked per field so prefill only ever fills a blank the instructor has not
+    // written in, and stops as soon as they do.
+    var [touched, setTouched] = useState({});
+    function touch(f) { setTouched(function (p) { return Object.assign({}, p, { [f]: true }); }); }
     // Which ASHRAE criterion the goal came from, or '' for a hand-set target.
     // Picking one fills in the point, comparator and target below, resolved
     // against this unit's live state — so a criterion follows the unit's own
@@ -251,6 +255,75 @@
       return sp;
     })();
 
+    // What each faultable point implies, so the dialog can propose a title, a brief and
+    // a criterion rather than starting empty. Keyed by the point the instructor changed.
+    var FAULT_HINTS = {
+      runSchedule: {
+        title: 'Unit will not run during occupied hours',
+        brief: 'The air handler is delivering no air while the space is occupied. Find out what is stopping it and get airflow restored.',
+        criterion: 'iaq-min-oa-airflow'
+      },
+      oaDamperPosition: {
+        title: 'Outdoor air damper closed during occupancy',
+        brief: 'The space is being starved of ventilation air even though temperatures look correct. Find out why and restore the minimum outdoor air position.',
+        criterion: 'iaq-min-damper'
+      },
+      chwValvePosition: {
+        title: 'Chilled water valve stuck',
+        brief: 'Supply air is not where it should be and the cooling coil is not behaving. Diagnose the valve and return supply air to its setpoint.',
+        criterion: 'soo-supply-air-setpoint'
+      },
+      phtValvePosition: {
+        title: 'Preheat valve stuck',
+        brief: 'The heating coil is not responding as expected. Find the fault and bring supply air back to its active setpoint.',
+        criterion: 'soo-supply-air-setpoint'
+      },
+      coolingCoilSetpoint: {
+        title: 'Space is being overcooled',
+        brief: 'Occupants report the space is far too cold. Supply air is running well below where it should be — find out why and return it to design.',
+        criterion: 'soo-supply-air-setpoint'
+      },
+      heatingCoilSetpoint: {
+        title: 'Supply air running warm',
+        brief: 'Supply air is warmer than it should be for these conditions. Diagnose the heating side and restore the correct setpoint.',
+        criterion: 'soo-supply-air-setpoint'
+      },
+      co2Setpoint: {
+        title: 'Ventilation not keeping up with occupancy',
+        brief: 'Zone CO₂ is climbing above the ventilation indicator. Work out why the unit is not bringing in enough outdoor air.',
+        criterion: 'iaq-co2-differential'
+      },
+      co2Sensor: {
+        title: 'Zone CO₂ above the ventilation indicator',
+        brief: 'CO₂ in the zone is higher than 62.1 uses as an indicator of adequate ventilation. Bring it back down.',
+        criterion: 'iaq-co2-differential'
+      },
+      fanSpeedSetpoint: {
+        title: 'Duct static pressure off setpoint',
+        brief: 'The supply fan is not holding duct static where it should. Find what is driving it and restore control.',
+        criterion: 'soo-duct-static'
+      },
+      economizerActive: {
+        title: 'Free cooling available but unused',
+        brief: 'Outdoor conditions are suitable for free cooling but the unit is running mechanical cooling instead. Work out why the economizer is not engaging.',
+        criterion: 'energy-economizer-active'
+      },
+      zoneTempSetpoint: {
+        title: 'Zone outside the comfort range',
+        brief: 'The zone is drifting outside the comfort band occupants expect. Diagnose the cause and bring it back.',
+        criterion: 'comfort-zone-winter'
+      }
+    };
+
+    // First captured point that has a hint. Deliberately the FIRST rather than a merge:
+    // a title describing two faults at once helps nobody, and the instructor can edit.
+    var hint = (function () {
+      for (var i = 0; i < setupKeys.length; i++) {
+        if (FAULT_HINTS[setupKeys[i]]) return FAULT_HINTS[setupKeys[i]];
+      }
+      return null;
+    })();
+
     var AC = window.ASHRAECriteria;
     var criteria = (AC && AC.forState(state)) || [];
     var criterion = (criterionId && AC) ? AC.byId(criterionId) : null;
@@ -268,7 +341,18 @@
 
     // Editing the fields by hand detaches the goal from its criterion, rather
     // than leaving it citing a standard whose number no longer matches.
-    function detach() { if (criterionId) setCriterionId(''); }
+    function detach() { touch('goal'); if (criterionId) setCriterionId(''); }
+
+    // Runs when the captured setup changes — so building the fault, then opening this
+    // dialog, arrives with the description already written.
+    useEffect(function () {
+      if (!hint) return;
+      if (!touched.title && !title) setTitle(hint.title);
+      if (!touched.brief && !brief) setBrief(hint.brief);
+      if (!touched.goal && !criterionId && hint.criterion && AC && AC.byId(hint.criterion)) {
+        applyCriterion(hint.criterion);
+      }
+    }, [setupKeys.join(','), hint && hint.title]);
 
     function metaFor(k) {
       var found = null;
@@ -367,7 +451,7 @@
             React.createElement('span', { style: labelStyle() }, 'TITLE'),
             React.createElement('input', {
               type: 'text', value: title, placeholder: 'e.g. Supply air running warm on a cold morning',
-              onChange: function (e) { setTitle(e.target.value); }, style: fieldStyle()
+              onChange: function (e) { touch('title'); setTitle(e.target.value); }, style: fieldStyle()
             })
           ),
           React.createElement('label', { style: { display: 'block' } },
@@ -375,7 +459,7 @@
             React.createElement('textarea', {
               value: brief, rows: 3,
               placeholder: 'What they are being asked to do. Students see this before they start.',
-              onChange: function (e) { setBrief(e.target.value); },
+              onChange: function (e) { touch('brief'); setBrief(e.target.value); },
               style: Object.assign(fieldStyle(), { resize: 'vertical' })
             })
           ),

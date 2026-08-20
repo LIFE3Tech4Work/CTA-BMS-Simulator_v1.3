@@ -62,6 +62,30 @@
       var LA = window.LocalAccounts, R = window.StudentRoster;
       if (!LA || !R) return;
       var acct = LA.get(seat) || R.get(seat);
+
+      // With a backend, a browser CANNOT set another person's password — that needs
+      // the service role key, which must never ship to a client. What it can do is
+      // send that student a reset link. Handing out a temporary password here would
+      // have written it into local storage for an account that lives on the server:
+      // it would report success and change nothing the student could use.
+      if (LA.backendActive && LA.backendActive()) {
+        if (!acct || !acct.email) {
+          setResetInfo({ seat: seat, error: 'No email on file for this student.' });
+          return;
+        }
+        setResetInfo({ seat: seat, sending: true });
+        LA.resetPasswordAsync(acct.email, '').then(function (res) {
+          if (!res || !res.ok) {
+            setResetInfo({ seat: seat, error: (res && res.error) || 'Could not send the reset email.' });
+            return;
+          }
+          setResetInfo({ seat: seat, emailedTo: acct.email });
+        });
+        return;
+      }
+
+      // No backend: local accounts are the record, so a temporary password is both
+      // possible and the fastest way to get a student back in.
       var pw = tempPassword();
       var res = LA.resetPassword(seat, acct.email, pw);
       if (!res || !res.ok) {
@@ -314,7 +338,9 @@
                 React.createElement('button', {
                   type: 'button',
                   onClick: function () { resetStudentPassword(a.username); },
-                  title: 'Set a temporary password and show it once',
+                  title: (window.LocalAccounts && window.LocalAccounts.backendActive())
+                    ? 'Email this student a password reset link'
+                    : 'Set a temporary password and show it once',
                   style: { padding: '3px 9px', borderRadius: '4px', fontSize: '10px',
                            fontWeight: 800, letterSpacing: '.3px', fontFamily: 'inherit',
                            cursor: 'pointer', background: '#1b2230',
@@ -326,7 +352,17 @@
                          color: shown.error ? '#ff8a7e' : '#8ff0b5' }
               }, shown.error
                   ? shown.error
-                  : React.createElement('span', null,
+                  : shown.sending
+                    ? 'Sending\u2026'
+                    : shown.emailedTo
+                      // With a backend the browser cannot set someone else's password,
+                      // so the honest outcome is a link sent to them.
+                      ? React.createElement('span', null,
+                          'Reset link sent to ',
+                          React.createElement('strong', null, shown.emailedTo),
+                          '. They set their own password from that email.'
+                        )
+                      : React.createElement('span', null,
                       'Temporary password: ',
                       React.createElement('code', {
                         style: { fontFamily: 'ui-monospace,Menlo,monospace', fontSize: '12.5px',

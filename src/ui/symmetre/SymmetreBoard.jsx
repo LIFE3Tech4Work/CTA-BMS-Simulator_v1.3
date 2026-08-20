@@ -418,13 +418,16 @@ const SymmetreBoard = (function () {
         else if (c.clearModes) c.clearModes();
         if (c.recalculate) c.recalculate();
         eventLog.unshift({ t: stamp(), key: key, src: BP.bacnetFor(unitId, key).name,
-                           etype: 'Mode Transition', prev: 'Manual', val: 'Auto' });
+                           etype: 'Mode Transition', prev: 'Manual', val: 'Auto',
+                           by: window.CTAAuthOperator || 'operator' });
       } else {
         c.setValue(key, value);
         eventLog.unshift({ t: stamp(), key: key, src: BP.bacnetFor(unitId, key).name,
                            etype: 'Value Change',
                            prev: prev + (m.unit ? ' ' + m.unit : ''),
-                           val: BP.format(key, value) + (m.unit ? ' ' + m.unit : '') });
+                           val: BP.format(key, value) + (m.unit ? ' ' + m.unit : ''),
+                           // Whose credentials made the change.
+                           by: window.CTAAuthOperator || 'operator' });
       }
       if (eventLog.length > 120) eventLog.length = 120;
       // An exercise attempt records what the student actually changed, so the
