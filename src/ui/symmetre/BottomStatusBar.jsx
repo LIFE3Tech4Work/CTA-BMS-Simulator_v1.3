@@ -60,7 +60,22 @@ const BottomStatusBar = (function() {
       return window.WeatherOverride.subscribe(setOvr);
     }, []);
 
-    const overrideDate = (ovr && ovr.active && ovr.date) ? ovr.date : null;
+    // Follow the engine while it runs, even under an override — otherwise Start
+    // Simulation looks broken. The override's own date is shown only when paused,
+    // where it stops a Winter reading sitting beside a July date.
+    // Tick purely to re-render; the value itself is read fresh below. Holding it in
+    // state meant a stale flag decided which date to show.
+    const [, tick] = useState(0);
+    useEffect(function () {
+      var t = setInterval(function () { tick(function (n) { return n + 1; }); }, 500);
+      return function () { clearInterval(t); };
+    }, []);
+
+    const engineRunning = !!(window.SimulationEngine && window.SimulationEngine.running);
+    // No substitute date any more: applying a preset moves the engine to that date, so
+    // the engine's own clock already reads January under a Winter override. Overriding
+    // the display on top of that is what made paused and running disagree.
+    const overrideDate = null;
 
     // Format the current simulation timestamp
     const timestamp = useMemo(function() {
@@ -69,7 +84,7 @@ const BottomStatusBar = (function() {
         simulation.interpolationFraction || 0,
         overrideDate
       );
-    }, [simulation.currentRow, simulation.interpolationFraction, overrideDate]);
+    }, [simulation.currentRow, simulation.interpolationFraction, overrideDate, engineRunning]);
 
     // Get selected point BACnet path (if any)
     const selectedPointPath = useMemo(function() {
@@ -90,15 +105,21 @@ const BottomStatusBar = (function() {
         'aria-label': 'Simulation time'
       },
         React.createElement('span', {
-          className: (ovr && ovr.active) ? '' : 'text-green-400',
-          style: (ovr && ovr.active) ? { color: '#ff9bec' } : null
+          // Green whenever time is advancing, whatever the weather is doing.
+          className: engineRunning ? 'text-green-400' : '',
+          style: engineRunning ? null : { color: '#ff9bec' }
         }, '●'),
         React.createElement('span', null, timestamp),
         // Says why the clock is not advancing, rather than leaving a frozen
         // timestamp looking like a stalled app.
         (ovr && ovr.active) ? React.createElement('span', {
-          style: { color: '#ff9bec', fontWeight: 700, letterSpacing: '.3px' }
-        }, overrideDate ? 'HELD — weather override' : 'HELD — custom weather') : null
+          style: { color: '#ff9bec', fontWeight: 700, letterSpacing: '.3px' },
+          title: engineRunning
+            ? 'Outdoor conditions are held; the clock is running.'
+            : 'Outdoor conditions and the clock are both held at this reading.'
+        // While running, only the weather is held — saying "HELD" alone next to a
+        // ticking clock is what made this look like a frozen simulation.
+        }, engineRunning ? 'WEATHER HELD — clock running' : 'HELD — weather override') : null
       ),
       // Center: Selected point BACnet path
       React.createElement('div', {

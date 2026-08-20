@@ -33,7 +33,10 @@
 (function () {
   'use strict';
 
-  var SDK_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+  var SDK_URLS = [
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js',
+    'https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js'
+  ];
 
   var client = null;
   var sdkPromise = null;
@@ -69,15 +72,22 @@
     if (sdkPromise) return sdkPromise;
     sdkPromise = new Promise(function (resolve, reject) {
       if (window.supabase && window.supabase.createClient) return resolve(window.supabase);
-      var s = document.createElement('script');
-      s.src = SDK_URL;
-      s.async = true;
-      s.onload = function () {
-        if (window.supabase && window.supabase.createClient) resolve(window.supabase);
-        else reject(new Error('SDK loaded but createClient missing'));
-      };
-      s.onerror = function () { reject(new Error('could not load the Supabase SDK')); };
-      document.head.appendChild(s);
+      var i = 0;
+      function attempt() {
+        if (i >= SDK_URLS.length) {
+          return reject(new Error('could not load the Supabase SDK from any CDN'));
+        }
+        var el = document.createElement('script');
+        el.src = SDK_URLS[i++];
+        el.async = true;
+        el.onload = function () {
+          if (window.supabase && window.supabase.createClient) resolve(window.supabase);
+          else attempt();
+        };
+        el.onerror = attempt;   // try the next host rather than giving up
+        document.head.appendChild(el);
+      }
+      attempt();
     });
     return sdkPromise;
   }
@@ -110,7 +120,14 @@
    */
   function signUp(fields) {
     return getClient().then(function (c) {
-      if (!c) return { ok: false, error: 'No backend configured.', local: true };
+      if (!c) {
+        // Distinguish "not set up" from "set up but unreachable": only the first may
+        // fall back to browser-only storage.
+        return isConfigured()
+          ? { ok: false, unreachable: true,
+              error: 'Could not reach the account server. Check your connection and try again \u2014 do not create a local-only account.' }
+          : { ok: false, error: 'No backend configured.', local: true };
+      }
       var first = String(fields.firstName || '').trim();
       var last = String(fields.lastName || '').trim();
       return c.auth.signUp({
@@ -177,7 +194,14 @@
 
   function signIn(email, password) {
     return getClient().then(function (c) {
-      if (!c) return { ok: false, error: 'No backend configured.', local: true };
+      if (!c) {
+        // Distinguish "not set up" from "set up but unreachable": only the first may
+        // fall back to browser-only storage.
+        return isConfigured()
+          ? { ok: false, unreachable: true,
+              error: 'Could not reach the account server. Check your connection and try again \u2014 do not create a local-only account.' }
+          : { ok: false, error: 'No backend configured.', local: true };
+      }
       return c.auth.signInWithPassword({
         email: String(email || '').trim(),
         password: String(password || '')
@@ -193,7 +217,14 @@
   /** Emails a real reset link back to this app's #/reset route. */
   function resetPassword(email) {
     return getClient().then(function (c) {
-      if (!c) return { ok: false, error: 'No backend configured.', local: true };
+      if (!c) {
+        // Distinguish "not set up" from "set up but unreachable": only the first may
+        // fall back to browser-only storage.
+        return isConfigured()
+          ? { ok: false, unreachable: true,
+              error: 'Could not reach the account server. Check your connection and try again \u2014 do not create a local-only account.' }
+          : { ok: false, error: 'No backend configured.', local: true };
+      }
       var redirect = window.location.origin + window.location.pathname + '#/reset';
       return c.auth.resetPasswordForEmail(String(email || '').trim(), { redirectTo: redirect })
         .then(function (res) {
@@ -326,9 +357,22 @@
         c.from('attempts').select('*'),
         c.from('groups').select('id,name,class_id'),
         c.from('group_members').select('group_id,student_id'),
-        c.from('profiles').select('id,email,display_name,role')
+        c.from('profiles').select('id,email,display_name,role'),
+        c.from('review_flags').select('*')
       ]).then(function (res) {
         var exRes = res[0], atRes = res[1], grRes = res[2], gmRes = res[3], prRes = res[4];
+        var rfRes = res[5];
+        if (rfRes && !rfRes.error && (rfRes.data || []).length) {
+          writeLocal('cta_review_flags', (rfRes.data || []).map(function (r) {
+            return {
+              id: r.id, unitId: r.unit_id, pointKey: r.point_key,
+              pointLabel: r.point_label, pointAddr: r.point_addr,
+              valueAtFlag: r.value_at_flag, statusAtFlag: r.status_at_flag,
+              note: r.note, flaggedBy: r.flagged_by,
+              createdAt: r.created_at, resolvedAt: r.resolved_at, resolvedBy: null
+            };
+          }));
+        }
         if (exRes.error) { fail('exercises', exRes.error); return { ok: false }; }
 
         // Do NOT overwrite the local list when the server has nothing. On a fresh
@@ -372,7 +416,9 @@
             roster[p.id] = {
               firstName: sp > 0 ? name.slice(0, sp) : name,
               lastName: sp > 0 ? name.slice(sp + 1) : '',
-              email: p.email || ''
+              email: p.email || '',
+              // Kept so the assignment picker can leave instructors out.
+              role: p.role || 'student'
             };
           });
           writeLocal(ROSTER_KEY, roster);
@@ -487,7 +533,45 @@
     }).catch(function (e) { fail('pushAttempt', e); return { ok: false }; });
   }
 
+  /** Flagged points, so a review raised on one machine is visible on another. */
+  function pushReviewFlag(flag) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, local: true };
+      return c.auth.getUser().then(function (u) {
+        var uid = u && u.data && u.data.user && u.data.user.id;
+        if (!uid) return { ok: false };
+        return c.from('review_flags').upsert({
+          id: flag.id,
+          unit_id: flag.unitId || '',
+          point_key: flag.pointKey || '',
+          point_label: flag.pointLabel || '',
+          point_addr: flag.pointAddr || '',
+          value_at_flag: String(flag.valueAtFlag || ''),
+          status_at_flag: flag.statusAtFlag || '',
+          note: flag.note || '',
+          flagged_by: uid,
+          created_at: flag.createdAt,
+          resolved_at: flag.resolvedAt || null
+        }).then(function (r) {
+          if (r.error) { fail('pushReviewFlag', r.error); return { ok: false }; }
+          return { ok: true };
+        });
+      });
+    }).catch(function (e) { fail('pushReviewFlag', e); return { ok: false }; });
+  }
+
+  function deleteReviewFlag(id) {
+    return getClient().then(function (c) {
+      if (!c) return;
+      return c.from('review_flags').delete().eq('id', id).then(function (r) {
+        if (r.error) fail('deleteReviewFlag', r.error);
+      });
+    }).catch(function (e) { fail('deleteReviewFlag', e); });
+  }
+
   window.SupabaseBackend = {
+    pushReviewFlag: pushReviewFlag,
+    deleteReviewFlag: deleteReviewFlag,
     isConfigured: isConfigured,
     getStatus: getStatus,
     subscribe: subscribe,

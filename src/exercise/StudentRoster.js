@@ -34,7 +34,14 @@
     // combination made the reset control unreachable for every row.
     var B = window.SupabaseBackend;
     if (B && B.isConfigured()) {
-      var ids = Object.keys(read());
+      var map = read();
+      var ids = Object.keys(map).filter(function (id) {
+        // Skip instructors and the six fallback seat ids: a real backend means real
+        // accounts, and mixing the placeholder seats in makes an exercise assignable
+        // to a seat nobody signs in as.
+        if (/^student_[a-f]$/.test(id)) return false;
+        return map[id] && map[id].role !== 'instructor';
+      });
       if (ids.length) return ids;
     }
     var fixed = (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||

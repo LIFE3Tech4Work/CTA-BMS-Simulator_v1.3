@@ -224,6 +224,7 @@ alter table public.attempts      enable row level security;
 alter table public.groups        enable row level security;
 alter table public.group_members enable row level security;
 alter table public.assignments   enable row level security;
+alter table public.review_flags  enable row level security;
 
 -- Profiles ───────────────────────────────────────────────────────────────────
 drop policy if exists "read own profile" on public.profiles;
@@ -344,6 +345,15 @@ drop policy if exists "students read assigned exercises" on public.exercises;
 create policy "students read assigned exercises" on public.exercises
   for select using (published = true and public.is_assigned_to_me(id));
 
+-- Review flags ───────────────────────────────────────────────────────────────
+-- Any instructor may read and resolve any flag: this is a shared QA queue, and one
+-- instructor being unable to see what another raised defeats the point. Students have
+-- no access at all — a list of "things that look broken" is not theirs to read.
+drop policy if exists "instructors manage review flags" on public.review_flags;
+create policy "instructors manage review flags" on public.review_flags
+  for all using (public.is_instructor())
+  with check (public.is_instructor());
+
 -- Attempts ───────────────────────────────────────────────────────────────────
 drop policy if exists "students own attempts" on public.attempts;
 create policy "students own attempts" on public.attempts
@@ -377,6 +387,7 @@ grant select, insert, update, delete on public.enrollments   to authenticated;
 grant select, insert, update, delete on public.groups        to authenticated;
 grant select, insert, update, delete on public.group_members to authenticated;
 grant select, insert, update, delete on public.assignments   to authenticated;
+grant select, insert, update, delete on public.review_flags  to authenticated;
 grant select                          on public.profiles   to authenticated;
 grant usage, select on sequence public.attempts_id_seq to authenticated;
 grant usage, select on sequence public.assignments_id_seq to authenticated;
@@ -387,7 +398,7 @@ grant update (display_name) on public.profiles to authenticated;
 -- Nothing here is readable before signing in.
 revoke all on public.exercises, public.attempts, public.classes,
               public.enrollments, public.profiles, public.groups,
-              public.group_members, public.assignments from anon;
+              public.group_members, public.assignments, public.review_flags from anon;
 
 -- ─── Join codes generate themselves ──────────────────────────────────────────
 -- Six uppercase characters: unique, and readable aloud to a room.

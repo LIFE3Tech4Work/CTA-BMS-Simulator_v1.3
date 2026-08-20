@@ -119,7 +119,7 @@
 
   <g id="panelsBg" fill="#bcd6fb" fill-opacity="0.4" stroke="#eaf2fd" stroke-opacity="0.7" stroke-width="2">
     <rect x="236" y="215" width="82" height="110" rx="18"/><rect x="236" y="346" width="82" height="80" rx="18"/><rect x="345" y="346" width="132" height="80" rx="18"/><rect x="886" y="88" width="222" height="322" rx="18"/>
-    <rect x="1133" y="133" width="85" height="192" rx="18"/><rect x="1223" y="158" width="82" height="167" rx="18"/>
+    <rect x="1133" y="133" width="85" height="192" rx="18"/><rect x="1223" y="133" width="82" height="192" rx="18"/>
     <rect x="140" y="505" width="86" height="153" rx="16"/><rect x="240" y="505" width="75" height="153" rx="16"/><rect x="430" y="505" width="78" height="153" rx="16"/><rect x="518" y="505" width="82" height="153" rx="16"/><rect x="610" y="{{frzBoxY}}" width="82" height="{{frzBoxH}}" rx="16"/><rect x="707" y="505" width="78" height="153" rx="16"/><rect x="795" y="505" width="83" height="153" rx="16"/><rect x="886" y="416" width="222" height="324" rx="18"/><rect x="1138" y="478" width="80" height="180" rx="16"/><rect x="1315" y="505" width="80" height="153" rx="16"/><rect x="611" y="660" width="82" height="138" rx="16"/>
   </g>
 
@@ -153,7 +153,6 @@
     <use href="#cubeGoldL" transform="translate(120,548)"/>
     <use href="#oliveAF" transform="translate(175,561)"/><use href="#filterUnit" transform="translate(558,558)"/><!--IF:notU44--><g><use href="#coilR" transform="translate(650,554)"></use><use href="#valveAct" transform="translate(644.5,604)"></use></g><!--/IF--><!--IF:isU44--><g><use href="#htgBank2" transform="translate(650,520)"></use><use href="#valveAct" transform="translate(644.5,604)"></use></g><!--/IF--><use href="#coilB" transform="translate(740,554)"/><use href="#damperH" transform="translate(281,586) rotate(-90) scale(1,-1)"/><use href="#cubeGoldL" transform="translate(464,560)"/><use href="#valveAct" transform="translate(734.5,604)"/><use href="#cubeGoldS" transform="translate(820,560)"/><use href="#cubeSlateS" transform="translate(858,560)"/><use href="#sqig" transform="translate(823,566)"/><use href="#sqig" transform="translate(861,566)"/>
     <use href="#dpPair" transform="translate(1000,577)"/><use href="#fanGearS" transform="translate(1000,577)"/>
-    <use href="#damperV" transform="translate(1112,558) scale(1.125,1)"/>
     <use href="#cubeGoldS" transform="translate(1172,560)"/><use href="#sqig" transform="translate(1175,566)"/><use href="#dpSensor" transform="translate(1338,560)"/>
     <use href="#pump" transform="translate(658,727)"/>
     <g font-weight="700" text-anchor="middle">
@@ -208,7 +207,6 @@
       <text x="262" y="499">DA-1 (N.C.)</text>
       <text x="464" y="499">TS-1</text>
       <text x="559" y="499">DPS-1</text>
-      <text x="1112" y="499">DA-4 (N.O.)</text>
       <text x="651" y="{{frzTagY}}">TS-2 · FZ-1</text>
       <text x="997" y="719">DPS-2 / DPS-3</text>
       <text x="997" y="731">AFMS-1 · CS-1 · VFD</text>

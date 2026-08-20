@@ -106,6 +106,9 @@ const CompanionMode = (function () {
     var boundsTimerRef = useRef(null);
 
     // Pause simulation when companion mode activates (Req 20.2, 20.6)
+    // Runs on MOUNT ONLY, and this component stays mounted while the panel is
+    // collapsed — so it must not pause again on a re-render, or Start Simulation
+    // silently stops a second later and the clock looks frozen.
     useEffect(function () {
       if (window.SimulationEngine) {
         window.SimulationEngine.pause();

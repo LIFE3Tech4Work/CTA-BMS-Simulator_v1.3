@@ -102,6 +102,7 @@
       setMode(next);
       setError('');
       setNotice('');
+      setClearable('');
       setPassword('');
       setConfirm('');
       setNewPassword('');
@@ -169,6 +170,7 @@
       }).then(function (res) {
         if (!res || !res.ok) {
           setError((res && res.error) || 'Could not create the account.');
+          setClearable(res && res.localDuplicate ? email.trim() : '');
           setIsLoading(false);
           // A duplicate is not a dead end — it means they already have an account.
           // Send them to sign-in with the address kept, rather than leaving them on a
@@ -327,12 +329,9 @@
               React.createElement('span', {
                 className: 'text-white text-sm font-semibold tracking-wide'
               }, 'LIFE3 BMS Simulator')
-            ),
-            React.createElement('div', { className: 'flex gap-1' },
-              React.createElement('div', { className: 'w-3 h-3 rounded-full', style: { background: 'rgba(255,255,255,.22)' } }),
-              React.createElement('div', { className: 'w-3 h-3 rounded-full', style: { background: 'rgba(255,255,255,.22)' } }),
-              React.createElement('div', { className: 'w-3 h-3 rounded-full', style: { background: 'rgba(255,255,255,.22)' } })
             )
+            // The three fake window dots are gone: this is a full-page sign-on, not
+            // a window, so they implied controls that were never clickable.
           ),
 
           React.createElement('div', { className: 'p-6' },
@@ -442,13 +441,28 @@
                 className: 'mb-4 px-3 py-2 rounded text-sm',
                 style: { background: 'rgba(224,52,43,.14)', border: '1px solid #8a2018', color: '#ff8a7e' },
                 role: 'alert'
-              }, error) : null,
-              React.createElement('button', {
-                type: 'submit',
-                disabled: signUpDisabled,
-                className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
-                style: primaryButtonStyle(signUpDisabled)
-              }, 'Create Account'),
+              },
+                error,
+                // A browser-only record is the one blocker the person can clear
+                // themselves, so offer the action rather than an error they can only
+                // read — the alternative is walking someone through devtools.
+                clearable ? React.createElement('button', {
+                  type: 'button',
+                  onClick: function () {
+                    if (window.LocalAccounts && window.LocalAccounts.forget) {
+                      window.LocalAccounts.forget(clearable);
+                    }
+                    setClearable('');
+                    setError('');
+                    setNotice('Local record cleared. Create your account again.');
+                  },
+                  style: { display: 'block', marginTop: '7px', padding: '4px 10px',
+                           borderRadius: '4px', fontSize: '12px', fontWeight: 600,
+                           cursor: 'pointer', fontFamily: 'inherit',
+                           background: 'rgba(255,255,255,.08)',
+                           border: '1px solid #8a2018', color: '#ffb3aa' }
+                }, 'Clear the local record and try again') : null
+              ) : null,
               // The browser-only caveat is a real limitation someone would otherwise
               // discover on a second machine, so it stays. With a backend there is no
               // caveat to give, and a line saying so was just noise under the button.

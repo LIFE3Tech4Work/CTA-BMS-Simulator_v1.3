@@ -91,13 +91,17 @@ const PointDialog = (function () {
 
   function GeneralTab(props) {
     const { rows, statusText, statusColor, cmdAnalog, cmdMode, cmdOptions,
-            draft, onDraft, onStep, mode, onAuto, onManual } = props;
+            draft, onDraft, onStep, mode, onAuto, onManual, pending } = props;
 
     const btn = (on) => ({
       flex: 1, textAlign: 'center', padding: '9px', borderRadius: '6px', fontWeight: 800,
-      cursor: 'pointer', border: '1px solid ' + (on ? '#2d5aa8' : '#b7c3d6'),
-      background: on ? 'linear-gradient(180deg,#3f6fbf,#2d5aa8)' : '#eef2f8',
-      color: on ? '#fff' : '#3f5170',
+      cursor: 'pointer',
+      border: (on ? '2px solid #2d5aa8' : '1px solid #b7c3d6'),
+      // No gradient: a filled button here competes with SET and gets pressed instead.
+      background: on ? '#dbe6f7' : '#eef2f8',
+      color: on ? '#1d3f7a' : '#5a6f8e',
+      // Keep both segments the same height whichever is selected.
+      boxSizing: 'border-box',
     });
     const stepBtn = {
       width: '40px', border: '1px solid #98a6bd', borderRadius: '6px', background: '#fff',
@@ -137,10 +141,23 @@ const PointDialog = (function () {
       ) : null,
       cmdMode ? React.createElement('div', null,
         React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Control Mode'),
-        React.createElement('div', { style: { display: 'flex', gap: '8px', marginBottom: '13px' } },
-          React.createElement('div', { style: btn(mode === 'auto'), onClick: onAuto }, 'AUTO'),
-          React.createElement('div', { style: btn(mode === 'man'), onClick: onManual }, 'MANUAL')
-        )
+        React.createElement('div', { style: { display: 'flex', gap: '8px', marginBottom: '7px' } },
+          React.createElement('div', { style: btn(mode === 'auto'), onClick: onAuto },
+            (mode === 'auto' ? '\u2713  ' : '') + 'AUTO'),
+          React.createElement('div', { style: btn(mode === 'man'), onClick: onManual },
+            (mode === 'man' ? '\u2713  ' : '') + 'MANUAL')
+        ),
+        // The step people were missing. Only shown in Manual, where a value is
+        // genuinely waiting to be committed.
+        pending ? React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '13px',
+                   fontSize: '11.5px', fontWeight: 700, color: '#8a6116' }
+        },
+          React.createElement('span', {
+            style: { width: '6px', height: '6px', borderRadius: '50%', background: '#e6a23c', flexShrink: 0 }
+          }),
+          'Not applied yet \u2014 press SET below to command this value.'
+        ) : React.createElement('div', { style: { marginBottom: '13px' } })
       ) : null,
       (cmdOptions && cmdOptions.length) ? React.createElement('div', null,
         React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Command'),
@@ -234,25 +251,42 @@ const PointDialog = (function () {
   // "the thing on the AHU-4-4 screen near the fan" from scratch. Deliberately
   // has no backend/storage — a copyable prompt is the whole feature; there's
   // no persisted multi-item queue to keep in sync with anything.
-  function FlagTab({ unitId, label, pointName, pointAddr, currentValue, statusText }) {
+  function FlagTab({ unitId, pointKey, label, pointName, pointAddr, currentValue, statusText }) {
     const [note, setNote] = useState('');
     const [copied, setCopied] = useState(false);
+    const [saved, setSaved] = useState(null);
+    const [err, setErr] = useState('');
+
+    function draftRow() {
+      return {
+        unitId: unitId, pointKey: pointKey, pointLabel: label,
+        pointAddr: (pointName || '') + (pointAddr ? ' @ ' + pointAddr : ''),
+        valueAtFlag: currentValue, statusAtFlag: statusText, note: note
+      };
+    }
+
+    function saveFlag() {
+      const Q = window.ReviewQueue;
+      if (!Q) { setErr('Review queue unavailable.'); return; }
+      const res = Q.add(draftRow());
+      if (!res.ok) { setErr(res.error); return; }
+      setErr('');
+      setSaved(res.flag);
+    }
 
     function buildPrompt() {
-      return [
-        'BMS Simulator — instructor-flagged point',
-        '',
-        'Screen: ' + unitId,
-        'Point: ' + label + ' (' + pointName + ' @ ' + pointAddr + ')',
-        'Current value: ' + currentValue,
-        'Status: ' + statusText,
-        '',
-        'Instructor note:',
-        note.trim() || '(no note entered)',
-        '',
-        'Please investigate this point in the CTA-BMS-Simulator_v1.3 repo and fix ' +
-          'or explain the issue described above.',
-      ].join('\n');
+      const Q = window.ReviewQueue;
+      // Built from the queue's own formatter so a saved flag and a copied prompt can
+      // never describe the point differently.
+      const base = (Q && Q.promptFor)
+        ? Q.promptFor(Object.assign({}, draftRow(), {
+            note: note.trim() || '(no note entered)',
+            flaggedBy: window.CTAAuthOperator || 'instructor',
+            createdAt: (saved && saved.createdAt) || new Date().toISOString()
+          }))
+        : '';
+      return base + '\n\nPlease investigate this point in the CTA-BMS-Simulator_v1.3 ' +
+        'repo and fix or explain the issue described above.';
     }
 
     function copyPrompt() {
@@ -267,9 +301,8 @@ const PointDialog = (function () {
 
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
       React.createElement('div', { style: { fontSize: '11px', color: '#5a6f8e', lineHeight: 1.5 } },
-        'Describe what looks wrong with this point, then copy the prompt below ',
-        'and paste it to Claude to investigate. No note is saved here — copy it ',
-        'before closing this dialog.'
+        'Describe what looks wrong with this point and save it to the review queue. ',
+        'Saved flags are listed in the Exercise Report, with who raised them and when.'
       ),
       React.createElement('textarea', {
         value: note,
@@ -285,13 +318,22 @@ const PointDialog = (function () {
       },
         React.createElement('button', {
           type: 'button',
+          onClick: saveFlag,
+          disabled: !note.trim(),
+          style: { padding: '7px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 800,
+                   fontFamily: 'inherit', cursor: note.trim() ? 'pointer' : 'not-allowed',
+                   border: '1px solid ' + (note.trim() ? '#2f7a52' : '#b7c3d6'),
+                   background: note.trim() ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#eef2f8',
+                   color: note.trim() ? '#fff' : '#8a97ab' },
+        }, saved ? '\u2713 Saved to queue' : 'Save to Review Queue'),
+        React.createElement('button', {
+          type: 'button',
           onClick: copyPrompt,
           style: { padding: '7px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 800,
-                   fontFamily: 'inherit', cursor: 'pointer', border: '1px solid #2f7a52',
-                   background: 'linear-gradient(180deg,#3f8f5a,#2d7346)', color: '#fff' },
-        }, copied ? '✓ Copied' : 'Copy Fix Prompt'),
-        React.createElement('span', { style: { fontSize: '10.5px', color: '#5a6f8e' } },
-          'Copies point context + your note as one paste-ready block')
+                   fontFamily: 'inherit', cursor: 'pointer', border: '1px solid #b7c3d6',
+                   background: '#eef2f8', color: '#3f5170' },
+        }, copied ? '\u2713 Copied' : 'Copy Prompt'),
+        err ? React.createElement('span', { style: { fontSize: '10.5px', color: '#c22222' } }, err) : null
       ),
       React.createElement('pre', {
         style: { margin: 0, padding: '10px', background: '#22262c', color: '#c3cfdd',
@@ -334,6 +376,12 @@ const PointDialog = (function () {
       const n = typeof raw === 'number' ? raw : 0;
       return String(m.dec ? n.toFixed(m.dec) : Math.round(n));
     });
+    // The committed value formatted exactly as the draft box formats it, so comparing
+// them cannot report a pending edit that is only a difference in decimals.
+    const committedDraft = isBinary ? '' : (function () {
+      const n = typeof raw === 'number' ? raw : 0;
+      return String(m.dec ? n.toFixed(m.dec) : Math.round(n));
+    })();
     const [histPeriod, setHistPeriod] = useState(240);
     const [histIvl, setHistIvl] = useState(1);
     const [cur, setCur] = useState(null);
@@ -377,11 +425,10 @@ const PointDialog = (function () {
     }
     rows.push({ k: 'Subsystem', v: (rec && rec.subsystem) || unitId });
 
-    const statusText = (kind === 'ao')
-      ? (isManual ? 'MANUAL (overridden)' : 'AUTO')
-      : (kind === 'sp' ? 'Operator setpoint'
-        : (isManual ? 'MANUAL (overridden)'
-          : (kind === 'ai' ? 'AUTO — field / TMY input' : 'AUTO')));
+    const statusText = isManual
+      ? 'MANUAL (overridden)'
+      : (kind === 'sp' ? 'AUTO — scheduled / zone reset'
+        : (kind === 'ai' ? 'AUTO — field / TMY input' : 'AUTO'));
     const statusColor = isManual ? '#c81fae' : '#2a6a2a';
 
     // ── history series ──
@@ -474,7 +521,8 @@ const PointDialog = (function () {
     }
 
     // ── command priorities ──
-    const manActive = (kind === 'sp') || isManual;
+    // Follows the real override state; a setpoint in Auto has no manual entry.
+    const manActive = isManual;
     const prios = [];
     for (let n = 1; n <= 16; n++) {
       const active = manActive && n === 8;
@@ -489,9 +537,19 @@ const PointDialog = (function () {
     }
 
     // ── tabs ──
+    // Engr+ only. Read live rather than passed in, because the dialog opens from the
+    // board, the panels and the alarm list, and threading a prop through all of them
+    // would leave the one that forgot it showing the tab to students.
+    const isInstructor = (function () {
+      var A = window.AuthHelpers, level = window.CTAAuthLevel;
+      if (!A || !A.hasPrivilege) return false;
+      return !!(level && A.hasPrivilege(level, 'Engr'));
+    })();
+
     const tabList = [['general', 'General']]
       .concat(commandable ? [['prio', 'Command Priorities']] : [])
-      .concat([['hist', 'History'], ['events', 'Recent Events'], ['flag', 'Flag for Review']]);
+      .concat([['hist', 'History'], ['events', 'Recent Events']])
+      .concat(isInstructor ? [['flag', 'Flag for Review']] : []);
 
     const dot = (lit, color) => ({
       width: '11px', height: '11px', borderRadius: '50%', display: 'inline-block',
@@ -511,9 +569,10 @@ const PointDialog = (function () {
     }
 
     function commitSet() {
-      // Control Mode is a pending choice like the Command list — SET commits it.
-      // Setpoints have no Auto/Manual, so SET always writes their value.
-      if (kind !== 'sp' && mode === 'auto') { onSet(null, 'auto'); onClose(); return; }
+      // AUTO already released on its own click; this covers SET pressed while the
+      // point is in Auto. Setpoints included — excluding them was what left Zone
+      // Heating SP overridden with no way back.
+      if (mode === 'auto') { onSet(null, 'auto'); onClose(); return; }
       if (isBinary) {
         if (pendingBin !== null) onSet(binVal(pendingBin === options[0]), 'man');
         onClose();
@@ -648,7 +707,7 @@ const PointDialog = (function () {
             React.createElement('div', { style: { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
               React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, color: '#5a6f8e' } }, 'Mode'),
               React.createElement('span', { style: { fontSize: '12px', fontWeight: 800, color: isManual ? '#c81fae' : '#12294f' } },
-                (kind === 'sp') ? 'Operator' : (isManual ? 'Manual Ovr' : 'Auto'))
+                isManual ? 'Manual Ovr' : 'Auto')
             ),
             React.createElement('div', { style: { width: '100%', display: 'flex', flexDirection: 'column', gap: '5px' } },
               [{ label: 'Alarm', lit: !!alarm, val: alarm ? 'ALARM' : 'Normal', vc: alarm ? '#c22222' : '#2a6a2a' },
@@ -693,7 +752,9 @@ const PointDialog = (function () {
               tab === 'general' ? React.createElement(GeneralTab, {
                 rows: rows, statusText: statusText, statusColor: statusColor,
                 cmdAnalog: !isBinary && (kind === 'sp' || mode === 'man'),
-                cmdMode: kind !== 'sp',
+                // Every kind gets Control Mode, setpoints included: the reset schedule
+                // and zone control write them, so there is an Auto to go back to.
+                cmdMode: true,
                 // The Command list is only meaningful while the point is Manual —
                 // in Auto the sequence owns the point, so offering states to
                 // command implies a write that would silently be overwritten.
@@ -708,7 +769,14 @@ const PointDialog = (function () {
                 }) : null,
                 draft: draft, onDraft: setDraft, onStep: step,
                 mode: mode,
-                onAuto: () => setMode('auto'),
+                // Something SET would actually write: a typed value differing from the
+                // committed one, a chosen binary state, or Manual selected on a point
+                // that is not yet overridden. Reopening an override shows nothing.
+                pending: isBinary
+                  ? (pendingBin !== null && pendingBin !== raw)
+                  : (mode === 'man' &&
+                     (!isManual || String(draft) !== String(committedDraft))),
+                onAuto: () => { setMode('auto'); onSet(null, 'auto'); },
                 onManual: () => setMode('man'),
               }) : null,
               tab === 'prio' ? React.createElement(PriorityTab, {
@@ -717,8 +785,8 @@ const PointDialog = (function () {
                 relinqNote: manActive ? 'Ignored while priority 8 (Manual Operator) is set' : 'Controlling now — no higher priority is set',
               }) : null,
               tab === 'events' ? React.createElement(EventsTab, { rows: pointEvents }) : null,
-              tab === 'flag' ? React.createElement(FlagTab, {
-                unitId: unitId, label: m.label, pointName: bac.name, pointAddr: bac.addr,
+              (tab === 'flag' && isInstructor) ? React.createElement(FlagTab, {
+                unitId: unitId, pointKey: stateKey, label: m.label, pointName: bac.name, pointAddr: bac.addr,
                 currentValue: display, statusText: statusText,
               }) : null,
               tab === 'hist' ? React.createElement('div', null,

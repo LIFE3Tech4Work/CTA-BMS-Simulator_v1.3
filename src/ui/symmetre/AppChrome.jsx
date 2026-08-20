@@ -99,7 +99,11 @@ const SymmetreAppChrome = (function() {
         { label: 'About CTA BMS Simulator', action: function() { alert('CTA BMS Simulator v2.4\nLIFE3 SymmetrE / EBI Training Platform\nCTA Training Building — NYC Downtown\n\nProperty Primary Use: Multifamily Home\nProperty Secondary Use: Hotel'); } },
         { label: null, action: null },
         { label: 'SME QA: Log Observation', action: function() { if (window.SMEQAForm) window.SMEQAForm.open(); } },
-      ],
+        // Flagged points are a QA concern, not a teaching one, so they sit under Help
+        // rather than inside the Exercise Report where they competed with student
+        // results. Instructor-only, like the Flag for Review tab that feeds it.
+        isInstructorOp ? { label: 'Review Queue', action: function() { window.location.hash = '#/review'; } } : null,
+      ].filter(Boolean),
     };
 
     const handleMenuClick = useCallback(function(item) {
