@@ -650,20 +650,26 @@
         createdBy: 'cta_instructor', createdAt: now
       },
       {
-        id: 'ex-starter-overcool',
+        id: 'ex-starter-overcool-v2',
         title: 'Space is being overcooled',
         unitId: 'AHU-4-6',
         instructions:
-          'Occupants on the 2nd level are complaining that the space is far too cold. ' +
-          'Supply air is running well below where it should be. Find out why and return ' +
-          'supply air to its 60\u00b0F design setpoint.\n\n' +
-          'Hint: a point left in Manual overrides the control program. The Point ' +
+          'Occupants on the 2nd level are complaining that the space is far too cold.\n\n' +
+          'The room wants 72\u00b0F. The cooling coil setpoint for this unit is 70\u00b0F in ' +
+          'Auto. So why is supply air sitting at 60\u00b0F?\n\n' +
+          'Work out what is holding it there, put it back, and say in your diagnosis what ' +
+          'the evidence told you.\n\n' +
+          'Hint: check the colour of each reading. A point in Auto is drawn in the normal ' +
+          'panel colour; a point somebody has overridden by hand is magenta. The Point ' +
           'Attribute Report (View menu) lists every override on the system.',
-        setup: { coolingCoilSetpoint: 45 },
+        // The zone setpoint is the reference that makes the mismatch visible, and the
+        // overridden coil setpoint is the fault. 70 is its Auto value, so releasing the
+        // override is the fix rather than typing a number from the brief.
+        setup: { coolingCoilSetpoint: 60, zoneTempSetpoint: 72 },
         weather: null,
         goal: {
           key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
-          comparator: 'within', target: 60, tolerance: 1.5,
+          comparator: 'within', target: 70, tolerance: 2,
           standard: '36', criterionId: 'soo-supply-air-setpoint',
           criterionLabel: 'Supply air at its active setpoint',
           citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU supply air temperature control',
@@ -720,12 +726,19 @@
    */
   function libraryExercises() {
     var now = new Date().toISOString();
+    var seats = (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||
+      ['student_a', 'student_b', 'student_c', 'student_d', 'student_e', 'student_f'];
     function ex(o) {
+      // Library entries default to drafts, since the instructor chooses what a class
+      // sees. An entry may opt in with published/assigned — the helper used to hardcode
+      // both, so those fields were silently ignored.
+      var to = o.assigned || [];
       return {
         id: o.id, title: o.title, unitId: o.unit, instructions: o.brief,
         setup: o.setup, weather: o.weather || null, goal: o.goal,
-        assignedTo: [], assignment: { mode: 'students', groupIds: [], seatIds: [] },
-        published: false, createdBy: 'cta_instructor', createdAt: now
+        assignedTo: to,
+        assignment: { mode: to.length ? 'students' : 'students', groupIds: [], seatIds: to },
+        published: !!o.published, createdBy: 'cta_instructor', createdAt: now
       };
     }
     return [
@@ -789,11 +802,23 @@
       // A terminal box teaches something the AHUs cannot: the zone can be wrong while
       // the air handler upstream is behaving perfectly.
       ex({
-        id: 'ex-lib-vav-damper',
+        id: 'ex-lib-vav-damper-v2',
         title: 'Ballroom zone starved of air',
         unit: 'VAV-4-4-02',
-        brief: 'The ballroom is uncomfortable but the air handler upstream looks healthy. Work out what is happening at the terminal box and restore airflow to the zone.\n\nStart by comparing what the AHU is delivering with what this box is passing through.',
+        brief: 'The ballroom is stuffy and warm, but AHU-4-4 upstream looks healthy \u2014 ' +
+          'its fan is running and its discharge air is on setpoint.\n\n' +
+          'Three readings at this box tell you what is wrong. Take them in order:\n\n' +
+          '\u2022 Zone airflow \u2014 how much air is actually reaching the room\n' +
+          '\u2022 Zone CO\u2082 \u2014 whether the room is occupied and being ventilated\n' +
+          '\u2022 Damper position \u2014 what the box is doing about it\n\n' +
+          'Restore airflow to the zone, then say what each reading told you and how they ' +
+          'fit together. Name the ASHRAE standard the starting state violated and why that ' +
+          'standard exists.\n\n' +
+          'Hint: check the colour of the damper reading. A point in Auto is drawn in the ' +
+          'normal panel colour; one somebody has overridden by hand is magenta.',
         setup: { damperPosition: 0 },
+        published: true,
+        assigned: seats.slice(),
         goal: { key: 'airflowCFM', label: 'Zone Airflow', unit: ' CFM',
                 comparator: 'above', target: 300, tolerance: 0,
                 standard: '62.1', criterionId: 'iaq-min-oa-airflow',
@@ -804,25 +829,170 @@
     ];
   }
 
+  // Bump when a seeded definition changes. Any stored copy seeded at a lower version is
+  // refreshed, so a content fix reaches browsers that have already seeded.
+  var SEED_VERSION = 2;
+  var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
+
+  // Superseded seeds. A stored copy is dropped when it still matches what was seeded;
+  // if the instructor changed it, theirs is kept and only logged. Listing the successor
+  // means a browser cannot end up holding both versions of the same exercise.
+  var RETIRED_SEEDS = {
+    'ex-starter-overcool': 'ex-starter-overcool-v2',
+    'ex-lib-vav-damper': 'ex-lib-vav-damper-v2'
+  };
+
+  /**
+   * Remove a superseded exercise and any attempts against it.
+   *
+   * Unconditional on purpose. The earlier version tried to protect edited copies by
+   * checking whether anyone had started the exercise, which is not the same question —
+   * and the result was that a rejected definition stayed published next to its
+   * replacement. A retired id has a successor carrying the corrected content; leaving
+   * both means a student picks between two identical titles.
+   */
+  function dropRetired(list) {
+    var kept = list.filter(function (e) { return !RETIRED_SEEDS[e.id]; });
+    var dropped = list.length - kept.length;
+    if (dropped) {
+      var dead = {};
+      list.forEach(function (e) { if (RETIRED_SEEDS[e.id]) dead[e.id] = true; });
+      // Attempts on a removed exercise would otherwise sit in the report forever with
+      // nothing to attach to.
+      writeJSON(ATTEMPT_KEY, listAttempts().filter(function (a) { return !dead[a.exerciseId]; }));
+    }
+    return { kept: kept, dropped: dropped };
+  }
+
+  function readSnapshot() {
+    try {
+      var raw = localStorage.getItem(SNAPSHOT_KEY);
+      var o = raw ? JSON.parse(raw) : {};
+      return (o && typeof o === 'object') ? o : {};
+    } catch (e) { return {}; }
+  }
+
+  /** What matters for "has the instructor changed this?" — not timestamps or ids. */
+  function seedFingerprint(e) {
+    return JSON.stringify({
+      title: e.title, instructions: e.instructions, setup: e.setup,
+      weather: e.weather, goal: e.goal, published: e.published,
+      assignedTo: (e.assignedTo || []).slice().sort()
+    });
+  }
+
   function seedIfEmpty() {
     try {
       var seen = seededIds();
+      var snapshot = readSnapshot();
       var existing = listExercises();
       var byId = {};
-      existing.forEach(function (e) { byId[e.id] = true; });
-      // Skip anything present OR previously seeded and since deleted.
-      var add = starterExercises().concat(libraryExercises()).filter(function (e) {
-        return !byId[e.id] && seen.indexOf(e.id) < 0;
+      existing.forEach(function (e) { byId[e.id] = e; });
+
+      var defs = starterExercises().concat(libraryExercises());
+      var add = [];
+      var refreshed = 0, keptEdited = [], retired = [];
+
+      // Drop superseded copies before adding their replacements.
+      existing.forEach(function (e) { if (RETIRED_SEEDS[e.id]) retired.push(e.id); });
+      var pruned = dropRetired(existing);
+      existing = pruned.kept;
+      byId = {};
+      existing.forEach(function (e) { byId[e.id] = e; });
+
+      // Verifier probe rows that were published to the student list by mistake. Matched
+      // by id prefix rather than title, so a real exercise cannot be caught by accident.
+      var beforeProbe = existing.length;
+      existing = existing.filter(function (e) {
+        return !/^verify-|^probe-|^audit-/.test(String(e.id));
       });
-      // Record every starter as seen, so this run is the last chance to add these.
+      if (existing.length !== beforeProbe) {
+        retired.push((beforeProbe - existing.length) + ' test row(s)');
+        byId = {};
+        existing.forEach(function (e) { byId[e.id] = e; });
+      }
+      // And the throwaway operators those probes left behind.
+      writeJSON(ATTEMPT_KEY, listAttempts().filter(function (a) {
+        return !/^verif_|^probe_|^progress_test|^multi_test/.test(String(a.operator || ''));
+      }));
+
+      defs.forEach(function (def) {
+        var stored = byId[def.id];
+
+        // Never seeded, and not deleted by hand — add it.
+        if (!stored) {
+          if (seen.indexOf(def.id) < 0) add.push(def);
+          return;
+        }
+
+        var snap = snapshot[def.id];
+        // Seeded before versioning existed, or already current: leave it.
+        if (!snap || (snap.version || 1) >= SEED_VERSION) return;
+
+        // Only replace a copy that still matches what was seeded. If the instructor has
+        // touched the title, brief, setup, goal or assignment, their version wins.
+        if (snap.fingerprint && snap.fingerprint !== seedFingerprint(stored)) {
+          keptEdited.push(def.id);
+          return;
+        }
+
+        // Carry the instructor's own publication and assignment forward rather than
+        // resetting them: a content fix should not un-assign a live exercise.
+        byId[def.id] = Object.assign({}, def, {
+          published: stored.published,
+          assignedTo: stored.assignedTo || def.assignedTo,
+          assignment: stored.assignment || def.assignment,
+          createdAt: stored.createdAt || def.createdAt
+        });
+        refreshed++;
+      });
+
       var nextSeen = seen.slice();
-      starterExercises().forEach(function (e) {
+      defs.forEach(function (e) {
         if (nextSeen.indexOf(e.id) < 0) nextSeen.push(e.id);
       });
       localStorage.setItem(SEED_FLAG, JSON.stringify(nextSeen));
-      if (!add.length) return;
-      writeJSON(EX_KEY, existing.concat(add));
+
+      if (!add.length && !refreshed && !retired.length) {
+        // Still record the snapshot, so a browser seeded before versioning gets a
+        // baseline and the NEXT bump can reach it.
+        writeSnapshot(existing, defs, snapshot);
+        return;
+      }
+
+      // Rebuild in the stored order, with refreshed copies swapped in place, then append.
+      var next = existing.map(function (e) { return byId[e.id] || e; }).concat(add);
+      writeJSON(EX_KEY, next);
+      writeSnapshot(next, defs, snapshot);
+      if (window.console && (keptEdited.length || retired.length)) {
+        if (retired.length) {
+          console.info('[Exercises] Replaced superseded seed(s): ' + retired.join(', '));
+        }
+        if (keptEdited.length) {
+          console.info('[Exercises] Kept your edited copy of: ' + keptEdited.join(', '));
+        }
+      }
       notify();
+    } catch (e) {}
+  }
+
+  /** Record what each seeded exercise looked like when written, for the next upgrade. */
+  function writeSnapshot(list, defs, prev) {
+    try {
+      var seedIds = {};
+      defs.forEach(function (d) { seedIds[d.id] = true; });
+      var out = Object.assign({}, prev);
+      list.forEach(function (e) {
+        if (!seedIds[e.id]) return;
+        var was = prev[e.id];
+        // Keep the old fingerprint if this copy was not refreshed this run, so an edit
+        // made since the last seed is still detectable.
+        out[e.id] = { version: SEED_VERSION, fingerprint: seedFingerprint(e) };
+        if (was && (was.version || 1) >= SEED_VERSION && was.fingerprint) {
+          out[e.id].fingerprint = was.fingerprint;
+        }
+      });
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(out));
     } catch (e) {}
   }
 
