@@ -184,6 +184,12 @@
     if (idx >= 0) all[idx] = attempt; else all.push(attempt);
     writeJSON(ATTEMPT_KEY, all);
     notify();
+    // Push from the single choke point every attempt write passes through, rather than
+    // from each caller. startAttempt, logAction, saveProgress, saveDiagnosis and the pass
+    // check all land here, and scattering the push across them is how paths get missed —
+    // which is why an instructor saw "Not started" for students who were actively working.
+    var B = be();
+    if (B) B.pushAttempt(attempt);
     return attempt;
   }
 

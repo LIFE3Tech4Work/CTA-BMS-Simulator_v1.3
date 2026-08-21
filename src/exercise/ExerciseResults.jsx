@@ -133,7 +133,14 @@
         published: !!ex.published,
         // Copied, not referenced, so editing a value does not mutate the saved record
         // before SAVE CHANGES is pressed.
-        setup: Object.assign({}, ex.setup || {})
+        setup: Object.assign({}, ex.setup || {}),
+        goalKey: (ex.goal && ex.goal.key) || '',
+        comparator: (ex.goal && ex.goal.comparator) || 'within',
+        criterionId: (ex.goal && ex.goal.criterionId) || '',
+        standard: (ex.goal && ex.goal.standard) || null,
+        criterionLabel: (ex.goal && ex.goal.criterionLabel) || null,
+        citation: (ex.goal && ex.goal.citation) || null,
+        basis: (ex.goal && ex.goal.basis) || null
       });
       setEditingId(ex.id);
     }
@@ -165,8 +172,19 @@
         instructions: draft.instructions,
         published: !!draft.published,
         goal: Object.assign({}, ex.goal, {
+          key: draft.goalKey || ex.goal.key,
+          comparator: draft.comparator || ex.goal.comparator,
           target: draft.target === '' ? ex.goal.target : Number(draft.target),
-          tolerance: draft.tolerance === '' ? ex.goal.tolerance : Number(draft.tolerance)
+          tolerance: draft.tolerance === '' ? ex.goal.tolerance : Number(draft.tolerance),
+          // The ASHRAE fields travel with the goal so the student's brief, the banner
+          // badge and the instructor's report all cite the same standard. Cleared
+          // together when the criterion is detached, rather than leaving a stale
+          // citation attached to a hand-typed target.
+          standard: draft.standard || null,
+          criterionId: draft.criterionId || null,
+          criterionLabel: draft.criterionLabel || null,
+          citation: draft.citation || null,
+          basis: draft.basis || null
         })
       });
       // Numeric-looking values go back as numbers. Left as strings, a setpoint would be
@@ -472,7 +490,78 @@
               onChange: function (e) { setDraft(Object.assign({}, draft, { instructions: e.target.value })); },
               style: Object.assign({}, EDIT_IN, { width: '100%', resize: 'vertical', lineHeight: 1.45 })
             }),
+            // Criterion first: picking one rewrites the point, comparator and target
+            // together, which is the order the goal is actually reasoned in.
+            React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '10px' }) },
+              'SUCCESS CRITERION'),
+            (function () {
+              var AC = window.ASHRAECriteria;
+              if (!AC) return null;
+              var st = (function () {
+                var CTRL = { 'AHU-4-6': 'AHU46Controller', 'AHU-4-4': 'AHU44NewController',
+                             'AHU-4-3': 'AHU43Controller', 'AHU-23-1': 'AHU23Controller' };
+                var c = window[CTRL[ex.unitId]];
+                if (c && c.getState) return c.getState();
+                var v = window.VAVController;
+                return (v && v.getState) ? v.getState(ex.unitId) : {};
+              })();
+              return React.createElement('select', {
+                value: draft.criterionId || '',
+                onChange: function (e) {
+                  var id = e.target.value;
+                  if (!id) { setDraft(Object.assign({}, draft, { criterionId: '', standard: null })); return; }
+                  var c = AC.byId(id);
+                  var g = c && c.goalFor(st);
+                  if (!g) return;
+                  // Point, comparator and target move together — leaving the old target
+                  // beside a new criterion is how a goal ends up unreachable.
+                  setDraft(Object.assign({}, draft, {
+                    criterionId: id, standard: c.standard, citation: c.citation,
+                    criterionLabel: c.label, basis: c.basis,
+                    goalKey: g.key, comparator: g.comparator,
+                    target: String(g.target), tolerance: String(g.tolerance)
+                  }));
+                },
+                style: Object.assign({}, EDIT_IN, { width: '100%' })
+              },
+                React.createElement('option', { value: '' }, 'Custom target (no standard)'),
+                ['62.1', '55', '90.1', '36'].map(function (std) {
+                  var group = AC.forState(st).filter(function (c) { return c.standard === std; });
+                  if (!group.length) return null;
+                  return React.createElement('optgroup', { key: std, label: AC.badge(std) },
+                    group.map(function (c) {
+                      return React.createElement('option', { key: c.id, value: c.id }, c.label);
+                    }));
+                })
+              );
+            })(),
+
             React.createElement('div', { style: { display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap' } },
+              React.createElement('div', null,
+                React.createElement('div', { style: EDIT_LBL }, 'MEASURED POINT'),
+                React.createElement('input', {
+                  value: draft.goalKey || '',
+                  onChange: function (e) {
+                    // Typing a point by hand detaches it from the criterion, rather than
+                    // leaving it citing a standard whose measurement no longer matches.
+                    setDraft(Object.assign({}, draft, { goalKey: e.target.value,
+                                                        criterionId: '', standard: null }));
+                  },
+                  style: Object.assign({}, EDIT_IN, { width: '170px', fontFamily: 'monospace' })
+                })
+              ),
+              React.createElement('div', null,
+                React.createElement('div', { style: EDIT_LBL }, 'COMPARATOR'),
+                React.createElement('select', {
+                  value: draft.comparator || 'within',
+                  onChange: function (e) { setDraft(Object.assign({}, draft, { comparator: e.target.value })); },
+                  style: Object.assign({}, EDIT_IN, { width: '110px' })
+                },
+                  ['within', 'above', 'below', 'equals'].map(function (c) {
+                    return React.createElement('option', { key: c, value: c }, c);
+                  })
+                )
+              ),
               React.createElement('div', null,
                 React.createElement('div', { style: EDIT_LBL }, 'TARGET'),
                 React.createElement('input', {
@@ -671,6 +760,12 @@
               title: 'Load this exercise\u2019s starting state onto the unit so you can walk through it',
               onClick: function () {
                 ES.applySetup(ex);
+                // Point the banner at THIS exercise. Without it the banner kept showing
+                // whichever exercise was previewed first — the active id lives in
+                // localStorage and nothing here updated it, so switching exercises moved
+                // the unit but left the old task on screen. Uses the list's own setter so
+                // both paths write the key and fire the same event.
+                if (window.ExerciseActive) window.ExerciseActive.setActiveId(ex.id);
                 window.location.hash = '#/symmetre/' + ex.unitId;
               },
               style: { padding: '5px 11px', borderRadius: '5px', fontSize: '11px', fontWeight: 800,
@@ -822,7 +917,9 @@
                 { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             : 'Picks up new sign-ups and submitted work')
       ) : null,
-      renderAccounts(),
+      // Student Accounts list removed: it duplicated the roster already shown per
+      // exercise below, and RESET PASSWORD is reachable from each student's own row —
+      // so this was a second copy of the same names competing with the results.
       React.createElement('div', {
         style: { display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '10px' }
       },

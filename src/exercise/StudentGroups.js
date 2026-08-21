@@ -57,6 +57,12 @@
     notify();
   }
 
+  /** Mirror one group to the server so teams exist beyond the machine that made them. */
+  function push(group) {
+    var B = window.SupabaseBackend;
+    if (B && B.isConfigured() && B.pushGroup) B.pushGroup(group);
+  }
+
   function all() { return read(); }
 
   function get(id) {
@@ -84,6 +90,7 @@
     };
     list.push(g);
     write(list);
+    push(g);
     return { ok: true, group: g };
   }
 
@@ -95,11 +102,14 @@
     if (!g) return false;
     g.name = trimmed;
     write(list);
+    push(g);
     return true;
   }
 
   function remove(id) {
     write(read().filter(function (g) { return g.id !== id; }));
+    var B = window.SupabaseBackend;
+    if (B && B.isConfigured() && B.deleteGroup) B.deleteGroup(id);
   }
 
   /** Add or remove a seat. A seat may belong to more than one group — teams
@@ -111,6 +121,7 @@
     var i = g.seatIds.indexOf(seatId);
     if (i >= 0) g.seatIds.splice(i, 1); else g.seatIds.push(seatId);
     write(list);
+    push(g);
     return true;
   }
 
