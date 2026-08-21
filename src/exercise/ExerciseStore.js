@@ -213,7 +213,9 @@
     var attempt = existing || {
       exerciseId: exerciseId, operator: operator,
       startedAt: new Date().toISOString(),
-      completedAt: null, passed: false, actions: [], progress: {}
+      completedAt: null, passed: false, actions: [], progress: {},
+      // Time genuinely spent on the exercise, accumulated in beat().
+      activeMs: 0, lastBeatAt: null
     };
     // Restarting keeps the original start time and log: a student who resets is
     // still on the same attempt, and hiding that from the instructor would make
@@ -427,10 +429,69 @@
     return (ex && ex.goal && ex.goal.standard) ? ex.goal.standard : null;
   }
 
+  // Longer than this between heartbeats and the student was not working: signed out,
+  // closed the tab, or walked away. 90s is comfortably above the 20s beat, so ordinary
+  // scheduling jitter never trims real work.
+  var IDLE_CUTOFF_MS = 90000;
+  var BEAT_MS = 20000;
+  var beatTimer = null;
+
+  /**
+   * Add the time since the last beat to the attempt's active total. Called on a timer
+   * while the exercise is open and focused, and once more on the way out, so the final
+   * partial interval is not lost.
+   */
+  function beat(exerciseId, operator) {
+    var a = attemptFor(exerciseId, operator);
+    if (!a || a.passed) return;
+    var now = Date.now();
+    var last = a.lastBeatAt ? new Date(a.lastBeatAt).getTime() : now;
+    var gap = now - last;
+    // A gap beyond the cutoff is idle time, not work — count nothing for it.
+    if (gap > 0 && gap <= IDLE_CUTOFF_MS) {
+      a.activeMs = (a.activeMs || 0) + gap;
+    }
+    a.lastBeatAt = new Date(now).toISOString();
+    saveAttempt(a);
+  }
+
+  /**
+   * Start counting for this attempt. Stops on sign-out, on the tab being hidden, and
+   * when the exercise is left — each of those is a moment the student is demonstrably
+   * not working, and each writes a final beat first so nothing in progress is dropped.
+   */
+  function startTimer(exerciseId, operator) {
+    stopTimer();
+    var a = attemptFor(exerciseId, operator);
+    if (!a || a.passed) return;
+    // Reset the mark so the gap since a previous session is not counted as work.
+    a.lastBeatAt = new Date().toISOString();
+    saveAttempt(a);
+    beatTimer = setInterval(function () {
+      // A hidden tab is not work. Skipping the beat leaves lastBeatAt stale, and the
+      // gap check above then discards the whole away period when they return.
+      if (typeof document !== 'undefined' && document.hidden) return;
+      beat(exerciseId, operator);
+    }, BEAT_MS);
+  }
+
+  function stopTimer(exerciseId, operator) {
+    if (beatTimer) { clearInterval(beatTimer); beatTimer = null; }
+    if (exerciseId && operator) beat(exerciseId, operator);
+  }
+
   function durationOf(attempt) {
-    if (!attempt || !attempt.startedAt) return null;
-    var end = attempt.completedAt ? new Date(attempt.completedAt) : new Date();
-    var ms = end - new Date(attempt.startedAt);
+    if (!attempt) return null;
+    // Prefer accumulated active time. Attempts recorded before this existed have no
+    // activeMs, so they fall back to the old elapsed figure rather than reading zero.
+    var ms;
+    if (typeof attempt.activeMs === 'number' && attempt.activeMs > 0) {
+      ms = attempt.activeMs;
+    } else {
+      if (!attempt.startedAt) return null;
+      var end = attempt.completedAt ? new Date(attempt.completedAt) : new Date();
+      ms = end - new Date(attempt.startedAt);
+    }
     if (!isFinite(ms) || ms < 0) return null;
     var mins = Math.floor(ms / 60000);
     var secs = Math.floor((ms % 60000) / 1000);
@@ -1098,6 +1159,8 @@
     attemptFor: attemptFor,
     saveAttempt: saveAttempt,
     startAttempt: startAttempt,
+    startTimer: startTimer,
+    stopTimer: stopTimer,
     saveProgress: saveProgress,
     saveDiagnosis: saveDiagnosis,
     logAction: logAction,

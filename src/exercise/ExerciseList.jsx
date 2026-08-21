@@ -113,6 +113,10 @@
 
     function start(ex) {
       ES.startAttempt(ex.id, auth.operator);
+      // Begin counting active time. The timer stops itself on sign-out, on the tab being
+      // hidden, and when the exercise is left — so the duration an instructor grades on
+      // is time actually spent, not wall-clock since the student first pressed START.
+      if (ES.startTimer) ES.startTimer(ex.id, auth.operator);
       setActiveId(ex.id);
       window.location.hash = '#/symmetre/' + ex.unitId;
     }
@@ -382,7 +386,11 @@
         title: preview
           ? 'Leave preview — nothing was saved'
           : 'Leave the exercise — your progress is kept',
-        onClick: function () { setActiveId(null); },
+        onClick: function () {
+          // Final beat before leaving, so the partial interval since the last one counts.
+          if (ES.stopTimer && !preview) ES.stopTimer(ex.id, auth.operator);
+          setActiveId(null);
+        },
         style: { padding: '3px 10px', borderRadius: '5px', fontSize: '10.5px', fontWeight: 800,
                  fontFamily: 'inherit', cursor: 'pointer', border: '1px solid rgba(255,255,255,.35)',
                  background: 'transparent', color: 'inherit' }

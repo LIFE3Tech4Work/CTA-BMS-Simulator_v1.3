@@ -23,7 +23,7 @@
 (function() {
   'use strict';
 
-  const { useState, useCallback } = React;
+  const { useState, useCallback, useEffect } = React;
 
   // ─── Shared field styling ───────────────────────────────────────────────────
   const FIELD_CLASS = 'w-full px-3 py-2 rounded text-white text-sm focus:outline-none';

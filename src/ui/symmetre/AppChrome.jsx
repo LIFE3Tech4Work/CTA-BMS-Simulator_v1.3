@@ -108,6 +108,15 @@ const SymmetreAppChrome = (function() {
 
     const handleMenuClick = useCallback(function(item) {
       if (item === 'Sign Off') {
+        // Stop the exercise clock first. Sign-out is the clearest possible signal that
+        // a student has stopped working, and without this the attempt kept accruing
+        // time until the next beat noticed the gap.
+        if (window.ExerciseStore && window.ExerciseStore.stopTimer) {
+          try {
+            var actEx = window.ExerciseStore.activeExercise && window.ExerciseStore.activeExercise();
+            window.ExerciseStore.stopTimer(actEx && actEx.id, window.CTAAuthOperator);
+          } catch (e) {}
+        }
         // Clear the Supabase session too, not just the app's own auth state. Without
         // this a student's session token stays on the machine after they sign off —
         // on a shared classroom computer that leaves their account reachable to
