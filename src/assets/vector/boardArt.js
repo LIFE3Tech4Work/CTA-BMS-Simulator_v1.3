@@ -408,7 +408,12 @@
     <rect x="867" y="266" width="230" height="338" rx="20"/>
     <rect x="511" y="566" width="74" height="152" rx="18"/>
     <rect x="678" y="566" width="74" height="152" rx="18"/>
-    <rect x="1446" y="390" width="135" height="180" rx="18"/>
+    <!-- Tightened from height 180: that box was sized to hold a SETPOINT caption below the
+         TS cube, and with the caption removed it left a block of dead space under the
+         sensor. 150 closes the gap to roughly the padding VAV-4-4-02 leaves below its own
+         cube, so the container reads as wrapping the pill and sensor rather than trailing
+         off beneath them. -->
+    <rect x="1446" y="390" width="135" height="150" rx="18"/>
   </g>
 
   <g id="ducts" shape-rendering="geometricPrecision">
@@ -500,13 +505,20 @@
     <text x="752" y="397" font-size="10">FZ-2</text><text x="784" y="397" font-size="10">TS-2</text>
     <text x="789" y="527" font-size="10">PLIN MIN</text>
     <text x="789" y="573" font-size="10">DAT SEIPOINT</text>
+    <!-- Zone readings following VAV-4-4-02's pattern exactly: the setpoint is a standalone
+         label+pill pair (nothing measures it), while the measured temperature's pill sits
+         INSIDE the sensor container directly above the TS cube that reads it, with its
+         label above the container. All three share the TS cube's centre line at x=1513. -->
+    <text x="1513" y="328" font-size="10" text-anchor="middle">ZONE SETPOINT</text>
+    <text x="1513" y="412" font-size="10" text-anchor="middle">ZONE TEMP</text>
     <text x="1055" y="400" font-size="10.5">AHU-23-1</text>
     <text x="516" y="570" font-size="11">P-1</text>
     <text x="678" y="570" font-size="11">P-2</text>
     <text x="525.8" y="700" font-size="11">V-1</text>
     <text x="687.8" y="700" font-size="11">V-2</text>
-    <text x="1513" y="562" font-size="10">SETPOINT</text>
-    
+    <!-- The container's own "SETPOINT" caption is gone: with ZONE SETPOINT and ZONE TEMP
+         labelling their own pills above, a third setpoint word at the bottom of the box
+         named nothing and read as a label for the TS cube, which measures temperature. -->
     <text x="1513" y="482" font-size="11" font-weight="800" fill="#16181d">TS</text>
   </g>
 

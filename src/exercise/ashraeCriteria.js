@@ -220,6 +220,11 @@
           key: 'supplyAirTemp',
           comparator: 'within',
           target: (typeof state.activeSetpoint === 'number' ? state.activeSetpoint : 60),
+          // ±1.5°F — a 3°F total deadband — which is Lev's written figure. My earlier read of
+          // his verbal "3 is too much" moved this to ±2; he meant the BAND, not the
+          // tolerance: ±3 (a 6°F band) is too wide, ±1.5 is standard commercial practice.
+          // The deadband is deliberate — it saves energy, prevents short-cycling that wears
+          // compressors, fans and valves, and sits below what people can feel.
           tolerance: 1.5
         };
       },

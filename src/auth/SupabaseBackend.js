@@ -343,6 +343,11 @@
       assignment: (row.goal && row.goal.__assignment) || row.assignment || null,
       trends: (row.goal && row.goal.__trends) || null,
       assignedTo: (row.goal && row.goal.__assignedTo) || [],
+      // Instructor's own answer/explanation, shown to a student only after they submit.
+      // Rides in goal like assignment and trends: jsonb, so no schema migration is
+      // needed before this works — a column added now would silently drop notes on any
+      // project that had not re-run the schema.
+      instructorNotes: (row.goal && row.goal.__instructorNotes) || '',
       published: !!row.published,
       createdBy: row.created_by,
       createdAt: row.created_at
@@ -521,6 +526,7 @@
         var goal = Object.assign({}, ex.goal, {
           __assignment: ex.assignment || null,
           __assignedTo: ex.assignedTo || [],
+          __instructorNotes: ex.instructorNotes || '',
           // Rides in goal for the same reason assignment does: no column of its own yet,
           // and without this an authored trend is lost on the next sync.
           __trends: ex.trends || null

@@ -1167,6 +1167,17 @@
     // 4. COOLING LOGIC (Closed Loop Controller #3 — Supply Temperature
     //    Control of Cooling Coil)
     if (state.fanRunning) {
+      // Mixed air temperature — the weighted average Lev specified:
+      //   MAT = (%OA × T_OA) + (%RA × T_RA)
+      // Worked example from his note: 20% outdoor air at 95°F blended with 80% return
+      // air at 75°F gives (0.20 × 95) + (0.80 × 75) = 79°F.
+      //
+      // The OA term reads preheatTemp rather than raw outdoor air because the preheat
+      // coil sits upstream of the mix on this unit — with the coil off the two are
+      // identical, so this is his formula exactly whenever no heating is called. It is
+      // also what makes the closed-damper exercise solvable: at 0% outdoor air the mix
+      // collapses to return air, so mixed air reading 72°F on an 85°F outdoor day
+      // proves no outdoor air is entering, whatever the damper claims.
       var oaFraction = state.oaDamperPosition / 100;
       state.mixedAirTemp = Math.round(
         (state.preheatTemp * oaFraction + state.returnAirTemp * (1 - oaFraction)) * 10

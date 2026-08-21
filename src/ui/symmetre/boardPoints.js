@@ -159,7 +159,10 @@
         ['phtValvePosition',  'box',  623,  630, 42],
         ['chwValvePosition',  'box',  718,  630, 42],
         ['heatingCoilSetpoint', 'box', 807, 593, 42],
-        ['activeSetpoint',    'box',  930,  593, 46],
+        // activeSetpoint removed: the uncaptioned white box directly left of the VFD, showing
+        // the same 60.0 °F as the captioned Cooling Coil Setpoint two boxes right. The artwork
+        // never had a caption for this position — it is the duplicate Omar flagged. The reading
+        // still drives the goal checks and stays visible in the left panel.
         ['fanSpeed',          'box',  1055, 593, 32],
         ['coolingCoilSetpoint', 'box', 1148, 593, 42],
         ['ductStaticPressureSetpoint', 'box', 1318, 593, 48],
@@ -198,7 +201,10 @@
         ['phtValvePosition',  'box',  623,  630, 42],
         ['chwValvePosition',  'box',  718,  630, 42],
         ['heatingCoilSetpoint', 'box', 807, 593, 42],
-        ['activeSetpoint',    'box',  930,  593, 46],
+        // activeSetpoint removed: the uncaptioned white box directly left of the VFD, showing
+        // the same 60.0 °F as the captioned Cooling Coil Setpoint two boxes right. The artwork
+        // never had a caption for this position — it is the duplicate Omar flagged. The reading
+        // still drives the goal checks and stays visible in the left panel.
         ['fanSpeed',          'box',  1055, 593, 32],
         ['coolingCoilSetpoint', 'box', 1148, 593, 42],
         ['spillDamperPct',    'box',  1318, 593, 48],
@@ -241,7 +247,10 @@
         ['phtValvePosition',  'box',  623,  630, 42],
         ['chwValvePosition',  'box',  718,  630, 42],
         ['heatingCoilSetpoint', 'box', 807, 593, 42],
-        ['activeSetpoint',    'box',  930,  593, 46],
+        // activeSetpoint removed: the uncaptioned white box directly left of the VFD, showing
+        // the same 60.0 °F as the captioned Cooling Coil Setpoint two boxes right. The artwork
+        // never had a caption for this position — it is the duplicate Omar flagged. The reading
+        // still drives the goal checks and stays visible in the left panel.
         ['fanSpeed',          'box',  1055, 593, 32],
         ['coolingCoilSetpoint', 'box', 1148, 593, 42],
         ['spillDamperPct',    'box',  1318, 593, 48],
@@ -283,6 +292,21 @@
         // fanSpeedSetpoint removed from this board: this unit drives measured speed
         // directly from it, so both chips always showed the same number and looked like
         // a rendering fault. The setpoint remains editable in the left panel.
+        //
+        // Zone temperature above its setpoint on the right edge, stacked the way
+        // VAV-4-4-02 shows the same pair. Lev asked for these on this unit, and asked
+        // specifically for NO CO2 here: the boiler room's air-quality hazard is carbon
+        // MONOXIDE, so a CO2 reading would point at the wrong thing.
+        //
+        // Centred on the TS cube's own centre line (x=1513) so each reading sits over the
+        // sensor it reports, matching VAV-4-4-02.
+        //
+        // The setpoint pair stands alone above the container — nothing measures a setpoint.
+        // The measured temperature's pill sits INSIDE the container, above the TS cube that
+        // reads it, which is the pairing that makes the sensor and its value read as one
+        // thing rather than two.
+        ['zoneTempSetpoint',  'pill', 1513, 364, null, 'center', 13],
+        ['spaceTemp',         'pill', 1513, 448, null, 'center', 13],
       ],
       fans: [
         { key: 'fanRunning', cmdKey: 'runSchedule', interlockKey: null, x: 878, y: 528, pills: 'u23', pillY: 282 },
