@@ -394,12 +394,18 @@
         }
         if (exRes.error) { fail('exercises', exRes.error); return { ok: false }; }
 
-        // Do NOT overwrite the local list when the server has nothing. On a fresh
-        // project the exercises table is empty, and a blind write would erase the
-        // seeded starter exercises — a student's first sign-in would show an empty
-        // list. The server is authoritative only once it actually holds rows.
+        // Merge by id, do NOT replace. A wholesale overwrite meant the first exercise to
+        // reach the server erased every other one from the cache — the seeded library and
+        // anything authored before the push both vanished, which is why the report went
+        // from nine exercises to one. Server rows win where ids collide; local-only rows
+        // are kept, because they are either seeds or not yet pushed.
         var serverEx = (exRes.data || []).map(rowToExercise);
-        if (serverEx.length) writeLocal(EX_KEY, serverEx);
+        if (serverEx.length) {
+          var byId = {};
+          (readLocal(EX_KEY, []) || []).forEach(function (e) { byId[e.id] = e; });
+          serverEx.forEach(function (e) { byId[e.id] = e; });
+          writeLocal(EX_KEY, Object.keys(byId).map(function (k) { return byId[k]; }));
+        }
 
         // Same reasoning for attempts and groups: an empty server response is
         // "nothing uploaded yet", not "the student has no work".
