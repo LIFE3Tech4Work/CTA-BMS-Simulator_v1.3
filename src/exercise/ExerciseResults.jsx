@@ -16,6 +16,12 @@
 
   var STATUS = {
     'not-started': { label: 'Not started', color: '#9db0c8', bg: 'rgba(157,176,200,.14)' },
+    // statusFor() returns this when a student has opened the exercise but changed
+    // nothing yet. It had no entry here, so the pill read `.color` off undefined and —
+    // because these elements are built during the parent's render — one such row took
+    // the whole report blank. Distinct from 'not-started': "opened it and got nowhere"
+    // and "has not looked at it" call for different follow-up.
+    started: { label: 'Opened', color: '#7fd4e2', bg: 'rgba(127,212,226,.14)' },
     'in-progress': { label: 'In progress', color: '#e6a23c', bg: 'rgba(230,162,60,.16)' },
     passed: { label: 'Passed', color: '#6ee7a8', bg: 'rgba(110,231,168,.16)' }
   };
@@ -237,7 +243,12 @@
     var exercises = ES.listExercises();
 
     function statusPill(status) {
-      var st = STATUS[status];
+      // Fall back rather than throw. An unrecognised status used to read `.color` off
+      // undefined, and because these elements are built during the parent's render one
+      // unknown value took the WHOLE report blank — which is what happened to the VAV
+      // row once its attempt reported a state this map had no entry for.
+      var st = STATUS[status] || { label: String(status || 'unknown').toUpperCase(),
+                                   color: '#9db0c8', bg: '#1b2230' };
       return React.createElement('span', {
         style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.3px', padding: '2px 7px',
                  borderRadius: '999px', color: st.color, background: st.bg, whiteSpace: 'nowrap' }
