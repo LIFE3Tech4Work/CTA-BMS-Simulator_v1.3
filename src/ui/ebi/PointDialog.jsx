@@ -134,17 +134,7 @@ const PointDialog = (function () {
           React.createElement('div', { style: btn(mode === 'man'), onClick: onManual },
             (mode === 'man' ? '\u2713  ' : '') + 'MANUAL')
         ),
-        // The step people were missing. Only shown in Manual, where a value is
-        // genuinely waiting to be committed.
-        pending ? React.createElement('div', {
-          style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '13px',
-                   fontSize: '11.5px', fontWeight: 700, color: '#8a6116' }
-        },
-          React.createElement('span', {
-            style: { width: '6px', height: '6px', borderRadius: '50%', background: '#e6a23c', flexShrink: 0 }
-          }),
-          'Not applied yet \u2014 press SET below to command this value.'
-        ) : React.createElement('div', { style: { marginBottom: '13px' } })
+        React.createElement('div', { style: { marginBottom: '13px' } })
       ) : null,
       cmdAnalog ? React.createElement('div', null,
         React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Command Value'),
@@ -157,7 +147,19 @@ const PointDialog = (function () {
                      color: '#12294f', background: '#fff' },
           }),
           React.createElement('div', { style: stepBtn, onClick: () => onStep(1), title: 'Increase' }, '+')
-        )
+        ),
+        // Sits under the value it refers to. Above Command Value it pointed past a field
+        // the reader had not reached, and sat further from the SET button it names.
+        pending ? React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: '6px',
+                   marginTop: '-6px', marginBottom: '13px',
+                   fontSize: '11.5px', fontWeight: 700, color: '#8a6116' }
+        },
+          React.createElement('span', {
+            style: { width: '6px', height: '6px', borderRadius: '50%', background: '#e6a23c', flexShrink: 0 }
+          }),
+          'Not applied yet \u2014 press SET below to command this value.'
+        ) : null
       ) : null,
       (cmdOptions && cmdOptions.length) ? React.createElement('div', null,
         React.createElement('div', { style: { fontWeight: 700, color: '#3f5170', marginBottom: '5px' } }, 'Command'),
@@ -572,6 +574,16 @@ const PointDialog = (function () {
       });
     }
 
+    // Is there anything for SET to write? A typed value differing from the committed
+    // one, a chosen binary state, or a mode change not yet applied. Computed once so the
+    // "Not applied yet" hint and the SET button cannot disagree about it.
+    var hasPendingChange = isBinary
+      ? (pendingBin !== null && pendingBin !== raw)
+      : (mode === 'man' && (!isManual || String(draft) !== String(committedDraft)));
+    // AUTO releases on its own click, so a point already in Auto has nothing pending;
+    // but a point sitting in Manual that the operator switched to Auto does.
+    if (mode === 'auto' && isManual) hasPendingChange = true;
+
     // ── tabs ──
     // Engr+ only. Read live rather than passed in, because the dialog opens from the
     // board, the panels and the alarm list, and threading a prop through all of them
@@ -811,10 +823,7 @@ const PointDialog = (function () {
                 // Something SET would actually write: a typed value differing from the
                 // committed one, a chosen binary state, or Manual selected on a point
                 // that is not yet overridden. Reopening an override shows nothing.
-                pending: isBinary
-                  ? (pendingBin !== null && pendingBin !== raw)
-                  : (mode === 'man' &&
-                     (!isManual || String(draft) !== String(committedDraft))),
+                pending: hasPendingChange,
                 onAuto: () => { setMode('auto'); onSet(null, 'auto'); },
                 onManual: () => setMode('man'),
               }) : null,
@@ -1016,10 +1025,19 @@ const PointDialog = (function () {
             onClick: onClose,
           }, 'CANCEL'),
           commandable ? React.createElement('div', {
+            title: hasPendingChange
+              ? 'Command this value'
+              : 'Nothing to apply \u2014 change the value or the control mode first',
             style: { flex: 1, textAlign: 'center', padding: '10px', borderRadius: '6px',
-                     background: 'linear-gradient(180deg,#3f8f5a,#2d7346)', color: '#fff',
-                     fontWeight: 800, cursor: 'pointer' },
-            onClick: commitSet,
+                     fontWeight: 800,
+                     // Inert when there is nothing to write, rather than silently
+                     // re-commanding the value already in place.
+                     background: hasPendingChange
+                       ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#e2e8f2',
+                     border: '1px solid ' + (hasPendingChange ? '#2f7a52' : '#b7c3d6'),
+                     color: hasPendingChange ? '#fff' : '#8a97ab',
+                     cursor: hasPendingChange ? 'pointer' : 'not-allowed' },
+            onClick: function () { if (hasPendingChange) commitSet(); },
           }, 'SET') : null
         )
       )

@@ -17,6 +17,7 @@
 
   var ACTIVE_KEY = 'cta_exercise_active';
 
+
   function activeId() {
     try { return localStorage.getItem(ACTIVE_KEY) || null; } catch (e) { return null; }
   }
@@ -51,6 +52,19 @@
   };
 
   // ─── Student assignment screen ──────────────────────────────────────────────
+
+  /**
+   * True when the viewer has navigated off the unit the exercise is on. Reading the task,
+   * jumping to the assignment list or restarting all make sense ON the unit and are noise
+   * while looking at a different one — the only useful actions there are going back or
+   * leaving. Shared so the buttons cannot disagree about which state they are in.
+   */
+  function offExerciseUnit(ex) {
+    if (!ex || !ex.unitId) return false;
+    var m = /#\/symmetre\/([^/?]+)/.exec(window.location.hash || '');
+    var here = m ? decodeURIComponent(m[1]) : null;
+    return !!(here && here !== ex.unitId);
+  }
 
   function ExerciseList() {
     var auth = useContext(window.AuthContext);
@@ -316,24 +330,29 @@
                  color: '#ffd79a' }
       }, gap) : null,
 
-      // While the goal is met but not yet held long enough, say so rather than
-      // leaving the student wondering why nothing happened.
-      (!passed && res.ok) ? React.createElement('span', {
-        style: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', color: '#ffd79a' }
-      },
-        React.createElement('span', null, 'holding\u2026'),
-        React.createElement('span', {
-          style: { width: '46px', height: '5px', borderRadius: '3px', background: 'rgba(255,255,255,.18)' }
-        },
-          React.createElement('span', {
-            style: { display: 'block', width: holdPct + '%', height: '100%', borderRadius: '3px',
-                     background: '#ffb347', transition: 'width .3s linear' }
-          })
-        )
-      ) : null,
-
+      // The 3s hold that guards against a value passing through on its way somewhere
+      // wrong is short enough that showing a progress bar for it read as the app
+      // loading rather than as grading in progress.
       React.createElement('div', { style: { flex: 1 } }),
-      React.createElement('button', {
+
+      // Wandering off the exercise's unit is easy — the station tabs are always live —
+      // and until now nothing said so or offered a way back. Only shown when the student
+      // is actually on a different unit, so it is a correction rather than a permanent
+      // fixture competing with the task and exercise-list buttons beside it.
+      offExerciseUnit(ex) ? (function () {
+        var m = /#\/symmetre\/([^/?]+)/.exec(window.location.hash || '');
+        var here = m ? decodeURIComponent(m[1]) : null;
+        return React.createElement('button', {
+          type: 'button',
+          onClick: function () { window.location.hash = '#/symmetre/' + ex.unitId; },
+          title: 'This exercise is on ' + ex.unitId + ' — you are looking at ' + here,
+          style: { padding: '3px 10px', borderRadius: '5px', fontSize: '10.5px', fontWeight: 800,
+                   fontFamily: 'inherit', cursor: 'pointer', marginRight: '6px',
+                   border: '1px solid #ffd79a', background: 'rgba(230,162,60,.28)',
+                   color: '#fff', flexShrink: 0 }
+        }, '\u2190 BACK TO ' + ex.unitId);
+      })() : null,
+      offExerciseUnit(ex) ? null : React.createElement('button', {
         type: 'button',
         onClick: function () { setShowTask(!showTask); },
         title: 'Read the task again',
@@ -343,14 +362,14 @@
                  background: showTask ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.1)',
                  color: 'inherit' }
       }, showTask ? '\u25b4 TASK' : '\u25be TASK'),
-      React.createElement('button', {
+      offExerciseUnit(ex) ? null : React.createElement('button', {
         type: 'button',
         onClick: function () { window.location.hash = '#/exercises'; },
         style: { padding: '3px 10px', borderRadius: '5px', fontSize: '10.5px', fontWeight: 800,
                  fontFamily: 'inherit', cursor: 'pointer', border: '1px solid rgba(255,255,255,.35)',
                  background: 'rgba(255,255,255,.1)', color: 'inherit' }
       }, 'MY EXERCISES'),
-      React.createElement('button', {
+      offExerciseUnit(ex) ? null : React.createElement('button', {
         type: 'button',
         title: 'Put the unit back to the exercise starting state',
         onClick: function () { ES.applySetup(ex); },

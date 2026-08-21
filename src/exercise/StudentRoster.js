@@ -117,9 +117,22 @@
     map[seatId] = {
       firstName: fields.firstName !== undefined ? String(fields.firstName).trim() : (cur.firstName || ''),
       lastName: fields.lastName !== undefined ? String(fields.lastName).trim() : (cur.lastName || ''),
-      email: fields.email !== undefined ? String(fields.email).trim() : (cur.email || '')
+      email: fields.email !== undefined ? String(fields.email).trim() : (cur.email || ''),
+      // Carried through. The whole record was being replaced, so editing a synced
+      // student's name dropped the role syncDown had written — and an instructor with
+      // no role reappears in the assignment picker as an assignable student.
+      role: cur.role
     };
     write(map);
+    // Mirror the name to profiles.display_name so it is the same on every machine.
+    // Without this a name typed here lived only in the instructor's browser, and the
+    // student's own screen still greeted them by their sign-up name.
+    var B = window.SupabaseBackend;
+    if (B && B.isConfigured() && B.pushProfileName &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(seatId))) {
+      var m2 = map[seatId];
+      B.pushProfileName(seatId, (m2.firstName + ' ' + m2.lastName).trim());
+    }
     return get(seatId);
   }
 

@@ -614,6 +614,88 @@
     }).catch(function (e) { fail('pushReviewFlag', e); return { ok: false }; });
   }
 
+  /**
+   * Groups were never pushed at all, so a team built on the instructor's laptop existed
+   * only there — and an exercise assigned "to Team A" resolved to seats no other machine
+   * knew about.
+   *
+   * public.groups requires a class_id, and there is no class-management screen yet, so
+   * this reuses (or creates once) a single default class owned by the signed-in
+   * instructor. That keeps the schema honest without inventing a UI the SME has not
+   * asked for; when classes do arrive, only this lookup changes.
+   */
+  function defaultClassId(c, uid) {
+    return c.from('classes').select('id').eq('instructor_id', uid).limit(1)
+      .then(function (r) {
+        if (r.error) { fail('defaultClass', r.error); return null; }
+        if (r.data && r.data.length) return r.data[0].id;
+        return c.from('classes').insert({
+          name: 'Default Class', instructor_id: uid,
+          join_code: Math.random().toString(36).slice(2, 8).toUpperCase()
+        }).select('id').maybeSingle().then(function (ins) {
+          if (ins.error) { fail('createDefaultClass', ins.error); return null; }
+          return ins.data && ins.data.id;
+        });
+      });
+  }
+
+  function pushGroup(group) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, local: true };
+      return c.auth.getUser().then(function (u) {
+        var uid = u && u.data && u.data.user && u.data.user.id;
+        if (!uid) return { ok: false, error: 'Not signed in.' };
+        return defaultClassId(c, uid).then(function (classId) {
+          if (!classId) return { ok: false };
+          return c.from('groups').upsert({
+            id: group.id, class_id: classId, name: group.name
+          }).then(function (r) {
+            if (r.error) { fail('pushGroup', r.error); return { ok: false }; }
+            // Membership is replaced rather than merged: removing a student from a team
+            // has to actually remove them, not just fail to add.
+            return c.from('group_members').delete().eq('group_id', group.id).then(function () {
+              var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+              var ids = (group.seatIds || []).filter(function (s) { return UUID.test(String(s)); });
+              if (!ids.length) return { ok: true };
+              return c.from('group_members').insert(ids.map(function (sid) {
+                return { group_id: group.id, student_id: sid };
+              })).then(function (ins) {
+                if (ins.error) fail('pushGroupMembers', ins.error);
+                return { ok: !ins.error };
+              });
+            });
+          });
+        });
+      });
+    }).catch(function (e) { fail('pushGroup', e); return { ok: false }; });
+  }
+
+  function deleteGroup(id) {
+    return getClient().then(function (c) {
+      if (!c) return;
+      return c.from('groups').delete().eq('id', id).then(function (r) {
+        if (r.error) fail('deleteGroup', r.error);
+      });
+    }).catch(function (e) { fail('deleteGroup', e); });
+  }
+
+  /**
+   * Rename a student on the server. profiles grants UPDATE only on display_name — role
+   * is deliberately unwritable from a browser — so this is the one profile field the
+   * app may change, and it keeps a name typed by an instructor from living only in
+   * that instructor's browser.
+   */
+  function pushProfileName(userId, displayName) {
+    return getClient().then(function (c) {
+      if (!c) return { ok: false, local: true };
+      return c.from('profiles').update({ display_name: displayName }).eq('id', userId)
+        .then(function (r) {
+          if (r.error) { fail('pushProfileName', r.error); return { ok: false }; }
+          return { ok: true };
+        });
+    }).catch(function (e) { fail('pushProfileName', e); return { ok: false }; });
+  }
+
   function deleteReviewFlag(id) {
     return getClient().then(function (c) {
       if (!c) return;
@@ -625,6 +707,9 @@
 
   window.SupabaseBackend = {
     pushReviewFlag: pushReviewFlag,
+    pushGroup: pushGroup,
+    pushProfileName: pushProfileName,
+    deleteGroup: deleteGroup,
     deleteReviewFlag: deleteReviewFlag,
     isConfigured: isConfigured,
     getStatus: getStatus,
