@@ -580,8 +580,8 @@ const PointDialog = (function () {
     var hasPendingChange = isBinary
       ? (pendingBin !== null && pendingBin !== raw)
       : (mode === 'man' && (!isManual || String(draft) !== String(committedDraft)));
-    // AUTO releases on its own click, so a point already in Auto has nothing pending;
-    // but a point sitting in Manual that the operator switched to Auto does.
+    // A point sitting in Manual that the operator switched to Auto has a release waiting
+    // for SET, exactly as a typed value does.
     if (mode === 'auto' && isManual) hasPendingChange = true;
 
     // ── tabs ──
@@ -824,7 +824,11 @@ const PointDialog = (function () {
                 // committed one, a chosen binary state, or Manual selected on a point
                 // that is not yet overridden. Reopening an override shows nothing.
                 pending: hasPendingChange,
-                onAuto: () => { setMode('auto'); onSet(null, 'auto'); },
+                // AUTO selects, SET commits — the same model as the Command list directly
+                // below it. It used to release on its own click, which left SET inert the
+                // instant it was pressed: the operator saw a greyed SET and no way to tell
+                // whether the release had happened. commitSet handles the auto branch.
+                onAuto: () => setMode('auto'),
                 onManual: () => setMode('man'),
               }) : null,
               tab === 'prio' ? React.createElement(PriorityTab, {

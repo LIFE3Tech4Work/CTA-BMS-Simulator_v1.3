@@ -538,8 +538,27 @@
         // 1. Ran all weekend with nobody in the building.
         id: 'ex-lev-weekend-override',
         title: 'Unit ran through the weekend',
+        instructorNotes:
+          'Run Schedule is a status, not a modulating value. It is a binary input: 0 means ' +
+          'off, 1 means on, and nothing in between. A speed feedback would modulate \u2014 25, ' +
+          '35, 68 \u2014 but a run status is a switch.\n\n' +
+          'What happened: someone put the unit in manual to run it outside hours and never ' +
+          'put it back. The schedule still said weekdays 08:00\u201318:00; the fan ran straight ' +
+          'through Saturday and Sunday anyway.\n\n' +
+          'Zone CO\u2082 is what proves nobody was in the building. CO\u2082 rises with occupancy, so ' +
+          'a flat reading near the outdoor baseline over those same days means the space was ' +
+          'empty \u2014 the unit was conditioning air for nobody. Two full days of fan energy, ' +
+          'heating and cooling, for no one.\n\n' +
+          'This is the most common finding in a real building and the cheapest to fix: put ' +
+          'the point back to Auto so it follows its schedule. Always check whether an ' +
+          'override was left behind after an event or an after-hours request.',
         unitId: 'AHU-4-4',
         instructions:
+          // Run Schedule is a status, not a modulating value, so "above 0.5" reads as a
+          // percentage unless the binary is spelled out. Lev asked for exactly this.
+          'Run Schedule is a status, not a percentage: 0 means off, 1 means on. The goal ' +
+          'reads "above 0.5" because that is how the check tells the two apart \u2014 it means ' +
+          'the unit must be following its schedule again.\n\n' +
           'Check the weekly schedule for this unit, then look at the supply fan run ' +
           'status in its History tab.\n\n' +
           'The schedule says weekdays 08:00\u201318:00, but the fan tells a different ' +
@@ -579,6 +598,15 @@
         // 2. Late running that WAS justified — the control case.
         id: 'ex-lev-extended-occupied',
         title: 'Late running \u2014 was it justified?',
+        instructorNotes:
+          'This one is NOT a fault, and that is the lesson. The unit ran to 23:00 instead ' +
+          'of 18:00, which looks like the weekend-override problem \u2014 until you check CO\u2082.\n\n' +
+          'CO\u2082 sat at 800\u2013900 ppm through those late hours. CO\u2082 rises with occupancy, so that ' +
+          'is people in the building: an event, a late meeting, a legitimate after-hours ' +
+          'request. The unit was doing the right thing.\n\n' +
+          'An operator who reports every after-hours run as a fault stops being trusted. ' +
+          'Schedule alone never tells you whether running was justified \u2014 pair it with an ' +
+          'occupancy signal before you judge.',
         unitId: 'AHU-4-4',
         instructions:
           'This unit ran until 23:00 on Monday and Tuesday instead of stopping at ' +
@@ -621,6 +649,15 @@
         // 3. The same late running, one day later, with nobody there.
         id: 'ex-lev-forgotten-override',
         title: 'The override nobody reset',
+        instructorNotes:
+          'Compare this with the previous day. Same late running to 23:00, same override \u2014 ' +
+          'but CO\u2082 is flat near the outdoor baseline, so nobody was there.\n\n' +
+          'What happened: the after-hours override was set for a genuine event, and never ' +
+          'put back. The next evening it ran again for an empty building.\n\n' +
+          'This is the most common finding in a real building and the cheapest to fix. The ' +
+          'pair of exercises together is the point: identical schedule evidence, opposite ' +
+          'conclusions, and CO\u2082 is what separates them. Always check whether an override ' +
+          'was left behind after an event.',
         unitId: 'AHU-4-4',
         instructions:
           'There was an evening event on Monday, so the unit was held on until 23:00. ' +
@@ -660,6 +697,15 @@
         // 4. Three signals, one conclusion — Lev's "prove it was mechanically cooling".
         id: 'ex-lev-supply-temp-evidence',
         title: 'Prove the unit was running',
+        instructorNotes:
+          'Three signals, one conclusion \u2014 and no single one of them would have been enough.\n\n' +
+          'Discharge air at 60\u00b0F over a weekend is the proof of mechanical cooling. Air does ' +
+          'not arrive at 60\u00b0F by itself on a warm day: a chilled water valve was open and a ' +
+          'fan was moving air through the coil. Read alongside a schedule that says the unit ' +
+          'should be off and a CO\u2082 trace showing an empty building, that is a unit ' +
+          'conditioning air for nobody.\n\n' +
+          'Building a case from several readings rather than one is the habit worth taking ' +
+          'from this. A fan status alone can be argued with; three agreeing signals cannot.',
         unitId: 'AHU-4-4',
         instructions:
           'Someone insists this air handler was off over the weekend.\n\n' +
@@ -708,6 +754,18 @@
         // is that 62.1 ventilation applies wherever people work, not only to offices.
         id: 'ex-lev-ashrae-ventilation',
         title: 'Ventilation violation \u2014 ASHRAE 62.1',
+        instructorNotes:
+          '62.1 applies wherever people work, not only to offices \u2014 that is why this one is ' +
+          'set on the boiler-room air handler. A mechanical space with staff in it needs ' +
+          'ventilation like any other.\n\n' +
+          'Note what the hazard actually is here. In a boiler room the air-quality concern ' +
+          'is carbon MONOXIDE from combustion, not CO\u2082 from people. Different gas, different ' +
+          'sensor, different consequence \u2014 do not carry the office assumption into a plant ' +
+          'room.\n\n' +
+          'The fix is the minimum outdoor air position required during occupied hours. ' +
+          'Temperature can look perfectly correct while a space is starved of ventilation, ' +
+          'which is exactly why 62.1 sets a minimum damper position rather than trusting a ' +
+          'temperature reading.',
         unitId: 'AHU-23-1',
         instructions:
           'An alarm has been raised against this unit. Open the Alarm Summary, find it, ' +
@@ -732,6 +790,21 @@
       {
         id: 'ex-starter-overcool-v2',
         title: 'Space is being overcooled',
+        instructorNotes:
+          'The cooling coil setpoint was left in Manual. That is an override, not a fault \u2014 ' +
+          'the sequence was doing exactly what it had been told, which is why nothing on ' +
+          'the unit looked broken.\n\n' +
+          'Colour is the giveaway. A point in Auto is drawn in the normal panel colour; a ' +
+          'point somebody overrode by hand is magenta. The Point Attribute Report under the ' +
+          'View menu lists every override on the system, and that is the first place to ' +
+          'look when a unit is behaving oddly but no alarm has tripped.\n\n' +
+          'On tolerance: \u00b11.5\u00b0F \u2014 a 3\u00b0F total deadband \u2014 is normal and acceptable in a ' +
+          'standard commercial building automation system. It exists on purpose: it saves ' +
+          'energy by not cycling equipment constantly, it protects compressors, fans and ' +
+          'valves from short-cycling, and most people cannot feel one or two degrees. Do ' +
+          'not chase it. Ten degrees below setpoint, as here, is a different matter \u2014 and ' +
+          'the same small swing WOULD be unacceptable in a lab, a data centre or a medical ' +
+          'facility.',
         unitId: 'AHU-4-6',
         instructions:
           'Occupants on the 2nd level are complaining that the space is far too cold.\n\n' +
@@ -749,7 +822,7 @@
         weather: null,
         goal: {
           key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
-          comparator: 'within', target: 70, tolerance: 2,
+          comparator: 'within', target: 70, tolerance: 1.5,
           standard: '36', criterionId: 'soo-supply-air-setpoint',
           criterionLabel: 'Supply air at its active setpoint',
           citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU supply air temperature control',
@@ -763,6 +836,18 @@
       {
         id: 'ex-starter-nostart',
         title: 'Ventilation not keeping up with occupancy',
+        instructorNotes:
+          'CO\u2082 climbing above the ventilation indicator means the unit is not bringing in ' +
+          'enough outdoor air for the number of people in the space.\n\n' +
+          'Worth being precise about what that indicator is: CO\u2082 is not a compliance limit ' +
+          'in 62.1. Appendix C uses it as a PROXY for ventilation rate per person \u2014 roughly ' +
+          '700 ppm above outdoor air is the level at which most visitors find body-odour ' +
+          'intensity acceptable. With a 400 ppm outdoor baseline that puts the indicator ' +
+          'near 1,100 ppm. It is an indicator, not a legal threshold, and knowing the ' +
+          'difference matters when you write it up.\n\n' +
+          'Check the CO\u2082 setpoint and the minimum outdoor airflow. Demand-controlled ' +
+          'ventilation should open the damper as CO\u2082 rises; if it is not, find out what is ' +
+          'holding it.',
         unitId: 'AHU-4-4',
         instructions:
           'The Ballroom is at high occupancy and zone CO\u2082 has climbed past the level ' +
@@ -816,6 +901,13 @@
       return {
         id: o.id, title: o.title, unitId: o.unit, instructions: o.brief,
         setup: o.setup, weather: o.weather || null, goal: o.goal,
+        // Both of these were absent from the whitelist, so an entry could declare them
+        // and have them silently dropped before reaching the store — exactly the failure
+        // the note above warns about, repeated. instructorNotes is why two of Lev's three
+        // reviewed exercises showed an empty notes box; trends means no library exercise
+        // could ever carry an authored history either.
+        instructorNotes: o.instructorNotes || '',
+        trends: o.trends || null,
         assignedTo: to,
         assignment: { mode: to.length ? 'students' : 'students', groupIds: [], seatIds: to },
         published: !!o.published, createdBy: 'cta_instructor', createdAt: now
@@ -826,8 +918,26 @@
       ex({
         id: 'ex-lib-43-overcool',
         title: 'Ballroom running cold',
+        instructorNotes:
+          'A temperature swing of \u00b11.5\u00b0F \u2014 a 3\u00b0F total deadband \u2014 around the setpoint is ' +
+          'generally acceptable and normal in a standard commercial HVAC building ' +
+          'automation system, depending on the space type.\n\n' +
+          'Why \u00b11.5\u00b0F is acceptable:\n' +
+          '  \u2022 Energy savings \u2014 a small deadband stops the system constantly turning ' +
+          'equipment on and off.\n' +
+          '  \u2022 Equipment protection \u2014 it prevents short-cycling, which wears out ' +
+          'compressors, fans and valves far too fast.\n' +
+          '  \u2022 Human comfort \u2014 most people cannot feel a change of one or two degrees.\n\n' +
+          'So do not chase a swing that size; it is doing a job. The exception is a lab ' +
+          'environment, a medical facility or a data centre, where the tolerance is far ' +
+          'tighter. Know which kind of space you are looking at before you judge a reading.\n\n' +
+          'What was actually wrong here: the cooling coil setpoint had been left in Manual ' +
+          'at 46\u00b0F. That is an override, not a fault in the unit \u2014 the sequence was doing ' +
+          'exactly what it had been told. Release it to Auto and supply air returns to its ' +
+          'design setpoint. The Point Attribute Report under View lists every override on ' +
+          'the system, which is where to look first when a unit is behaving oddly.',
         unit: 'AHU-4-3',
-        brief: 'The ballroom is being overcooled and staff are complaining. Supply air is well below where it should be for this unit. Find what is driving it and return supply air to its design setpoint.\n\nHint: a point left in Manual overrides the control program. The Point Attribute Report under View lists every override on the system.',
+        brief: 'The ballroom is being overcooled and staff are complaining. Supply air is well below where it should be for this unit. Find what is driving it and return supply air to its design setpoint.\n\nHint: a point left in Manual overrides the control program. The Point Attribute Report under View lists every override on the system.\n\nOn tolerance: \u00b11.5\u00b0F around setpoint \u2014 a 3\u00b0F total deadband \u2014 is normal and acceptable in a standard commercial building automation system. Do not treat a swing that size as a fault. It is deliberate: it saves energy by not cycling equipment constantly, it protects compressors, fans and valves from short-cycling, and most people cannot feel one or two degrees anyway. What you are looking at here is ten degrees below setpoint, which is a different matter entirely.',
         setup: { coolingCoilSetpoint: 46 },
         goal: { key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
                 comparator: 'within', target: 60, tolerance: 1.5,
@@ -839,11 +949,28 @@
       ex({
         id: 'ex-lib-43-damper',
         title: 'Ventilation shut off during occupancy',
+        instructorNotes:
+          'Check the mixed air temperature and the dampers \u2014 that is the pair that gives ' +
+          'this one away.\n\n' +
+          'Mixed air is a weighted blend of outdoor and return air:\n' +
+          '    MAT = (%OA \u00d7 T_OA) + (%RA \u00d7 T_RA)\n' +
+          'So with 20% outdoor air at 95\u00b0F and 80% return at 75\u00b0F you get ' +
+          '(0.20 \u00d7 95) + (0.80 \u00d7 75) = 79\u00b0F.\n\n' +
+          'Now run it with the outdoor damper closed. The outdoor fraction is zero, the ' +
+          'return fraction is 100%, and the mix collapses to exactly the return air ' +
+          'temperature. That is the proof: on a warm day, mixed air reading the same as ' +
+          'return air means no outdoor air is entering at all, whatever position the damper ' +
+          'claims. Read the two side by side rather than looking for a particular number \u2014 ' +
+          'return air differs by unit and by season. Outdoor airflow will read low or zero ' +
+          'for the same reason.\n\n' +
+          'Supply air temperature alone would not have told you \u2014 it can look perfectly ' +
+          'correct while the space is starved of ventilation. That is why 62.1 sets a ' +
+          'minimum damper position for occupied hours rather than trusting temperature.',
         unit: 'AHU-4-3',
-        brief: 'Temperatures look correct but the space feels stuffy. Check whether the unit is actually bringing in outdoor air, and restore the minimum position required during occupied hours.\n\nThis is a fault a student will not catch by watching supply air alone.',
+        brief: 'Temperatures look correct but the space feels stuffy. Check whether the unit is actually bringing in outdoor air, and restore the minimum position required during occupied hours.\n\nThis is a fault you will not catch by watching supply air alone.\n\nHint: check the mixed air temperature, and check the dampers.',
         setup: { oaDamperPosition: 0 },
         goal: { key: 'oaDamperPosition', label: 'OA Damper Position', unit: '%',
-                comparator: 'above', target: 19.5, tolerance: 0,
+                comparator: 'above', target: 20, tolerance: 0,
                 standard: '62.1', criterionId: 'iaq-min-damper',
                 criterionLabel: 'OA damper at or above minimum position',
                 citation: 'ASHRAE 62.1 \u00a75.16 \u2014 outdoor air intake, minimum position during occupancy',
@@ -854,6 +981,14 @@
       ex({
         id: 'ex-lib-231-fan',
         title: 'Meeting rooms getting no air',
+        instructorNotes:
+          'No air at all means start upstream: is the fan running? Airflow near zero with ' +
+          'the schedule saying occupied points at the run status, not at a damper or a coil.\n\n' +
+          'Work outward from the fan in the direction the air travels \u2014 fan, then dampers, ' +
+          'then coils, then the terminal units. Chasing a coil while the fan is off wastes ' +
+          'the time you have on site.\n\n' +
+          'A unit that will not run during occupied hours is also a 62.1 problem, not only a ' +
+          'comfort one: no fan means no outdoor air, whatever the damper position says.',
         unit: 'AHU-23-1',
         brief: 'Occupants on the 2nd level report no air movement during the working day. Work out what is stopping the unit and get airflow restored.\n\nHint: check what is commanding the unit before you touch the fan itself.',
         setup: { runSchedule: false },
@@ -867,11 +1002,20 @@
       ex({
         id: 'ex-lib-231-freeze',
         title: 'Preheat coil not protecting the plenum',
+        instructorNotes:
+          'Freeze protection is a safety, not a comfort function. The plenum minimum ' +
+          'setpoint exists to keep the coil above freezing \u2014 a burst coil floods a ' +
+          'mechanical room and takes the unit out for weeks.\n\n' +
+          'Check the preheat valve against the plenum temperature. If plenum air is below ' +
+          'the minimum and the valve is not opening, either the valve is overridden shut or ' +
+          'the setpoint has been moved down. Both are things a person did.\n\n' +
+          'This is the one case where you do NOT wait for a complaint. Comfort faults can ' +
+          'be scheduled; a freeze risk on a cold night is acted on immediately.',
         unit: 'AHU-23-1',
         brief: 'It is a cold morning and the preheat coil is not doing its job. Find out why the plenum is running below its minimum and bring supply air back to setpoint.\n\nFreeze protection runs at all times, not only when the space calls for heat \u2014 work out what is preventing it.',
         setup: { phtValvePosition: 0, oaTemperature: 28 },
         goal: { key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
-                comparator: 'within', target: 60, tolerance: 2,
+                comparator: 'within', target: 60, tolerance: 1.5,
                 standard: '36', criterionId: 'soo-supply-air-setpoint',
                 criterionLabel: 'Supply air at its active setpoint',
                 citation: 'ASHRAE Guideline 36 \u00a75.16 \u2014 AHU supply air temperature control',
@@ -884,6 +1028,18 @@
       ex({
         id: 'ex-lib-vav-damper-v3',
         title: 'Ballroom zone starved of air',
+        instructorNotes:
+          'The air handler upstream is behaving perfectly. The fault is at the terminal box: ' +
+          'its damper was throttled well below the minimum airflow the zone needs.\n\n' +
+          'That is why the zone reads warm and stuffy while supply air from the AHU is on ' +
+          'setpoint \u2014 the air is being conditioned correctly and then not delivered. Zone ' +
+          'CO\u2082 rises for the same reason: less air in means less ventilation for the people ' +
+          'in the room.\n\n' +
+          'One thing worth knowing about the real world here: a terminal damper driven fully ' +
+          'CLOSED against a running fan builds duct static pressure and would trip the high ' +
+          'static safety, shutting the unit down. That is why this exercise throttles the ' +
+          'damper rather than closing it. A partly-starved zone is the fault you will ' +
+          'actually be called about, because nothing trips \u2014 it just quietly underperforms.',
         unit: 'VAV-4-4-02',
         brief: 'The ballroom is stuffy and occupants are complaining, but AHU-4-4 upstream ' +
           'looks healthy \u2014 its fan is running and its discharge air is on setpoint.\n\n' +
@@ -934,7 +1090,7 @@
   // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
   // stored copy already at this version, so an edit without a bump is silently inert —
   // that is how the reworked VAV brief failed to reach a browser that had already seeded.
-  var SEED_VERSION = 4;
+  var SEED_VERSION = 9;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;

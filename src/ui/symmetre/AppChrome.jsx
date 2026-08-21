@@ -401,7 +401,18 @@ function AppChrome({ children }) {
       window.ExerciseAuthorBanner
         ? React.createElement(window.ExerciseAuthorBanner, { unitId: unitFromHash() })
         : null,
-      window.ExerciseRunBanner ? React.createElement(window.ExerciseRunBanner, null) : null,
+      // Keyed on the active exercise so switching exercises REMOUNTS the banner. The
+      // seeding effect was not re-running on an id change, which left the previous
+      // exercise's answer text, receipt and diagSaved in place — and because diagSaved
+      // gates the notes, exercise B showed its instructor answer with nothing submitted,
+      // and B's textarea held A's diagnosis. Remounting resets every piece of per-exercise
+      // state together, notesOpenedFor included, rather than each being reset by hand.
+      window.ExerciseRunBanner
+        ? React.createElement(window.ExerciseRunBanner, {
+            key: (window.ExerciseActive && window.ExerciseActive.activeId &&
+                  window.ExerciseActive.activeId()) || 'none'
+          })
+        : null,
       React.createElement('div', {
         className: 'flex-1 overflow-hidden relative',
         'data-station-content': 'true'

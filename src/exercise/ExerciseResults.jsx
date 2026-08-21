@@ -134,6 +134,7 @@
         seatIds: (ex.assignedTo || []).slice(),
         title: ex.title || '',
         instructions: ex.instructions || '',
+        instructorNotes: ex.instructorNotes || '',
         target: String((ex.goal && ex.goal.target) != null ? ex.goal.target : ''),
         tolerance: String((ex.goal && ex.goal.tolerance) != null ? ex.goal.tolerance : ''),
         published: !!ex.published,
@@ -176,6 +177,7 @@
         assignedTo: resolved,
         title: draft.title.trim() || ex.title,
         instructions: draft.instructions,
+        instructorNotes: draft.instructorNotes,
         published: !!draft.published,
         goal: Object.assign({}, ex.goal, {
           key: draft.goalKey || ex.goal.key,
@@ -469,11 +471,51 @@
               Object.keys(ex.setup || {}).length + ' point' +
               (Object.keys(ex.setup || {}).length === 1 ? '' : 's') + ' faulted')
           ),
-          React.createElement('span', { style: { fontSize: '11px', color: '#9db0c8', whiteSpace: 'nowrap' } },
-            seats.length
-              ? passedCount + '/' + seats.length + ' passed \u00b7 ' + startedCount + ' started'
-              : 'not assigned'),
-          React.createElement('span', { style: { color: '#6f7f97', fontSize: '12px' } }, isOpen ? '\u25b2' : '\u25bc')
+          // One flat grey line made "0/9 passed · 1 started" the same weight as the
+          // punctuation between the words, so the two numbers an instructor scans a
+          // whole list for were the hardest thing on the row to read. Split into
+          // separate counts: the figures carry weight and colour, the words stay quiet.
+          seats.length
+            ? React.createElement('span', {
+                style: { display: 'inline-flex', alignItems: 'baseline', gap: '10px',
+                         whiteSpace: 'nowrap', flexShrink: 0 }
+              },
+                React.createElement('span', {
+                  style: { fontSize: '13px', fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                           // Green only once somebody has actually passed — an all-zero
+                           // row reading green would say the opposite of what it means.
+                           color: passedCount > 0 ? '#6ee7a8' : '#c3cfdd' }
+                },
+                  passedCount + '/' + seats.length,
+                  React.createElement('span', {
+                    style: { fontSize: '11px', fontWeight: 600, color: '#9db0c8', marginLeft: '4px' }
+                  }, '\u00a0passed')
+                ),
+                React.createElement('span', {
+                  style: { fontSize: '13px', fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                           // Cyan once somebody has started; otherwise the SAME weight as
+                           // the passed count. Dimming the zero state pushed it to 3.78:1
+                           // — fainter than its own label, on the row state that is by far
+                           // the most common.
+                           color: startedCount > 0 ? '#7fd4e2' : '#c3cfdd' }
+                },
+                  String(startedCount),
+                  // Real space, not just a margin: innerText read "0started", so copy
+                  // and screen readers ran the number into the word.
+                  React.createElement('span', {
+                    style: { fontSize: '11px', fontWeight: 600, color: '#9db0c8', marginLeft: '4px' }
+                  }, '\u00a0started')
+                )
+              )
+            // Not a count at all, so it reads as a state rather than sitting in the
+            // column where numbers go.
+            : React.createElement('span', {
+                style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.4px',
+                         padding: '3px 9px', borderRadius: '999px', whiteSpace: 'nowrap',
+                         flexShrink: 0, color: '#9db0c8', background: 'rgba(157,176,200,.12)',
+                         border: '1px solid #38445c' }
+              }, 'NOT ASSIGNED'),
+          React.createElement('span', { style: { color: '#6f7f97', fontSize: '12px', marginLeft: '10px' } }, isOpen ? '\u25b2' : '\u25bc')
         ),
 
         isOpen ? React.createElement('div', null,
@@ -501,6 +543,21 @@
               onChange: function (e) { setDraft(Object.assign({}, draft, { instructions: e.target.value })); },
               style: Object.assign({}, EDIT_IN, { width: '100%', resize: 'vertical', lineHeight: 1.45 })
             }),
+
+            // Instructor notes: the answer and the reasoning, withheld until a student
+            // submits. Lev asked for this so students stop asking him privately during the
+            // capstone — which means the note has to read on its own, without him present.
+            React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '10px' }) },
+              'INSTRUCTOR NOTES — SHOWN AFTER THE STUDENT SUBMITS'),
+            React.createElement('textarea', {
+              value: draft.instructorNotes, rows: 5,
+              placeholder: 'Your answer and the reasoning. What the correct diagnosis is, why the reading was acceptable or not, and where the same conditions would be unacceptable \u2014 a lab, a data centre, a medical facility.',
+              onChange: function (e) { setDraft(Object.assign({}, draft, { instructorNotes: e.target.value })); },
+              style: Object.assign({}, EDIT_IN, { width: '100%', resize: 'vertical', lineHeight: 1.45 })
+            }),
+            React.createElement('div', {
+              style: { fontSize: '10px', color: '#6f7f97', marginTop: '4px', lineHeight: 1.45 }
+            }, 'Hidden while the exercise is in progress. A student sees it once they have submitted a diagnosis or passed \u2014 never before.'),
             // Criterion first: picking one rewrites the point, comparator and target
             // together, which is the order the goal is actually reasoned in.
             React.createElement('div', { style: Object.assign({}, EDIT_LBL, { marginTop: '10px' }) },

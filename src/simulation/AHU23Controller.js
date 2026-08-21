@@ -69,6 +69,12 @@
     systemStarting: false,
     startingTimeSetpoint: 240,     // seconds
     coolingCoilSetpoint: 60.0,     // °F — target SAT for CHW valve modulation
+    // Boiler-room space conditions. This unit had neither, so a zone reading could not
+    // be shown on the board at all. Lev asked for measured temperature above its
+    // setpoint here, and explicitly no CO2: the hazard in a boiler room is carbon
+    // MONOXIDE, so a CO2 reading would point at the wrong thing.
+    spaceTemp: 74.0,               // °F — measured room temperature
+    zoneTempSetpoint: 75.0,        // °F — boiler rooms run warmer than occupied space
     heatingCoilSetpoint: 55.0,     // °F — target SAT for PHT valve modulation
     plenumMinSetpoint: 40.0,       // °F — freeze protection threshold
     oaTemperature: 83.4,           // °F — outside air temperature
@@ -276,11 +282,23 @@
     //    preheat coil above.
     // ──────────────────────────────────────────────────────────────────────────
     if (state.fanRunning) {
-      // Calculate mixed air temperature (OA + Return air blend)
+      // Mixed air temperature — the weighted average Lev specified:
+      //   MAT = (%OA × T_OA) + (%RA × T_RA)
+      // with the outdoor fraction taken from damper position. The OA term reads
+      // preheatTemp rather than raw outdoor air, because on this unit the preheat coil
+      // sits upstream of the mix — with the coil off the two are identical, so the
+      // formula is Lev's exactly whenever no heating is called.
       var oaFraction = state.oaDamperPosition / 100;
       state.mixedAirTemp = Math.round(
         (state.preheatTemp * oaFraction + RETURN_AIR_TEMP * (1 - oaFraction)) * 10
       ) / 10;
+
+      // Room temperature drifts toward the setpoint while the unit runs, and toward
+      // its own equilibrium when it does not. A constant would have made the two new
+      // board chips decorative — a setpoint is only worth showing beside a reading
+      // that can disagree with it.
+      var spError23 = state.zoneTempSetpoint - state.spaceTemp;
+      state.spaceTemp = Math.round((state.spaceTemp + spError23 * 0.15) * 10) / 10;
 
       if (state.mixedAirTemp > state.coolingCoilSetpoint) {
         var neededDrop = state.mixedAirTemp - state.coolingCoilSetpoint;

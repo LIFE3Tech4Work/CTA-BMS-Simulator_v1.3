@@ -215,22 +215,67 @@
 
   // ─── Banner shown on the station while an exercise is running ───────────────
 
-  function ExerciseRunBanner() {
+  function ExerciseRunBanner(props) {
     var auth = useContext(window.AuthContext);
     useExerciseChanges();
     var ES = window.ExerciseStore;
     var [res, setRes] = useState({ ok: false, value: null, heldMs: 0, passed: false });
     var [showTask, setShowTask] = useState(false);
     var [diag, setDiag] = useState('');
-    var [diagSaved, setDiagSaved] = useState(false);
+    // Notes are unlocked by SUBMISSION, never by passing: a student can reach the right
+    // value by trial and error, and handing over the answer then skips the reasoning.
+    var notesUnlocked = false;
+    var storedAttempt = (ES && ex && auth && auth.operator)
+      ? ES.attemptFor(ex.id, auth.operator) : null;
+    var [diagSaved, setDiagSaved] = useState(!!(storedAttempt && storedAttempt.diagnosis));
+    // When the answer was last saved, so the receipt can say so rather than the button
+    // having to carry both the action and its own history. Seeded from the stored
+    // attempt so a reload does not make saved work look unsaved.
+    // Opened once per exercise when notes first become available. Keyed by id so it does
+// not re-open a panel the student has chosen to collapse, and re-arms for the next one.
+    var notesOpenedFor = React.useRef(null);
+    var [savedAt, setSavedAt] = useState(function () {
+      var at = storedAttempt && storedAttempt.diagnosisAt;
+      return at ? new Date(at).toLocaleTimeString('en-US',
+        { hour: 'numeric', minute: '2-digit' }) : null;
+    });
     // Seeded from the saved attempt when the panel opens, so reopening shows what they
     // already wrote rather than an empty box that looks like lost work.
     useEffect(function () {
-      if (!showTask || !ex || !auth) return;
+      if (!ex || !auth) return;
+      // Re-seeded per exercise: switching between two exercises would otherwise carry the
+      // first one's answer and receipt onto the second.
+      //
+      // NOT guarded on showTask. It was, which meant the reset never ran while the panel
+      // was collapsed — so the badge and receipt kept the previous exercise's state. Both
+      // directions were wrong: a badge advertising notes that are still locked, and worse,
+      // no badge on notes that ARE unlocked. The operator is a dependency too, so signing
+      // in as someone else re-seeds even on the same exercise.
       var a = ES.attemptFor(ex.id, auth.operator);
       setDiag((a && a.diagnosis) || '');
-      setDiagSaved(false);
-    }, [showTask, ex && ex.id]);
+      setDiagSaved(!!(a && a.diagnosis));
+      setSavedAt(a && a.diagnosisAt
+        ? new Date(a.diagnosisAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : null);
+    }, [ex && ex.id, auth && auth.operator]);
+
+    // Auto-expand, in its own effect. It sat inside the seeding effect above, which
+    // returns early unless showTask is ALREADY true — so setShowTask(true) could only run
+    // when the panel was open, making it a no-op in exactly the case it was written for.
+    // Keyed on the exercise and on diagSaved so it fires both on arrival with notes
+    // already unlocked and at the moment a student submits.
+    useEffect(function () {
+      // One flag for display, badge and expand: with notes off, nothing should force the
+      // panel open, and re-enabling should not mean remembering three separate sites.
+      if (!notesUnlocked || !ex || !auth) return;
+      var a = ES.attemptFor(ex.id, auth.operator);
+      if (a && a.diagnosis && a.passed && notesOpenedFor.current !== ex.id) {
+        // Once per exercise: a student who deliberately collapses the panel is not fought
+        // with, and the guard re-arms for the next exercise.
+        notesOpenedFor.current = ex.id;
+        setShowTask(true);
+      }
+    }, [ex && ex.id, diagSaved]);
 
     var id = activeId();
     var ex = (ES && id) ? ES.getExercise(id) : null;
@@ -264,7 +309,27 @@
     if (!ex || (!mine && !preview)) return null;
 
     var passed = res.passed;
+    // The student's stored attempt. Needed by the instructor-notes guard below, which
+    // referenced `attempt` while the only declaration lived inside the LIST component's
+    // map callback — a different function, so var-scoping made it invisible here and the
+    // guard threw. Read from the store rather than relying on diagSaved alone, because
+    // that is component state and resets on reload: a student who submitted and came
+    // back must still see the notes.
+    var attempt = ES.attemptFor(ex.id, auth.operator);
     var holdPct = Math.min(100, Math.round((res.heldMs / ES.HOLD_MS) * 100));
+    // Notes display is switched OFF for now, at the user's request — the gating logic and
+    // all twelve authored notes stay in place, so flipping this back to the expression
+    // below restores the whole feature with no rework:
+    //
+    //   notesUnlocked = !!(!preview && ex.instructorNotes && everPassed &&
+    //     (diagSaved || (attempt && attempt.diagnosis)));
+    //
+    // Gated on the STORED pass rather than live, so once earned it stays earned: nudging a
+    // value after finishing, the clock advancing, or returning next session with the unit
+    // elsewhere used to revoke notes a student had already unlocked.
+    var everPassed = !!(attempt && attempt.passed);
+    notesUnlocked = false;
+
     var unitLabel = (ex.goal && ex.goal.unit) || '';
     var g = ex.goal || {};
 
@@ -308,7 +373,7 @@
       }),
       React.createElement('span', { style: { fontSize: '11px', fontWeight: 800, letterSpacing: '.3px',
                                              color: preview ? '#ffd79a' : undefined } },
-        preview ? 'STUDENT VIEW · PREVIEW' : (passed ? 'COMPLETE' : 'EXERCISE')),
+        preview ? 'STUDENT VIEW · PREVIEW' : (everPassed ? 'COMPLETE' : 'EXERCISE')),
       React.createElement('span', { style: { fontSize: '11.5px', fontWeight: 700 } }, ex.title),
       React.createElement('span', { style: { fontSize: '11px', opacity: .85 } },
         'Goal: ' + ES.goalText(ex)),
@@ -365,7 +430,9 @@
                  border: '1px solid ' + (showTask ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.35)'),
                  background: showTask ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.1)',
                  color: 'inherit' }
-      }, showTask ? '\u25b4 TASK' : '\u25be TASK'),
+      }, showTask
+          ? '\u25b4 TASK'
+          : (notesUnlocked ? '\u25be TASK \u00b7 NOTES' : '\u25be TASK')),
       offExerciseUnit(ex) ? null : React.createElement('button', {
         type: 'button',
         onClick: function () { window.location.hash = '#/exercises'; },
@@ -421,7 +488,28 @@
       // and "why is 1100 ppm the number" is the question the standard answers.
       (g.citation) ? React.createElement('div', {
         style: { marginTop: '6px', fontSize: '10.5px', color: '#7fd4e2', lineHeight: 1.5 }
-      }, g.citation) : null
+      }, g.citation) : null,
+
+      // Instructor notes, in the brief column rather than a band of their own.
+      // Unlocked by SUBMISSION only — a saved diagnosis. Passing the goal is not a
+      // submission: a student can reach the right value by trial and error, and handing
+      // them the answer at that moment skips the reasoning the note exists to teach.
+      // Lev's own framing was "when they submit, they can see my answer."
+      notesUnlocked
+        ? React.createElement('div', {
+            style: { marginTop: '11px', paddingTop: '9px',
+                     borderTop: '1px solid rgba(127,212,226,.35)' }
+          },
+            React.createElement('div', {
+              style: { fontSize: '9.5px', fontWeight: 800, letterSpacing: '.5px',
+                       color: '#7fd4e2', marginBottom: '4px' }
+            }, 'INSTRUCTOR NOTES'),
+            React.createElement('div', {
+              style: { fontSize: '11.5px', color: '#dbe6f3', lineHeight: 1.55,
+                       whiteSpace: 'pre-wrap' }
+            }, ex.instructorNotes)
+          )
+        : null
       ),
 
       // Right: where the written answer goes. The diagnosis scenarios ask students to explain
@@ -455,7 +543,17 @@
             disabled: !diag.trim() || preview,
             onClick: function () {
               if (preview) return;
-              if (ES.saveDiagnosis(ex.id, auth.operator, diag)) setDiagSaved(true);
+              if (ES.saveDiagnosis(ex.id, auth.operator, diag)) {
+                setDiagSaved(true);
+                setSavedAt(new Date().toLocaleTimeString('en-US',
+                  { hour: 'numeric', minute: '2-digit' }));
+                // Same stored-flag condition as the gate, so the panel never opens onto
+                // notes the gate will refuse to render.
+                if (notesUnlocked) {
+                  notesOpenedFor.current = ex.id;
+                  setShowTask(true);
+                }
+              }
             },
             style: { padding: '5px 13px', borderRadius: '5px', fontSize: '11px',
                      fontWeight: 800, fontFamily: 'inherit',
@@ -464,7 +562,16 @@
                      background: (diag.trim() && !preview)
                        ? 'linear-gradient(180deg,#3f8f5a,#2d7346)' : '#1b2230',
                      color: (diag.trim() && !preview) ? '#fff' : '#5d6b83' }
-          }, diagSaved ? '\u2713 SAVED' : 'SAVE ANSWER'),
+          }, diagSaved ? 'SAVED' : 'SAVE ANSWER'),
+          // Receipt, distinct from the button and from the completion green.
+          (!preview && diagSaved) ? React.createElement('span', {
+            style: { fontSize: '10.5px', fontWeight: 700, color: '#7fd4e2' }
+          }, '\u2713 Answer saved' + (savedAt ? ' at ' + savedAt : '')) : null,
+          // Only shown once something HAS been saved: "unsaved changes" before a first
+          // save would be scolding a student for not having finished typing.
+          (!preview && !diagSaved && savedAt) ? React.createElement('span', {
+            style: { fontSize: '10.5px', fontWeight: 700, color: '#ffd79a' }
+          }, 'Unsaved changes') : null,
           React.createElement('span', {
             style: { fontSize: '10px', color: preview ? '#ffd79a' : '#7f8ea6' }
           }, preview
@@ -474,9 +581,17 @@
       )
     ) : null,
 
+
     // Completion is the moment the exercise teaches something, so it says what was
     // achieved rather than only that it ended.
-    passed ? React.createElement('div', {
+    //
+    // Reads the stored flag, like the label and the notes gate. On live `passed` a student
+    // who finished, submitted and then nudged any value saw the header revert to EXERCISE
+    // and this band vanish, while the instructor's answer — released only on completion —
+    // stayed on screen: two surfaces asserting opposite things about one attempt. The gap
+    // chip stays live on purpose; "2.2°F too cold" is a true statement about the reading
+    // now, and sits fine beside COMPLETE once the label has stopped contradicting it.
+    everPassed ? React.createElement('div', {
       style: { padding: '8px 14px', borderTop: '1px solid rgba(47,122,82,.5)',
                background: 'rgba(63,143,90,.14)', fontSize: '11.5px',
                color: '#8ff0b5', lineHeight: 1.5 }
