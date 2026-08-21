@@ -108,6 +108,25 @@
       setNewPassword('');
     }
 
+    // Adopt browser-autofilled values. Chrome fills controlled inputs without firing
+    // onChange, so state stays empty while the fields look complete and the button
+    // stays disabled with no explanation. Polled briefly because autofill can land
+    // after first paint, and password managers later still.
+    useEffect(function () {
+      if (mode !== 'signin') return;
+      var tries = 0;
+      function adopt() {
+        var u = document.getElementById('signon-operator');
+        var p = document.getElementById('signon-password');
+        if (u && u.value && !operator) setOperator(u.value);
+        if (p && p.value && !password) setPassword(p.value);
+        if (++tries > 12) clearInterval(iv);
+      }
+      adopt();
+      var iv = setInterval(adopt, 250);
+      return function () { clearInterval(iv); };
+    }, [mode, operator, password]);
+
     // ─── Sign in ──────────────────────────────────────────────────────────────
     const handleSignIn = useCallback(function(e) {
       e.preventDefault();
@@ -115,7 +134,19 @@
 
       // Built-in demo accounts first, and synchronously — they must keep working
       // with no backend, no network and no waiting.
-      var demo = window.AuthHelpers.login(operator.trim(), password);
+      // Read the fields directly as well — autofill may have landed between the last
+      // adopt() tick and this submit.
+      var uEl = document.getElementById('signon-operator');
+      var pEl = document.getElementById('signon-password');
+      var user = (operator || (uEl && uEl.value) || '').trim();
+      var pass = password || (pEl && pEl.value) || '';
+      if (!user || !pass) {
+        setError('Enter your email and password.');
+        setIsLoading(false);
+        return;
+      }
+
+      var demo = window.AuthHelpers.login(user, pass);
       if (demo) {
         if (window.setAuthState) window.setAuthState(demo);
         setTimeout(function () {
@@ -133,7 +164,7 @@
         setPassword(''); setIsLoading(false);
         return;
       }
-      LA.signInAsync(operator.trim(), password).then(function (res) {
+      LA.signInAsync(user, pass).then(function (res) {
         if (res && res.ok) {
           // createAuthState is the only correct way to build this — it carries the
           // privilege functions every screen calls, and the field is `authenticated`,
@@ -383,7 +414,7 @@
                 disabled: signInDisabled,
                 className: 'w-full py-2 px-4 text-sm font-semibold rounded transition-colors',
                 style: primaryButtonStyle(signInDisabled)
-              }, isLoading ? 'Signing On...' : 'Sign On'),
+              }, isLoading ? 'Signing In\u2026' : 'Sign In'),
               React.createElement('div', { className: 'flex justify-between mt-3' },
                 React.createElement('button', {
                   type: 'button',
