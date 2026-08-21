@@ -17,8 +17,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+  <!-- Tailwind itself. Its absence is why `tailwind is not defined` fired on every
+       screen: the config block below assigns to a global the library defines, and
+       nothing was loading the library. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
   <!-- Custom Tailwind config for BMS-specific colors -->
   <script>
+    // Guarded so a blocked CDN degrades to unstyled rather than throwing before the
+    // rest of the page's scripts run — a school network that blocks jsdelivr would
+    // otherwise take the whole app down at line one.
+    window.tailwind = window.tailwind || {};
     tailwind.config = {
       theme: {
         extend: {
