@@ -137,8 +137,24 @@
         ['returnAirRH',       'pill', 1211, 184, null, 'right', 13],
         ['returnAirTemp',     'pill', 1211, 212, null, 'right', 13],
         ['co2Sensor',         'pill', 1297, 212, null, 'right', 13],
-        ['spaceTemp',         'pill', 1297, 184, null, 'right', 13],
-        ['zoneTempSetpoint',  'pill', 1297, 159, null, 'right', 13],
+        // Zone readings moved clear of the return duct and out to the right edge, per
+        // Lev: sitting them on the duct made them read as DUCT temperatures when they are
+        // space temperatures. Same placement AHU-23-1 uses — label above, pill below,
+        // away from the ductwork so there is no ambiguity about what is being measured.
+        // Centred on the container's axis so label, pill and sensor share one centre
+        // line — the AHU-23-1 arrangement. Left-anchored coordinates put the pill off to
+        // one side of its own label, which read as neither aligned nor deliberate.
+        // Label above, pill below, in both pairs — the U23 convention. The setpoint pill
+        // was rendering ABOVE its label while ZONE TEMP's rendered below, leaving the two
+        // labels adjacent with one number either side of them and no way to tell which
+        // label owned which value.
+        // 36 units below each label, measured off U23 (label 328 → pill 364, label 412 →
+        // pill 448). At 12 the numbers crowded their labels; the artwork offsets around
+        // them already matched that template.
+        ['zoneTempSetpoint',  'pill', 1545, 324, null, 'center', 13],
+        // Back to +36 from its label, matching U23 (label 412 -> pill 448). The 392 lift was
+        // me dodging an overlap that turned out to be the unclosed-glyph arrow, not spacing.
+        ['spaceTemp',         'pill', 1545, 408, null, 'center', 13],
         ['supplyAirRH',       'pill', 1145, 506, null, 'left', 12.5],
         ['dischargeAirTemp',  'pill', 1145, 532, null, 'left', 12.5],
         ['oaTemperature',     'pill', 148,  508, null, 'right', 13],
@@ -181,8 +197,24 @@
       chips: [
         ['returnAirTemp',     'pill', 1211, 212, null, 'right', 13],
         ['co2Sensor',         'pill', 1297, 212, null, 'right', 13],
-        ['spaceTemp',         'pill', 1297, 184, null, 'right', 13],
-        ['zoneTempSetpoint',  'pill', 1297, 159, null, 'right', 13],
+        // Zone readings moved clear of the return duct and out to the right edge, per
+        // Lev: sitting them on the duct made them read as DUCT temperatures when they are
+        // space temperatures. Same placement AHU-23-1 uses — label above, pill below,
+        // away from the ductwork so there is no ambiguity about what is being measured.
+        // Centred on the container's axis so label, pill and sensor share one centre
+        // line — the AHU-23-1 arrangement. Left-anchored coordinates put the pill off to
+        // one side of its own label, which read as neither aligned nor deliberate.
+        // Label above, pill below, in both pairs — the U23 convention. The setpoint pill
+        // was rendering ABOVE its label while ZONE TEMP's rendered below, leaving the two
+        // labels adjacent with one number either side of them and no way to tell which
+        // label owned which value.
+        // 36 units below each label, measured off U23 (label 328 → pill 364, label 412 →
+        // pill 448). At 12 the numbers crowded their labels; the artwork offsets around
+        // them already matched that template.
+        ['zoneTempSetpoint',  'pill', 1545, 324, null, 'center', 13],
+        // Back to +36 from its label, matching U23 (label 412 -> pill 448). The 392 lift was
+        // me dodging an overlap that turned out to be the unclosed-glyph arrow, not spacing.
+        ['spaceTemp',         'pill', 1545, 408, null, 'center', 13],
         ['supplyStaticPressure', 'pill', 1145, 506, null, 'left', 12.5],
         ['dischargeAirTemp',  'pill', 1145, 532, null, 'left', 12.5],
         ['oaTemperature',     'pill', 148,  508, null, 'right', 13],
@@ -227,8 +259,24 @@
       chips: [
         ['returnAirTemp',     'pill', 1211, 212, null, 'right', 13],
         ['co2Sensor',         'pill', 1297, 212, null, 'right', 13],
-        ['spaceTemp',         'pill', 1297, 184, null, 'right', 13],
-        ['zoneTempSetpoint',  'pill', 1297, 159, null, 'right', 13],
+        // Zone readings moved clear of the return duct and out to the right edge, per
+        // Lev: sitting them on the duct made them read as DUCT temperatures when they are
+        // space temperatures. Same placement AHU-23-1 uses — label above, pill below,
+        // away from the ductwork so there is no ambiguity about what is being measured.
+        // Centred on the container's axis so label, pill and sensor share one centre
+        // line — the AHU-23-1 arrangement. Left-anchored coordinates put the pill off to
+        // one side of its own label, which read as neither aligned nor deliberate.
+        // Label above, pill below, in both pairs — the U23 convention. The setpoint pill
+        // was rendering ABOVE its label while ZONE TEMP's rendered below, leaving the two
+        // labels adjacent with one number either side of them and no way to tell which
+        // label owned which value.
+        // 36 units below each label, measured off U23 (label 328 → pill 364, label 412 →
+        // pill 448). At 12 the numbers crowded their labels; the artwork offsets around
+        // them already matched that template.
+        ['zoneTempSetpoint',  'pill', 1545, 324, null, 'center', 13],
+        // Back to +36 from its label, matching U23 (label 412 -> pill 448). The 392 lift was
+        // me dodging an overlap that turned out to be the unclosed-glyph arrow, not spacing.
+        ['spaceTemp',         'pill', 1545, 408, null, 'center', 13],
         ['supplyStaticPressure', 'pill', 1145, 506, null, 'left', 12.5],
         ['dischargeAirTemp',  'pill', 1145, 532, null, 'left', 12.5],
         ['oaTemperature',     'pill', 148,  508, null, 'right', 13],

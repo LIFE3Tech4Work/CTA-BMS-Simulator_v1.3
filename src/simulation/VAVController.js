@@ -103,6 +103,11 @@
 
   var zoneStates = {};   // Map<zoneId, state>
   var zoneModes = {};    // Map<zoneId, Map<stateKey, 'Manual'>>
+  // Map<zoneId, Map<stateKey, value>> — the reading each key held before an override, so
+  // releasing to Auto can put it back. Only meaningful for pure INPUTS (spaceTemp, co2Sensor,
+  // the zone setpoints), which nothing recomputes: without a snapshot, clearMode dropped the
+  // Manual flag and stranded the commanded value permanently.
+  var zoneAutoValues = {};
   var subscribers = {};  // Map<zoneId, callback[]>
 
   function seededState(z) {
@@ -290,6 +295,16 @@
       return;
     }
     if (state.hasOwnProperty(key)) {
+      // Snapshot the pre-override value the FIRST time a key goes Manual, so releasing it
+      // can put the real reading back. Without this, clearMode deleted the Manual flag and
+      // left the commanded value stranded — harmless for a computed output, silently broken
+      // for a pure input like spaceTemp or co2Sensor, which nothing recomputes. The AHU
+      // controllers already work this way; the VAV boxes did not, so the point dialog's
+      // AUTO button did nothing at all on those points.
+      if (!zoneModes[zoneId][key]) {
+        if (!zoneAutoValues[zoneId]) zoneAutoValues[zoneId] = {};
+        zoneAutoValues[zoneId][key] = state[key];
+      }
       state[key] = value;
       zoneModes[zoneId][key] = 'Manual';
       recalculate(zoneId);
@@ -401,6 +416,13 @@
   function clearMode(zoneId, key) {
     if (zoneModes[zoneId] && zoneModes[zoneId][key]) {
       delete zoneModes[zoneId][key];
+      // Restore the reading captured when the override went on. A computed output gets
+      // recalculated below regardless, but an input is only ever what someone wrote to it —
+      // so without this the false value survived the release.
+      if (zoneAutoValues[zoneId] && zoneAutoValues[zoneId].hasOwnProperty(key)) {
+        if (zoneStates[zoneId]) zoneStates[zoneId][key] = zoneAutoValues[zoneId][key];
+        delete zoneAutoValues[zoneId][key];
+      }
       recalculate(zoneId);
     }
   }

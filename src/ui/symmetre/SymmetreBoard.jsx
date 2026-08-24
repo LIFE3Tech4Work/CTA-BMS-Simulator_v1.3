@@ -603,10 +603,23 @@ const SymmetreBoard = (function () {
       className: 'relative w-full h-full',
       // Responsive band: whole board visible, centred. Pinned (below MIN_SCALE):
       // the board holds its readable size and this pane scrolls.
+      //
+      // Pinned used `display: block`, which pressed the oversized board against the pane's
+      // left edge and made every diagram read as shifted left. flex-end over-corrected the
+      // other way, so it centres instead: equal margins, and the overflow splits between
+      // both sides rather than hiding one whole edge.
       style: { background: bgTheme.flat,
                overflow: fit.pinned ? 'auto' : 'hidden',
-               display: fit.pinned ? 'block' : 'flex',
-               alignItems: 'center', justifyContent: 'center' },
+               display: 'flex',
+               alignItems: 'center',
+               // `safe center` rather than plain `center`. Centring an overflowing flex item
+               // places it at a NEGATIVE offset, and scrollLeft cannot go below zero — so
+               // 272 units of the board's left edge became unreachable, taking the whole
+               // outside-air plenum with it: the TS-OA sensor, AFMS-3, the DA-1 damper tag
+               // and the outdoor air chips. `safe` falls back to flex-start only while
+               // overflowing, so one value centres when the board fits and keeps every
+               // pixel scrollable when it does not.
+               justifyContent: 'safe center' },
       'data-testid': 'symmetre-board-' + unitId,
       'data-screen-label': unitId,
     },
