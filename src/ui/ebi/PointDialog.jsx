@@ -375,6 +375,25 @@ const PointDialog = (function () {
     const m = BP.meta(stateKey, unitId) || { label: stateKey, kind: 'ai', unit: '' };
     const kind = m.kind;
     const isManual = (modes || {})[stateKey] === 'Manual';
+
+    // A failed device, as distinct from an operator override. Lev's sensor exercise turns
+    // on that difference: the reading is wrong but nobody set it, so it must NOT appear as
+    // an override — the student has to judge whether the number is credible.
+    const unitCtrl = (function () {
+      var NAMES = { 'AHU-4-6': 'AHU46Controller', 'AHU-4-4': 'AHU44NewController',
+                    'AHU-4-3': 'AHU43Controller', 'AHU-23-1': 'AHU23Controller',
+                    'VAV-4-4-02': 'VAV4402Controller', 'VAV-02-03': 'VAV0203Controller' };
+      return window[NAMES[unitId]] || null;
+    })();
+    const sensorFaulted = !!(unitCtrl && typeof unitCtrl.getSensorFaults === 'function' &&
+                             unitCtrl.getSensorFaults()[stateKey] !== undefined);
+
+    function replaceSensor() {
+      if (!unitCtrl || typeof unitCtrl.clearSensorFault !== 'function') return;
+      unitCtrl.clearSensorFault(stateKey);
+      if (typeof unitCtrl.recalculate === 'function') unitCtrl.recalculate();
+      onClose();
+    }
     const raw = BP.valueOf(state, stateKey);
     const isBinary = (kind === 'bi' || kind === 'bo');
     const options = m.options || ['On', 'Off'];
@@ -800,7 +819,8 @@ const PointDialog = (function () {
             ),
             React.createElement('div', { style: { width: '100%', display: 'flex', flexDirection: 'column', gap: '5px' } },
               [{ label: 'Alarm', lit: !!alarm, val: alarm ? 'ALARM' : 'Normal', vc: alarm ? '#c22222' : '#2a6a2a' },
-               { label: 'Fault', lit: false, val: '', vc: '' },
+               { label: 'Fault', lit: sensorFaulted,
+                 val: sensorFaulted ? 'SENSOR' : '', vc: sensorFaulted ? '#c22222' : '' },
                { label: 'Overridden', lit: isManual, val: '', vc: '' },
                { label: 'Out of Service', lit: false, val: '', vc: '' }].map((d) =>
                 React.createElement('div', { key: d.label, style: { display: 'flex', alignItems: 'center', gap: '6px' } },
@@ -808,7 +828,23 @@ const PointDialog = (function () {
                   React.createElement('span', { style: { fontSize: '10.5px', fontWeight: 700, color: '#3f5170' } }, d.label),
                   React.createElement('span', { style: { fontSize: '10px', fontWeight: 800, marginLeft: 'auto', color: d.vc } }, d.val)
                 ))
-            )
+            ),
+            // Directly under the lamps: the Fault indicator states the problem, so the
+            // remedy belongs beside it rather than in the footer, where it competed with
+            // SET and read as a third way to submit a value. Replacing a device is not a
+            // command — a field engineer swaps the sensor, and there was no equivalent
+            // action here at all, so the only way out of this exercise was releasing the
+            // point to Auto, which reads as undoing an override.
+            sensorFaulted ? React.createElement('button', {
+              type: 'button',
+              onClick: replaceSensor,
+              title: 'Replace this sensor \u2014 the reading becomes trustworthy again',
+              style: { marginTop: '12px', width: '100%', padding: '8px 10px',
+                       borderRadius: '6px', fontSize: '11px', fontWeight: 800,
+                       letterSpacing: '.3px', fontFamily: 'inherit', cursor: 'pointer',
+                       background: 'linear-gradient(180deg,#3f8f5a,#2d7346)',
+                       border: '1px solid #2f7a52', color: '#fff' }
+            }, 'REPLACE SENSOR') : null
           ),
 
           // ── right pane ──

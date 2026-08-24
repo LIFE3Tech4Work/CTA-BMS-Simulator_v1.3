@@ -320,6 +320,20 @@
     Object.keys(setup).forEach(function (k) {
       try { ctrl.setValue(k, setup[k]); } catch (e) {}
     });
+
+    // Failed sensors. Applied after the setup so a fault always wins over a plain value,
+    // and cleared first so re-opening an exercise does not stack faults from a previous
+    // attempt. A point faulted this way reports FAULT rather than MANUAL and never shows
+    // among the overrides — which is the point: the student has to question the reading,
+    // not find it on a list.
+    var faults = ex.sensorFaults || {};
+    if (typeof ctrl.clearSensorFaults === 'function') ctrl.clearSensorFaults();
+    Object.keys(faults).forEach(function (k) {
+      try {
+        if (typeof ctrl.setSensorFault === 'function') ctrl.setSensorFault(k, faults[k]);
+      } catch (e) {}
+    });
+
     if (typeof ctrl.recalculate === 'function') ctrl.recalculate();
   }
 
@@ -1067,6 +1081,12 @@
     var now = new Date().toISOString();
     var seats = (window.AuthHelpers && window.AuthHelpers.STUDENT_SEATS) ||
       ['student_a', 'student_b', 'student_c', 'student_d', 'student_e', 'student_f'];
+    // Same demo seat starterExercises() adds. Without it a library entry that opts into
+    // published/assigned — as the sensor-failure exercise does, deliberately — reaches the
+    // six lettered seats but not the shared account on the sign-on card, so the one person
+    // most likely to be testing cannot see it. The refresh path's union cannot rescue this:
+    // it only fires when the DEFINITION already names the seat.
+    if (seats.indexOf('cta_student') < 0) seats = seats.concat(['cta_student']);
     function ex(o) {
       // Library entries default to drafts, since the instructor chooses what a class
       // sees. An entry may opt in with published/assigned — the helper used to hardcode
@@ -1082,6 +1102,7 @@
         // could ever carry an authored history either.
         instructorNotes: o.instructorNotes || '',
         trends: o.trends || null,
+        sensorFaults: o.sensorFaults || null,
         assignedTo: to,
         assignment: { mode: to.length ? 'students' : 'students', groupIds: [], seatIds: to },
         published: !!o.published, createdBy: 'cta_instructor', createdAt: now
@@ -1210,8 +1231,10 @@
         id: 'ex-lib-vav-sensor-fail',
         title: 'Zone running hot with a good setpoint',
         instructorNotes:
-          'The zone temperature sensor has failed and is reporting 0\u00b0F. That is the whole ' +
-          'fault \u2014 nothing was overridden and no setpoint is wrong.\n\n' +
+          'Resolution: the zone temperature sensor is faulty and is incorrectly reading ' +
+          '0\u00b0F. The sensor needs to be replaced.\n\n' +
+          'Nothing was overridden and no setpoint is wrong \u2014 that is what makes this ' +
+          'different from the other exercises.\n\n' +
           'Follow what the controller does with that reading. At 0\u00b0F against a 74\u00b0F ' +
           'setpoint it believes the space is freezing, so it does exactly what it should: ' +
           'reheat valve to 100%, damper to minimum position to stop dumping cold primary ' +
@@ -1230,14 +1253,72 @@
           'input you are reading is credible. Equipment fails, and a confident wrong number ' +
           'is harder to spot than an obviously missing one.',
         unit: 'VAV-4-4-02',
-        brief: 'The ballroom zone is overheating. The room temperature setpoint is 74\u00b0F and nothing on this box has been overridden by hand, yet the reheat valve is wide open and the damper has driven to its minimum position.\n\nWork out why the controller is behaving this way, then get the zone back under control.\n\nHint: equipment can fail, and a failed device can still report a number. Ask whether every reading in front of you is believable.',
-        setup: { spaceTemp: 0 },
+        brief: 'The VAV 4-4 zone temperature is reading 0\u00b0F, while the room temperature ' +
+          'setpoint is 74\u00b0F.\n\nBecause the zone temperature sensor is reporting 0\u00b0F, the ' +
+          'controller will interpret the space as extremely cold. As a result, the reheat ' +
+          'valve will open to 100%, and the VAV damper will drive to its minimum position, ' +
+          'which would cause the space to overheat.\n\n' +
+          'Hint: equipment can fail or provide invalid readings.',
+        setup: {},
+        // A failed DEVICE, not an override. Modelling it as an override meant a student
+        // could find the answer in the Point Attribute Report's override list, which
+        // teaches the wrong tell — Lev's lesson is to question whether the reading is
+        // credible, and a real failed sensor appears nowhere on an override list.
+        sensorFaults: { spaceTemp: 0 },
         // Published and assigned, unlike the rest of the library: Lev asked for this to be
         // added as an exercise, not as a draft an instructor still has to find and enable.
         published: true,
         assigned: seats.slice(),
         goal: { key: 'spaceTemp', label: 'Zone Temperature', unit: '\u00b0F',
                 comparator: 'above', target: 60, tolerance: 0,
+                standard: '55', criterionId: 'comfort-zone-winter',
+                criterionLabel: 'Zone temperature in comfort range',
+                citation: 'ASHRAE 55 \u00a75.3 \u2014 graphic comfort zone method',
+                basis: 'indicator' }
+      }),
+      ex({
+        id: 'ex-lib-vav-sensor-drift',
+        title: 'Zone complaints with nothing out of range',
+        instructorNotes:
+          'Resolution: the zone temperature sensor is reading about 12\u00b0F low \u2014 64\u00b0F when the ' +
+          'space is nearer 76\u00b0F. It is not a dead sensor; it is a wrong one. Replace it.\n\n' +
+          'This is the harder sibling of the 0\u00b0F failure, and the one that actually costs ' +
+          'weeks in a building. Nothing is out of range, so nothing alarms. Every control ' +
+          'action is textbook: at 64\u00b0F against a 74\u00b0F setpoint the box calls for heat, so ' +
+          'reheat opens and the damper backs toward minimum. The sequence is doing its job ' +
+          'perfectly on a number that is not true.\n\n' +
+          'A student cannot solve this by spotting an impossible value, because there is not ' +
+          'one \u2014 64\u00b0F is a temperature a room genuinely reaches. They have to build a case ' +
+          'from readings that disagree with each other:\n\n' +
+          '\u2022 Reheat has been running for hours and the zone has not warmed. A working sensor ' +
+          'in a heated space climbs; a stuck-low one does not move.\n' +
+          '\u2022 CO\u2082 says the space is occupied. Occupants in a genuinely 64\u00b0F room complain of ' +
+          'cold; these complaints are of heat.\n' +
+          '\u2022 Discharge air is warm and airflow is at minimum, which is a box heating hard. ' +
+          'If the room really were cold that combination would be raising the temperature.\n\n' +
+          'The reasoning is the deliverable here, not the fix. A student who replaces the ' +
+          'sensor without being able to say WHY the reading was untrustworthy has guessed. ' +
+          'Ask them which two readings contradicted each other.\n\n' +
+          'Field note: a drifted or partially shorted sensor does this. It is the reason ' +
+          'commissioning includes checking sensors against a calibrated instrument rather ' +
+          'than only checking that they report something.',
+        unit: 'VAV-4-4-02',
+        brief: 'Occupants in the ballroom are complaining that the space is too warm. ' +
+          'Nothing is in alarm, no point has been overridden by hand, and every reading on ' +
+          'the box is inside its normal range.\n\nThe zone temperature reads 64\u00b0F against a ' +
+          '74\u00b0F setpoint, so the controller is calling for heat \u2014 reheat is open and the ' +
+          'damper has backed toward minimum.\n\nWork out why the space is getting warmer ' +
+          'while the controller believes it is cold, then put it right.\n\n' +
+          'Hint: no single reading here is impossible. Look for two that cannot both be ' +
+          'true at once, and ask how long the box has been heating without result.',
+        setup: {},
+        // A plausible wrong value, not a rail. The point of this exercise is that nothing
+        // looks broken — an impossible reading would hand over the answer.
+        sensorFaults: { spaceTemp: 64 },
+        published: true,
+        assigned: seats.slice(),
+        goal: { key: 'spaceTemp', label: 'Zone Temperature', unit: '\u00b0F',
+                comparator: 'within', target: 74, tolerance: 3,
                 standard: '55', criterionId: 'comfort-zone-winter',
                 criterionLabel: 'Zone temperature in comfort range',
                 citation: 'ASHRAE 55 \u00a75.3 \u2014 graphic comfort zone method',
@@ -1308,7 +1389,7 @@
   // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
   // stored copy already at this version, so an edit without a bump is silently inert —
   // that is how the reworked VAV brief failed to reach a browser that had already seeded.
-  var SEED_VERSION = 23;
+  var SEED_VERSION = 27;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;

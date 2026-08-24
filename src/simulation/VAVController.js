@@ -108,6 +108,9 @@
   // the zone setpoints), which nothing recomputes: without a snapshot, clearMode dropped the
   // Manual flag and stranded the commanded value permanently.
   var zoneAutoValues = {};
+  // zoneId -> { key: falsifiedValue }. A failed device reporting a plausible-looking
+  // number, which is the hardest kind of fault to spot.
+  var zoneSensorFaults = {};
   var subscribers = {};  // Map<zoneId, callback[]>
 
   function seededState(z) {
@@ -133,6 +136,14 @@
   function recalculate(zoneId) {
     var state = zoneStates[zoneId];
     if (!state) return;
+
+    // Re-assert failed readings BEFORE the sequence runs, so the controller acts on the
+    // false number exactly as it would in the field — that is the whole point of the
+    // exercise. Applied every pass because recalculate recomputes derived values.
+    var faults = zoneSensorFaults[zoneId];
+    if (faults) {
+      Object.keys(faults).forEach(function (k) { state[k] = faults[k]; });
+    }
     var modesForZone = zoneModes[zoneId];
     var damperManual = modesForZone.damperPosition === 'Manual';
     var reheatManual = modesForZone.reheatValvePosition === 'Manual';
@@ -401,6 +412,40 @@
   /**
    * Reset all zones to default state. For tests / scenario changes.
    */
+  /**
+   * Fail a sensor: the device reports this value regardless of the real condition.
+   * Distinct from setValue, which records an operator's deliberate override.
+   */
+  function setSensorFault(zoneId, key, value) {
+    if (!zoneStates[zoneId] || !zoneStates[zoneId].hasOwnProperty(key)) return false;
+    if (!zoneSensorFaults[zoneId]) zoneSensorFaults[zoneId] = {};
+    // Remember the real reading so replacing the device restores it rather than leaving
+    // the zone at whatever the failed sensor last claimed.
+    if (!zoneAutoValues[zoneId]) zoneAutoValues[zoneId] = {};
+    if (zoneAutoValues[zoneId][key] === undefined) {
+      zoneAutoValues[zoneId][key] = zoneStates[zoneId][key];
+    }
+    zoneSensorFaults[zoneId][key] = value;
+    recalculate(zoneId);
+    notifySubscribers(zoneId);
+    return true;
+  }
+
+  /** Replace the device: the reading becomes trustworthy again. */
+  function clearSensorFault(zoneId, key) {
+    if (!zoneSensorFaults[zoneId] || zoneSensorFaults[zoneId][key] === undefined) return false;
+    delete zoneSensorFaults[zoneId][key];
+    var restore = zoneAutoValues[zoneId] && zoneAutoValues[zoneId][key];
+    if (restore !== undefined) zoneStates[zoneId][key] = restore;
+    recalculate(zoneId);
+    notifySubscribers(zoneId);
+    return true;
+  }
+
+  function getSensorFaults(zoneId) {
+    return Object.assign({}, zoneSensorFaults[zoneId] || {});
+  }
+
   function reset() {    ZONES.forEach(function(z) {
       zoneStates[z.id] = seededState(z);
       zoneModes[z.id] = {};
@@ -441,6 +486,16 @@
       recalculate: function () { return recalculate(zoneId); },
       getModes: function () { return getModes(zoneId); },
       clearMode: function (key) { return clearMode(zoneId, key); },
+      // Sensor faults, zone-bound like everything else on this facade. The exercise store
+      // and the point dialog both reach the box through here, so leaving these off meant
+      // a faulted reading could be set but never cleared — no replace action possible.
+      setSensorFault: function (key, value) { return setSensorFault(zoneId, key, value); },
+      clearSensorFault: function (key) { return clearSensorFault(zoneId, key); },
+      clearSensorFaults: function () {
+        var f = getSensorFaults(zoneId);
+        Object.keys(f).forEach(function (k) { clearSensorFault(zoneId, k); });
+      },
+      getSensorFaults: function () { return getSensorFaults(zoneId); },
       zoneId: zoneId
     };
   }
@@ -461,6 +516,9 @@
     getZoneInfo: getZoneInfo,
     reset: reset,
     clearModes: clearModes,
+    setSensorFault: setSensorFault,
+    clearSensorFault: clearSensorFault,
+    getSensorFaults: getSensorFaults,
     REHEAT_MAX_RISE: REHEAT_MAX_RISE
   };
 
