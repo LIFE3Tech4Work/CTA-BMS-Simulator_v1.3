@@ -531,7 +531,10 @@
 
     // Occupied window these scenarios are judged against — the same 08:00-18:00 the
     // Schedule Manager and the F-03 unoccupied alarm both use, so the three agree.
-    function trend(preset, pattern) { return { preset: preset, pattern: pattern }; }
+    // build() reads occHigh/occLow — NOT onValue/offValue, which it silently ignores and
+  // falls back to 900/450 on. On a binary point that renders as "on" at every hour,
+  // which erases whatever fault the trend was meant to show.
+  function trend(preset, pattern) { return { preset: preset, pattern: pattern }; }
 
     return [
       {
@@ -542,7 +545,7 @@
           'Run Schedule is a status, not a modulating value. It is a binary input: 0 means ' +
           'off, 1 means on, and nothing in between. A speed feedback would modulate \u2014 25, ' +
           '35, 68 \u2014 but a run status is a switch.\n\n' +
-          'What happened: someone put the unit in manual to run it outside hours and never ' +
+          'What happened: Axel put the unit in manual to run it outside hours and never ' +
           'put it back. The schedule still said weekdays 08:00\u201318:00; the fan ran straight ' +
           'through Saturday and Sunday anyway.\n\n' +
           'Zone CO\u2082 is what proves nobody was in the building. CO\u2082 rises with occupancy, so ' +
@@ -563,24 +566,87 @@
           'status in its History tab.\n\n' +
           'The schedule says weekdays 08:00\u201318:00, but the fan tells a different ' +
           'story. Compare it against zone CO\u2082 over the same days and decide whether ' +
-          'anyone was actually in the space.\n\n' +
+          'anyone was actually in the space \u2014 and note that the answer may not be the ' +
+          'same on every one of those days.\n\n' +
+          'The point\u2019s Recent Events tab records who changed what, and when.\n\n' +
           'Write down what you think happened, then set the unit so it follows its ' +
           'schedule again.',
         setup: { runSchedule: true },
         weather: null,
+        // Authored event history. A trend shows THAT the unit ran; this shows who put it
+        // that way. Without it the exercise can only be solved by inference, and Lev's
+        // framing was explicit — the student should be able to read the override off the
+        // point's own Recent Events, with a name and a timestamp against it.
+        events: [
+          // The override itself, on the schedule point where it was made.
+          { pointKey: 'runSchedule', weekday: 5, hour: 18, etype: 'Mode Transition',
+            prev: 'Auto', val: 'Manual', by: 'Axel' },
+          { pointKey: 'runSchedule', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: 'OFF', val: 'ON', by: 'Axel' },
+          // And its consequence on the fan, which is the point the brief sends students to.
+          // Same timestamp and the same name, so opening either one answers "who did this".
+          { pointKey: 'supplyFanStatus', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: 'OFF', val: 'ON', by: 'Axel' },
+          { pointKey: 'fanRunning', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: 'Stopped', val: 'Running', by: 'Axel' },
+          // And on fan SPEED. That is the labelled chip a student opens first, while run
+          // status is the green START block, which does not read as a clickable point at
+          // all — so the override was authored on points nobody found. Finding "no recent
+          // events" and having to guess which other point holds the record is a hunt
+          // through the UI, not through the fault.
+          { pointKey: 'fanSpeed', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' },
+          { pointKey: 'fanSpeedSetpoint', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' }
+        ],
         trends: {
-          fanRunning: trend('fan-weekend-override', {
-            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+          // Both keys carry it. supplyFanStatus is the chip on the diagram — the one the
+          // brief sends students to — and fanRunning is the same signal reached from the
+          // left panel. Authoring only the internal flag left the visible point blank.
+          supplyFanStatus: trend('fan-weekend-override', {
+            // occHigh/occLow are the parameters build() actually reads. onValue/offValue
+            // were silently ignored, so this emitted 900/450 and the fan read Running for
+            // every hour of the window.
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
             overrides: [
+              // Friday 18:00 onward as ONE uninterrupted run through to Monday morning:
+              // that shape is what points at a single override rather than a broken
+              // schedule. Named weekdays, so it lands on the weekend whenever it is read.
+              { weekday: 5, startHour: 18, endHour: 24, value: 1 },
+              { weekday: 6, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 0, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 1, startHour: 0, endHour: 8, value: 1 }
+            ]
+          }),
+          fanRunning: trend('fan-weekend-override', {
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
+            overrides: [
+              // Friday 18:00 onward: the override goes in and never comes out. Continuous
+              // through both weekend days rather than two separate all-day blocks, so the
+              // trace reads as one uninterrupted run from a single action — which is what
+              // points a student at an override rather than at a faulty schedule.
+              { dayOffset: 5, startHour: 18, endHour: 24, value: 1 },
               { dayOffset: 4, startHour: 0, endHour: 24, value: 1 },
-              { dayOffset: 3, startHour: 0, endHour: 24, value: 1 }
+              { dayOffset: 3, startHour: 0, endHour: 24, value: 1 },
+              // Still running Monday morning until someone notices.
+              { dayOffset: 2, startHour: 0, endHour: 8, value: 1 }
             ]
           }),
           co2Sensor: trend('co2-occupancy', {
             days: 10, startHour: 8, endHour: 18, weekends: false,
-            onValue: 850, offValue: 420,
-            // CO2 stays at baseline right through the weekend: the space was empty.
-            overrides: []
+            occHigh: 850, occLow: 470,
+            jitter: 18,
+            overrides: [
+              // Friday evening: the event. CO2 near 1,000 through to 23:00 proves the late
+              // running was justified at the time — the half of the story that stops a
+              // student reporting the override as simple negligence.
+              { weekday: 5, startHour: 18, endHour: 23, value: 960 },
+              // 23:00 onward, and all weekend: back to the outdoor baseline. The fan is
+              // still running, and now there is nobody to run it for.
+              { weekday: 5, startHour: 23, endHour: 24, value: 480 },
+              { weekday: 6, startHour: 0, endHour: 24, value: 472 },
+              { weekday: 0, startHour: 0, endHour: 24, value: 468 }
+            ]
           })
         },
         goal: {
@@ -616,9 +682,46 @@
           'Say whether the override was justified, and what you would do about it.',
         setup: {},
         weather: null,
+        // The request behind the late run. Without it a student can only infer that the
+        // after-hours operation was legitimate; with it they can point at who asked and
+        // when — which is the difference between a hunch and a finding. Deliberately a
+        // REQUEST rather than a bare override, so it contrasts with the forgotten-override
+        // exercise where the same run shape has nothing authorising it.
+        events: [
+          { pointKey: 'runSchedule', weekday: 1, hour: 16, etype: 'Mode Transition',
+            prev: 'Auto', val: 'Manual', by: 'Axel' },
+          { pointKey: 'runSchedule', weekday: 1, hour: 16, etype: 'Value Change',
+            prev: 'OFF', val: 'ON (event request \u2014 ballroom, to 23:00)', by: 'Axel' },
+          { pointKey: 'fanSpeed', weekday: 1, hour: 16, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' },
+          { pointKey: 'fanSpeedSetpoint', weekday: 1, hour: 16, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' },
+          // And the release the next morning: the override WAS put back, which is exactly
+          // what the forgotten-override exercise is missing.
+          { pointKey: 'runSchedule', weekday: 2, hour: 7, etype: 'Mode Transition',
+            prev: 'Manual', val: 'Auto', by: 'Axel' }
+        ],
         trends: {
+          // Both keys carry it. supplyFanStatus is the chip on the diagram — the one the
+          // brief sends students to — and fanRunning is the same signal reached from the
+          // left panel. Authoring only the internal flag left the visible point blank.
+          supplyFanStatus: trend('fan-weekend-override', {
+            // occHigh/occLow are the parameters build() actually reads. onValue/offValue
+            // were silently ignored, so this emitted 900/450 and the fan read Running for
+            // every hour of the window.
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
+            overrides: [
+              // Friday 18:00 onward as ONE uninterrupted run through to Monday morning:
+              // that shape is what points at a single override rather than a broken
+              // schedule. Named weekdays, so it lands on the weekend whenever it is read.
+              { weekday: 5, startHour: 18, endHour: 24, value: 1 },
+              { weekday: 6, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 0, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 1, startHour: 0, endHour: 8, value: 1 }
+            ]
+          }),
           fanRunning: trend('fan-weekend-override', {
-            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
             overrides: [
               { dayOffset: 1, startHour: 18, endHour: 23, value: 1 },
               { dayOffset: 0, startHour: 18, endHour: 23, value: 1 }
@@ -626,7 +729,7 @@
           }),
           co2Sensor: trend('co2-occupancy', {
             days: 10, startHour: 8, endHour: 18, weekends: false,
-            onValue: 850, offValue: 420,
+            occHigh: 850, occLow: 420,
             // CO2 stays high into the evening: the room was genuinely in use.
             overrides: [
               { dayOffset: 1, startHour: 18, endHour: 23, value: 900 },
@@ -652,8 +755,8 @@
         instructorNotes:
           'Compare this with the previous day. Same late running to 23:00, same override \u2014 ' +
           'but CO\u2082 is flat near the outdoor baseline, so nobody was there.\n\n' +
-          'What happened: the after-hours override was set for a genuine event, and never ' +
-          'put back. The next evening it ran again for an empty building.\n\n' +
+          'What happened: Axel set the after-hours override for a genuine event, and never ' +
+          'put it back. The next evening it ran again for an empty building.\n\n' +
           'This is the most common finding in a real building and the cheapest to fix. The ' +
           'pair of exercises together is the point: identical schedule evidence, opposite ' +
           'conclusions, and CO\u2082 is what separates them. Always check whether an override ' +
@@ -667,9 +770,49 @@
           'Explain what went wrong and put the unit back on its schedule.',
         setup: { runSchedule: true },
         weather: null,
+        // Authored event history. A trend shows THAT the unit ran; this shows who put it
+        // that way. Without it the exercise can only be solved by inference, and Lev's
+        // framing was explicit — the student should be able to read the override off the
+        // point's own Recent Events, with a name and a timestamp against it.
+        events: [
+          // The override itself, on the schedule point where it was made.
+          { pointKey: 'runSchedule', weekday: 5, hour: 18, etype: 'Mode Transition',
+            prev: 'Auto', val: 'Manual', by: 'Axel' },
+          { pointKey: 'runSchedule', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: 'OFF', val: 'ON', by: 'Axel' },
+          // And its consequence on the fan, which is the point the brief sends students to.
+          // Same timestamp and the same name, so opening either one answers "who did this".
+          { pointKey: 'supplyFanStatus', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: 'OFF', val: 'ON', by: 'Axel' },
+          { pointKey: 'fanRunning', weekday: 5, hour: 18, etype: 'Value Change',
+            prev: 'Stopped', val: 'Running', by: 'Axel' },
+          // Fan speed too: the labelled chip is where a student looks first.
+          { pointKey: 'fanSpeed', weekday: 1, hour: 18, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' },
+          { pointKey: 'fanSpeedSetpoint', weekday: 1, hour: 18, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' }
+        ],
         trends: {
+          // Both keys carry it. supplyFanStatus is the chip on the diagram — the one the
+          // brief sends students to — and fanRunning is the same signal reached from the
+          // left panel. Authoring only the internal flag left the visible point blank.
+          supplyFanStatus: trend('fan-weekend-override', {
+            // occHigh/occLow are the parameters build() actually reads. onValue/offValue
+            // were silently ignored, so this emitted 900/450 and the fan read Running for
+            // every hour of the window.
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
+            overrides: [
+              // Friday 18:00 onward as ONE uninterrupted run through to Monday morning:
+              // that shape is what points at a single override rather than a broken
+              // schedule. Named weekdays, so it lands on the weekend whenever it is read.
+              { weekday: 5, startHour: 18, endHour: 24, value: 1 },
+              { weekday: 6, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 0, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 1, startHour: 0, endHour: 8, value: 1 }
+            ]
+          }),
           fanRunning: trend('fan-weekend-override', {
-            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
             overrides: [
               { dayOffset: 2, startHour: 18, endHour: 23, value: 1 },
               { dayOffset: 1, startHour: 18, endHour: 23, value: 1 }
@@ -677,7 +820,7 @@
           }),
           co2Sensor: trend('co2-occupancy', {
             days: 10, startHour: 8, endHour: 18, weekends: false,
-            onValue: 850, offValue: 420,
+            occHigh: 850, occLow: 420,
             // Monday evening occupied, Tuesday evening empty — the whole exercise.
             overrides: [{ dayOffset: 2, startHour: 18, endHour: 23, value: 900 }]
           })
@@ -715,9 +858,40 @@
           'Set out what each reading tells you, and what the three together prove.',
         setup: {},
         weather: null,
+        // The action behind the weekend cooling. The brief teaches building a case from
+        // three agreeing signals, and the third — that mechanical cooling was actually
+        // called for — was only inferable from the trend. Now it is on the record.
+        events: [
+          { pointKey: 'runSchedule', weekday: 5, hour: 17, etype: 'Mode Transition',
+            prev: 'Auto', val: 'Manual', by: 'Axel' },
+          { pointKey: 'fanSpeed', weekday: 5, hour: 17, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' },
+          { pointKey: 'fanSpeedSetpoint', weekday: 5, hour: 17, etype: 'Value Change',
+            prev: '0 %', val: '38 %', by: 'Axel' },
+          { pointKey: 'chwValvePosition', weekday: 5, hour: 17, etype: 'Value Change',
+            prev: '0 %', val: '62 %', by: 'Axel' }
+        ],
         trends: {
+          // Both keys carry it. supplyFanStatus is the chip on the diagram — the one the
+          // brief sends students to — and fanRunning is the same signal reached from the
+          // left panel. Authoring only the internal flag left the visible point blank.
+          supplyFanStatus: trend('fan-weekend-override', {
+            // occHigh/occLow are the parameters build() actually reads. onValue/offValue
+            // were silently ignored, so this emitted 900/450 and the fan read Running for
+            // every hour of the window.
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
+            overrides: [
+              // Friday 18:00 onward as ONE uninterrupted run through to Monday morning:
+              // that shape is what points at a single override rather than a broken
+              // schedule. Named weekdays, so it lands on the weekend whenever it is read.
+              { weekday: 5, startHour: 18, endHour: 24, value: 1 },
+              { weekday: 6, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 0, startHour: 0, endHour: 24, value: 1 },
+              { weekday: 1, startHour: 0, endHour: 8, value: 1 }
+            ]
+          }),
           fanRunning: trend('fan-weekend-override', {
-            days: 10, startHour: 8, endHour: 18, weekends: false, onValue: 1, offValue: 0,
+            days: 10, startHour: 8, endHour: 18, weekends: false, occHigh: 1, occLow: 0,
             overrides: [
               { dayOffset: 4, startHour: 0, endHour: 24, value: 1 },
               { dayOffset: 3, startHour: 0, endHour: 24, value: 1 }
@@ -725,12 +899,12 @@
           }),
           co2Sensor: trend('co2-occupancy', {
             days: 10, startHour: 8, endHour: 18, weekends: false,
-            onValue: 850, offValue: 420, overrides: []
+            occHigh: 850, occLow: 420, overrides: []
           }),
           supplyAirTemp: trend('sat-mechanical-cooling', {
             days: 10, startHour: 8, endHour: 18, weekends: false,
             // 60 while conditioning, drifting to 74 when genuinely off.
-            onValue: 60, offValue: 74,
+            occHigh: 60, occLow: 74,
             overrides: [
               { dayOffset: 4, startHour: 0, endHour: 24, value: 60 },
               { dayOffset: 3, startHour: 0, endHour: 24, value: 60 }
@@ -980,8 +1154,15 @@
       // ── AHU-23-1 ──────────────────────────────────────────────────────────
       ex({
         id: 'ex-lib-231-fan',
-        title: 'Meeting rooms getting no air',
+        title: 'Boiler room getting no air',
         instructorNotes:
+          'Read the space first. This is a BOILER ROOM, not occupied office space \u2014 people ' +
+          'should not be in there. So this unit is not about human comfort at all: it is a ' +
+          'make-up air unit supplying combustion air to the boilers.\n\n' +
+          'That changes what the fault means. With no fresh air and the boilers firing, you ' +
+          'have a carbon monoxide risk, and CO is a safety hazard rather than an energy or ' +
+          'comfort one. It is also the wrong gas to look for out of habit: CO\u2082 tracks ' +
+          'people, CO comes from combustion. Different sensor, different consequence.\n\n' +
           'No air at all means start upstream: is the fan running? Airflow near zero with ' +
           'the schedule saying occupied points at the run status, not at a damper or a coil.\n\n' +
           'Work outward from the fan in the direction the air travels \u2014 fan, then dampers, ' +
@@ -990,7 +1171,7 @@
           'A unit that will not run during occupied hours is also a 62.1 problem, not only a ' +
           'comfort one: no fan means no outdoor air, whatever the damper position says.',
         unit: 'AHU-23-1',
-        brief: 'Occupants on the 2nd level report no air movement during the working day. Work out what is stopping the unit and get airflow restored.\n\nHint: check what is commanding the unit before you touch the fan itself.',
+        brief: 'The 2nd level boiler room has no air movement during the working day. This is a make-up air unit supplying combustion air to the boilers, not comfort air for people \u2014 so restoring airflow here is a safety matter, not a comfort one. Work out what is stopping the unit and get airflow restored.\n\nHint: check what is commanding the unit before you touch the fan itself.',
         setup: { runSchedule: false },
         goal: { key: 'cfm', label: 'Supply Airflow', unit: ' CFM',
                 comparator: 'above', target: 1000, tolerance: 0,
@@ -1025,6 +1206,43 @@
       // ── VAV-4-4-02 ────────────────────────────────────────────────────────
       // A terminal box teaches something the AHUs cannot: the zone can be wrong while
       // the air handler upstream is behaving perfectly.
+      ex({
+        id: 'ex-lib-vav-sensor-fail',
+        title: 'Zone running hot with a good setpoint',
+        instructorNotes:
+          'The zone temperature sensor has failed and is reporting 0\u00b0F. That is the whole ' +
+          'fault \u2014 nothing was overridden and no setpoint is wrong.\n\n' +
+          'Follow what the controller does with that reading. At 0\u00b0F against a 74\u00b0F ' +
+          'setpoint it believes the space is freezing, so it does exactly what it should: ' +
+          'reheat valve to 100%, damper to minimum position to stop dumping cold primary ' +
+          'air. Both are correct responses to the information it has. The result is a space ' +
+          'that overheats while every control action looks textbook.\n\n' +
+          'The tell is the reading itself. 0\u00b0F is not a temperature an occupied room ' +
+          'reaches \u2014 not in a heated building, not in any season. A sensor at a hard zero ' +
+          'or a hard maximum is usually reporting a failure, not a measurement: an open ' +
+          'circuit, a shorted input, a disconnected wire. Compare it against the other ' +
+          'readings in the same zone \u2014 CO\u2082 sitting at a normal occupied level says people ' +
+          'are in there, and they would not be at 0\u00b0F.\n\n' +
+          'The fix in the field is to replace the sensor. Here, releasing the point to Auto ' +
+          'stands in for that: the controller stops acting on the false reading, the reheat ' +
+          'valve backs off and the zone recovers.\n\n' +
+          'The habit worth taking away: before you chase a control problem, ask whether the ' +
+          'input you are reading is credible. Equipment fails, and a confident wrong number ' +
+          'is harder to spot than an obviously missing one.',
+        unit: 'VAV-4-4-02',
+        brief: 'The ballroom zone is overheating. The room temperature setpoint is 74\u00b0F and nothing on this box has been overridden by hand, yet the reheat valve is wide open and the damper has driven to its minimum position.\n\nWork out why the controller is behaving this way, then get the zone back under control.\n\nHint: equipment can fail, and a failed device can still report a number. Ask whether every reading in front of you is believable.',
+        setup: { spaceTemp: 0 },
+        // Published and assigned, unlike the rest of the library: Lev asked for this to be
+        // added as an exercise, not as a draft an instructor still has to find and enable.
+        published: true,
+        assigned: seats.slice(),
+        goal: { key: 'spaceTemp', label: 'Zone Temperature', unit: '\u00b0F',
+                comparator: 'above', target: 60, tolerance: 0,
+                standard: '55', criterionId: 'comfort-zone-winter',
+                criterionLabel: 'Zone temperature in comfort range',
+                citation: 'ASHRAE 55 \u00a75.3 \u2014 graphic comfort zone method',
+                basis: 'indicator' }
+      }),
       ex({
         id: 'ex-lib-vav-damper-v3',
         title: 'Ballroom zone starved of air',
@@ -1090,7 +1308,7 @@
   // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
   // stored copy already at this version, so an edit without a bump is silently inert —
   // that is how the reworked VAV brief failed to reach a browser that had already seeded.
-  var SEED_VERSION = 9;
+  var SEED_VERSION = 23;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;
@@ -1199,9 +1417,28 @@
 
         // Carry the instructor's own publication and assignment forward rather than
         // resetting them: a content fix should not un-assign a live exercise.
+        // An untouched draft — never published, never assigned — carries no instructor
+        // decision, so a definition that later opts in should be allowed to. Anything else
+        // means someone chose, and that choice outranks the seed.
+        var storedIsUntouchedDraft = !stored.published && !(stored.assignedTo || []).length;
+        // Union the shared demo seat in rather than only carrying the stored list forward.
+        // cta_student is a fixture on the sign-on card, not an instructor's choice, and it
+        // was added to the seed AFTER these rows had already been written — so the
+        // carry-forward kept preserving a list that never contained it, and the demo
+        // student could not open any seeded scenario. A student with no assignment has no
+        // attempt, and the authored history is gated on having one, which is why the fan
+        // trend and CO₂ comparison read as missing rather than as empty.
+        //
+        // Only this one id is unioned: any other seat an instructor removed stays removed.
+        var carried = (stored.assignedTo && stored.assignedTo.length)
+          ? stored.assignedTo.slice() : (def.assignedTo || []).slice();
+        if ((def.assignedTo || []).indexOf('cta_student') >= 0 &&
+            carried.indexOf('cta_student') < 0) {
+          carried.push('cta_student');
+        }
         byId[def.id] = Object.assign({}, def, {
-          published: stored.published,
-          assignedTo: stored.assignedTo || def.assignedTo,
+          published: storedIsUntouchedDraft ? def.published : stored.published,
+          assignedTo: carried,
           assignment: stored.assignment || def.assignment,
           createdAt: stored.createdAt || def.createdAt
         });

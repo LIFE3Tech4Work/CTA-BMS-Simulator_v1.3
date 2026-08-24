@@ -34,6 +34,8 @@ const PointDialog = (function () {
     6: 'Minimum On/Off', 8: 'Manual Operator',
   };
 
+  // Weekday labels for the history axis and the "Value at" readout.
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   const TYPE_CHIP = {
@@ -200,7 +202,7 @@ const PointDialog = (function () {
   }
 
   function EventsTab({ rows }) {
-    const head = { display: 'grid', gridTemplateColumns: '150px 122px 1fr 1fr', gap: '8px',
+    const head = { display: 'grid', gridTemplateColumns: '138px 116px 1fr 1fr 104px', gap: '8px',
                    padding: '6px 12px', background: '#22262c', borderBottom: '1px solid #101317',
                    fontSize: '10px', fontWeight: 800, color: '#9db0c8', letterSpacing: '.5px' };
     return React.createElement('div', {
@@ -217,7 +219,8 @@ const PointDialog = (function () {
         React.createElement('span', null, 'TIMESTAMP'),
         React.createElement('span', null, 'EVENT TYPE'),
         React.createElement('span', null, 'PREVIOUS'),
-        React.createElement('span', null, 'NEW')
+        React.createElement('span', null, 'NEW'),
+        React.createElement('span', null, 'BY')
       ),
       React.createElement('div', { style: { maxHeight: '238px', overflow: 'auto' } },
         rows.length === 0
@@ -229,7 +232,7 @@ const PointDialog = (function () {
             )
           : rows.map((pe, i) => React.createElement('div', {
               key: i,
-              style: { display: 'grid', gridTemplateColumns: '150px 122px 1fr 1fr', gap: '8px',
+              style: { display: 'grid', gridTemplateColumns: '138px 116px 1fr 1fr 104px', gap: '8px',
                        padding: '5.5px 12px', fontSize: '10.5px',
                        background: i % 2 ? '#343a41' : '#3a4048', alignItems: 'baseline' },
             },
@@ -240,7 +243,15 @@ const PointDialog = (function () {
                   parseInline(TYPE_CHIP[pe.ty] || TYPE_CHIP['Value Change'])),
               }, pe.ty)),
               React.createElement('span', { style: { color: '#c3cfdd' } }, pe.prev || '—'),
-              React.createElement('span', { style: { color: '#fff', fontWeight: 800 } }, pe.nw || '—')
+              React.createElement('span', { style: { color: '#fff', fontWeight: 800 } }, pe.nw || '—'),
+              // Falls back to "system" rather than a dash: an event with no operator was
+              // the sequence acting on its own, which is a real answer to "who did this"
+              // and a different one from "we do not know".
+              React.createElement('span', {
+                style: { color: pe.by ? '#8ff0b5' : '#7f8ea6', fontWeight: 700,
+                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                title: pe.by || 'Changed by the control sequence, not an operator'
+              }, pe.by || 'system')
             ))
       )
     );
@@ -491,7 +502,11 @@ const PointDialog = (function () {
       if (ser.length < 2) return { empty: true, ticks: [], pts: '', area: '' };
 
       const dAt = (off) => new Date(Date.now() - off * 3600000);
-      const fmtD = (off) => { const d = dAt(off); return String(d.getDate()).padStart(2, '0') + '-' + MONTHS[d.getMonth()]; };
+      const fmtD = (off) => { const d = dAt(off);
+        // Weekday first: Lev's reason was that finding the weekend meant opening a
+        // calendar, and identifying it is the core skill in the override exercise.
+        // Feeds both the x-axis ticks and the "Value at" readout.
+        return DAYS[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '-' + MONTHS[d.getMonth()]; };
       const ago = (off) => off <= 0 ? 'now' : (fmtD(off) + ' ' + String(dAt(off).getHours()).padStart(2, '0') + ':00');
       const n = ser.length, X = (i) => (i / Math.max(1, n - 1)) * HW;
 
@@ -538,7 +553,11 @@ const PointDialog = (function () {
 
     const xLabels = useMemo(function () {
       const dAt = (off) => new Date(Date.now() - off * 3600000);
-      const fmtD = (off) => { const d = dAt(off); return String(d.getDate()).padStart(2, '0') + '-' + MONTHS[d.getMonth()]; };
+      const fmtD = (off) => { const d = dAt(off);
+        // Weekday first: Lev's reason was that finding the weekend meant opening a
+        // calendar, and identifying it is the core skill in the override exercise.
+        // Feeds both the x-axis ticks and the "Value at" readout.
+        return DAYS[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '-' + MONTHS[d.getMonth()]; };
       const hq = (f) => {
         const off = Math.round(histPeriod * f);
         if (off <= 0) return 'now';
@@ -606,8 +625,30 @@ const PointDialog = (function () {
       border: '1px solid #131a24',
     });
 
-    const pointEvents = (events || []).filter(function (ev) { return ev.src === bac.name || ev.key === stateKey; })
-      .map(function (ev) { return { t: ev.t, ty: ev.etype || 'Value Change', prev: ev.prev, nw: ev.val }; });
+    const pointEvents = (function () {
+      // Authored events first: inside a running exercise the story the instructor wrote IS
+      // the point's history, and the live log would be empty anyway on a fresh attempt.
+      var TA = window.TrendAuthoring;
+      var authored = (TA && TA.eventsFor) ? TA.eventsFor(stateKey) : null;
+      // Decided ONCE, not by testing the array in each branch. eventsFor returns [] when
+      // the exercise has events but none for this point — and `[] ? true : …` is true, so
+      // the point-matching filter below was skipped and every live event on the unit was
+      // attributed to whichever point was open. Worst possible place for it: the schedule
+      // exercise carries events on runSchedule only, while its brief sends students to
+      // fanRunning and co2Sensor, in an exercise about attributing a change to a point.
+      var usingAuthored = !!(authored && authored.length);
+      var base = usingAuthored ? authored : (events || []);
+      return base
+        .filter(function (ev) {
+          // Authored rows are already for this point; live ones need matching.
+          return usingAuthored ? true : (ev.src === bac.name || ev.key === stateKey);
+        })
+        .map(function (ev) {
+          // `by` was dropped here, so the operator the board records on every event never
+          // reached the table — the new column would have read "system" for every row.
+          return { t: ev.t, ty: ev.etype || 'Value Change', prev: ev.prev, nw: ev.val, by: ev.by };
+        });
+    })();
 
     function step(dir) {
       const cv = parseFloat(draft) || 0;

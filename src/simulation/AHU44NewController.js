@@ -68,7 +68,19 @@ function CTA_createAHU44Controller(seed) {
   // 37.64% respectively, which is what this unit actually runs at day to
   // day — a single screenshot moment isn't representative. Corrected per
   // checklist Section F: "AHU-4-4 calibration mismatch."
-  var RETURN_AIR_TEMP = 62.0;      // °F — real 3-month export average (61.86°F), not the 72°F screenshot moment
+  // Seed only — returnAirTemp is now computed each pass, not pinned here. The 3-month
+  // export average (61.86°F) is a sensible starting point, but as a FIXED value it made
+  // the return sensor dead: Lev raised supply to 65°F on a 75°F day and return stayed at
+  // 62, colder than the air being delivered.
+  var RETURN_AIR_TEMP = 62.0;      // °F — starting value
+  // Space heat gain, supply → return. Matches AHU-4-6's ROOM_DELTA_T so the two units
+  // agree: at a 60°F supply setpoint this puts return air near 72°F, which is the
+  // comfortable range Lev expects to see.
+  var ROOM_DELTA_T = 12.2;         // °F
+  // Bounds. A space does not run below 60°F while being actively cooled, and does not
+  // exceed 82°F without the return sensor itself being the fault under investigation.
+  var RETURN_AIR_TEMP_MIN = 60.0;
+  var RETURN_AIR_TEMP_MAX = 82.0;
   var OA_DAMPER_FLOOR = 20;        // Minimum damper position (%) per ASHRAE 62.1
 
   // ─── Season changeover and coil authority (14 Aug review) ───────────────────
@@ -321,7 +333,7 @@ function CTA_createAHU44Controller(seed) {
     // DISABLE: OA enthalpy > (Return air enthalpy − 2.5 BTU/lb) OR OA < 35°F
     // Return air enthalpy approximated from return air temp at ~50% RH:
     //   h ≈ 0.240*T_rankine_offset — simplified: at 72°F/50%RH ≈ 28 BTU/lb
-    var returnAirEnthalpy = Math.max(15, 0.31 * RETURN_AIR_TEMP - 14.3);
+    var returnAirEnthalpy = Math.max(15, 0.31 * state.returnAirTemp - 14.3);
     if (modes.enthalpyOKForEconomizer !== 'Manual') {
       if (state.oaEnthalpy < (returnAirEnthalpy - 5.0) && state.oaTemperature > 38) {
         state.enthalpyOKForEconomizer = true;
@@ -349,9 +361,10 @@ function CTA_createAHU44Controller(seed) {
           // suppressed and stranded supply air below its setpoint.
           var econVentMin44 = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
           var econLimit44 = 100;
-          if (RETURN_AIR_TEMP - state.oaTemperature > 0.5) {
+          if (state.returnAirTemp - state.oaTemperature > 0.5) {
             econLimit44 = Math.round(
-              ((state.heatingCoilSetpoint - RETURN_AIR_TEMP) / (state.oaTemperature - RETURN_AIR_TEMP)) * 100
+              ((state.heatingCoilSetpoint - state.returnAirTemp) /
+               (state.oaTemperature - state.returnAirTemp)) * 100
             );
           }
           if (econLimit44 < econVentMin44) {
@@ -505,7 +518,7 @@ function CTA_createAHU44Controller(seed) {
     // cooling coil out, leaving supply air stranded (14 Aug review).
     if (state.fanRunning) {
       var oaFrac44 = state.oaDamperPosition / 100;
-      var entering44 = state.oaTemperature * oaFrac44 + RETURN_AIR_TEMP * (1 - oaFrac44);
+      var entering44 = state.oaTemperature * oaFrac44 + state.returnAirTemp * (1 - oaFrac44);
       var riseNeeded = 0;
 
       // Freeze protection: hold the OA stream at or above the plenum minimum.
@@ -553,7 +566,7 @@ function CTA_createAHU44Controller(seed) {
       // proves no outdoor air is entering, whatever the damper claims.
       var oaFraction = state.oaDamperPosition / 100;
       state.mixedAirTemp = Math.round(
-        (state.preheatTemp * oaFraction + RETURN_AIR_TEMP * (1 - oaFraction)) * 10
+        (state.preheatTemp * oaFraction + state.returnAirTemp * (1 - oaFraction)) * 10
       ) / 10;
 
       // Cooling defers while the heating valve is open (SOO #10), except to dry
@@ -588,7 +601,7 @@ function CTA_createAHU44Controller(seed) {
     } else {
       state.chwValvePosition = 0;
       state.chwValveStatus = 'OFF';
-      state.mixedAirTemp = RETURN_AIR_TEMP;
+      state.mixedAirTemp = state.returnAirTemp;
       state.supplyAirTemp = state.oaTemperature;
     }
 
@@ -606,7 +619,17 @@ function CTA_createAHU44Controller(seed) {
     state.dischargeAirTemp = Math.round((state.supplyAirTemp + state.fanHeatRise) * 10) / 10;
     state.preheatTemp   = Math.round(state.preheatTemp   * 10) / 10;
     state.mixedAirTemp  = Math.round(state.mixedAirTemp  * 10) / 10;
-    state.returnAirTemp = RETURN_AIR_TEMP;
+    // Return air is the air leaving the space: supply air plus the room's own heat gain.
+    // Bounded, and skipped while the fan is off — with no air moving there is nothing
+    // being returned, so the last reading simply persists rather than drifting.
+    if (modes.returnAirTemp !== 'Manual') {
+      if (state.fanRunning) {
+        state.returnAirTemp = Math.round(
+          Math.max(RETURN_AIR_TEMP_MIN,
+                   Math.min(RETURN_AIR_TEMP_MAX, state.supplyAirTemp + ROOM_DELTA_T)) * 10
+        ) / 10;
+      }
+    }
     // Zone sensor: the return duct carries the air leaving the space, which is
     // what a BMS reports as zone temperature on a unit with no wall sensor.
     if (modes.spaceTemp !== 'Manual') {

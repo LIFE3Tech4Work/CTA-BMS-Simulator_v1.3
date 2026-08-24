@@ -74,13 +74,33 @@
     return out;
   }
 
-  /** dayOffset 0 is the most recent day in the series, 1 the day before, and so on. */
+  /**
+   * Match an override window against a sample's timestamp.
+   *
+   * Two ways to name the day:
+   *   dayOffset — a fixed count back from the end of the series (0 = today)
+   *   weekday   — 0=Sun..6=Sat, resolved to the MOST RECENT occurrence of that day
+   *
+   * weekday exists because a story about a weekend override has to land on the weekend.
+   * With a fixed offset it does not: dayOffset 5 authored on a Wednesday lands on Friday,
+   * but read back on a Monday it lands on Wednesday — so the fan trace showed a "weekend"
+   * run midweek and the brief no longer described the data. An exercise is read weeks
+   * after it is written, so the day has to be named, not counted.
+   */
   function matchOverride(list, d, endsAt, days) {
     if (!list || !list.length) return null;
     for (var i = 0; i < list.length; i++) {
       var o = list[i];
-      var dayBack = Math.floor((startOfDay(endsAt) - startOfDay(d)) / 86400000);
-      if (dayBack !== num(o.dayOffset, -1)) continue;
+      if (o.weekday !== undefined && o.weekday !== null) {
+        if (d.getDay() !== num(o.weekday, -1)) continue;
+        // Most recent occurrence only — without this the window would also match the same
+        // weekday a week earlier, painting the fault twice in a 10-day series.
+        var back = Math.floor((startOfDay(endsAt) - startOfDay(d)) / 86400000);
+        if (back >= 7) continue;
+      } else {
+        var dayBack = Math.floor((startOfDay(endsAt) - startOfDay(d)) / 86400000);
+        if (dayBack !== num(o.dayOffset, -1)) continue;
+      }
       var h = d.getHours();
       var s = num(o.startHour, 0), e = num(o.endHour, 24);
       if (h >= s && h < e) return o;
@@ -179,6 +199,63 @@
     return t.__series;
   }
 
+  /**
+   * Authored events for a point in the running exercise, or null.
+   *
+   * Same gating as seriesFor: an authored history belongs to the exercise being WORKED,
+   * so a student browsing the station outside an attempt never reads a fabricated past
+   * as real data.
+   *
+   * dayOffset/hour are resolved to real timestamps at read time rather than stored as
+   * dates, so an exercise authored in August still reads correctly in November — the
+   * story is "five days ago", not "the 14th".
+   */
+  function eventsFor(pointKey) {
+    var ES = window.ExerciseStore;
+    if (!ES || !ES.activeExercise) return null;
+    var ex = ES.activeExercise();
+    if (!ex || !ex.events || !ex.events.length) return null;
+
+    var armed = !!(window.ExerciseAuthoring && window.ExerciseAuthoring.isArmed &&
+                   window.ExerciseAuthoring.isArmed());
+    if (!armed && ES.attemptFor && window.CTAAuthOperator) {
+      var att = ES.attemptFor(ex.id, window.CTAAuthOperator);
+      if (!att || att.passed) return null;
+    }
+
+    var now = new Date();
+    return ex.events
+      .filter(function (e) { return e.pointKey === pointKey; })
+      .map(function (e) {
+        var d;
+        if (e.weekday !== undefined && e.weekday !== null) {
+          // Same reasoning as override windows: a Friday override has to read "Fri". A
+          // fixed offset drifts with the day the exercise is opened, so the event stamp
+          // stopped matching the brief that describes it.
+          d = new Date(now.getTime());
+          var delta = (d.getDay() - e.weekday + 7) % 7;
+          if (delta === 0) delta = 7 * 0;   // today counts as the most recent occurrence
+          d = new Date(d.getTime() - delta * 86400000);
+        } else {
+          d = new Date(now.getTime() - (e.dayOffset || 0) * 86400000);
+        }
+        d.setHours(e.hour || 0, e.minute || 0, 0, 0);
+        return {
+          // Day name included: Lev asked for the weekday on the history axis so a student
+          // does not have to open a calendar to find the weekend, and the same reasoning
+          // applies to an event list where "Friday 18:00" is the whole point.
+          t: d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' +
+             d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+             d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+          key: pointKey,
+          etype: e.etype || 'Value Change',
+          prev: e.prev,
+          val: e.val,
+          by: e.by
+        };
+      });
+  }
+
   // Trends chosen in the point dialog before the exercise exists. The dialog closes
   // before Save is pressed, so the choice cannot live in component state.
   var draft = {};
@@ -267,6 +344,7 @@
   }
 
   window.TrendAuthoring = {
+    eventsFor: eventsFor,
     setDraft: setDraft,
     editDraft: editDraft,
     editOverride: editOverride,
