@@ -115,6 +115,59 @@
     var [assigned, setAssigned] = useState([]);
     var [err, setErr] = useState(null);
     var [confirmedTrivial, setConfirmedTrivial] = useState(false);
+    // "Was the late run justified?" has no repair to make — the answer is a judgement. With
+    // only numeric goals available, both such seeded exercises ended up with a target that
+    // was already true on open, so a student passed without acting and the written answer,
+    // which IS the work, counted for nothing.
+    var [diagnosisOnly, setDiagnosisOnly] = useState(false);
+
+    // Device faults, kept separate from the captured setup. A falsified READING is not an
+    // override: the sequence still computes from real physics and only what the BMS reports
+    // is wrong, so it must not be squashed into snap.setup, which is the override list.
+    var [faultKey, setFaultKey] = useState('');
+    var [faultVal, setFaultVal] = useState('');
+    // Seeded from the controller, not held independently: a sensor broken from the diagram
+    // has to appear here too, or it would be applied live and then silently dropped on save.
+    // The controller is the single source; this state only forces a redraw.
+    var [, faultTick] = useState(0);
+    var faults = (function () {
+      var c = window[(BP.UNITS[unitId] || {}).controller];
+      return (c && c.getSensorFaults) ? c.getSensorFaults() : {};
+    })();
+    function setFaults() { faultTick(function (n) { return n + 1; }); }
+
+    // Sensors on this unit worth faulting: measured inputs only. Faulting a setpoint or a
+    // valve command makes no physical sense — a transmitter fails, an instruction does not.
+    var faultable = (function () {
+      // Read straight from the controller. An earlier version called ES.snapshotState,
+      // which the store does not export — dead code that misled about where this came from.
+      var ctrl = window[(BP.UNITS[unitId] || {}).controller];
+      var st = (ctrl && ctrl.getState) ? ctrl.getState() : null;
+      if (!st || !ctrl || !ctrl.setSensorFault) return [];
+      return Object.keys(st).filter(function (k) {
+        var m = BP.meta(k, unitId);
+        return m && m.kind === 'ai' && typeof st[k] === 'number';
+      }).sort();
+    })();
+
+    function addFault() {
+      if (!faultKey || faultVal === '') return;
+      var v = Number(faultVal);
+      if (!isFinite(v)) return;
+      setFaults();
+      // Applied live so the instructor sees the consequence chain immediately — a damper
+      // reading 100% while airflow stays near zero is the tell a student will use, and it
+      // is worth confirming it actually reads that way before publishing.
+      var ctrl = window[(BP.UNITS[unitId] || {}).controller];
+      if (ctrl && ctrl.setSensorFault) ctrl.setSensorFault(faultKey, v);
+      setFaultKey(''); setFaultVal('');
+    }
+
+    function dropFault(k) {
+      setFaults();
+      var ctrl = window[(BP.UNITS[unitId] || {}).controller];
+      if (ctrl && ctrl.clearSensorFault) ctrl.clearSensorFault(k);
+    }
 
     // Through the roster, so the picker lists real signed-up accounts when a backend
     // is configured and the six fixed seats when it is not. Reading STUDENT_SEATS
@@ -402,12 +455,14 @@
 
     function save(publish) {
       if (!title.trim()) { setErr('Give the exercise a title — it is what students see in their list.'); return; }
-      if (!setupKeys.length) {
-        setErr('Nothing is overridden on this unit yet, so the exercise would start at normal. Set some values first.');
+      // A device fault alone is a complete exercise — the broken-feedback scenarios have no
+      // override by design, which is exactly what makes them hard to find.
+      if (!setupKeys.length && !Object.keys(faults).length) {
+        setErr('Nothing is faulted or overridden on this unit yet, so the exercise would start at normal. Set some values or add a device fault first.');
         return;
       }
       if (publish && !assigned.length) { setErr('Pick at least one student to publish to.'); return; }
-      if (publish && alreadyMet && !confirmedTrivial) {
+      if (publish && !diagnosisOnly && alreadyMet && !confirmedTrivial) {
         setErr('The goal is already met by this starting state — a student would pass immediately. Press PUBLISH again to do it anyway.');
         setConfirmedTrivial(true);
         return;
@@ -421,12 +476,17 @@
         createdBy: operator,
         createdAt: new Date().toISOString(),
         setup: snap.setup,
+        // Falsified readings, applied by applySetup through setSensorFault rather than
+        // setValue, so they report FAULT and stay off the override list.
+        sensorFaults: Object.keys(faults).length ? faults : undefined,
         // Authored history chosen in the point dialog's History tab, so a student's
         // trend can show a past that disagrees with the present.
         trends: (window.TrendAuthoring && window.TrendAuthoring.draftAll())
           ? window.TrendAuthoring.draftAll() : null,
         weather: snap.weather,
         goal: {
+          // No measured target: evaluate() passes on a saved diagnosis instead.
+          diagnosisOnly: diagnosisOnly || undefined,
           // Criterion fields travel with the goal so the student brief and the
           // instructor report can cite the same source the author chose.
           standard: criterion ? criterion.standard : null,
@@ -543,6 +603,73 @@
           React.createElement('div', null,
             // Criterion first, then the fields it fills. Choosing the standard
             // before the number is the order the exercise is actually reasoned in.
+            // Device faults. Deliberately its own section rather than a row in the captured
+            // list above: that list is overrides, and the whole point of a device fault is
+            // that it is NOT one. Presenting them together would teach the opposite.
+            faultable.length ? React.createElement('div', { style: { marginTop: '10px' } },
+              React.createElement('div', { style: labelStyle() }, 'DEVICE FAULTS'),
+              React.createElement('div', {
+                style: { fontSize: '10px', color: '#8a97ab', marginTop: '3px', lineHeight: 1.45 }
+              }, 'A sensor reporting a false reading. The plant still behaves correctly \u2014 only what the BMS reports is wrong, so this does not appear on the override list and a student has to question the reading itself.'),
+
+              Object.keys(faults).length ? React.createElement('div', {
+                style: { marginTop: '6px', border: '1px solid #35405a', borderRadius: '5px',
+                         background: '#141b28' }
+              },
+                Object.keys(faults).map(function (k) {
+                  var m = metaFor(k);
+                  return React.createElement('div', {
+                    key: k,
+                    style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                             gap: '8px', padding: '5px 8px', fontSize: '11px' }
+                  },
+                    React.createElement('span', { style: { color: '#c3cfdd' } }, m.label),
+                    React.createElement('span', {
+                      style: { fontFamily: 'monospace', fontWeight: 700, color: '#9aa3b2' }
+                    }, 'reports ' + faults[k] + (m.unit || '')),
+                    React.createElement('button', {
+                      type: 'button',
+                      onClick: function () { dropFault(k); },
+                      style: { background: 'none', border: 'none', cursor: 'pointer',
+                               color: '#7f8ea6', fontSize: '10px', fontFamily: 'inherit' }
+                    }, 'REMOVE')
+                  );
+                })
+              ) : null,
+
+              React.createElement('div', {
+                style: { display: 'flex', gap: '5px', marginTop: '6px' }
+              },
+                React.createElement('select', {
+                  value: faultKey,
+                  onChange: function (e) { setFaultKey(e.target.value); },
+                  style: Object.assign({}, fieldStyle(), { flex: 1 })
+                },
+                  React.createElement('option', { value: '' }, 'Add a faulted sensor\u2026'),
+                  faultable.filter(function (k) { return !(k in faults); }).map(function (k) {
+                    return React.createElement('option', { key: k, value: k }, metaFor(k).label);
+                  })
+                ),
+                React.createElement('input', {
+                  type: 'number', step: 'any', value: faultVal,
+                  placeholder: 'reads',
+                  onChange: function (e) { setFaultVal(e.target.value); },
+                  style: Object.assign({}, fieldStyle(), { width: '82px' })
+                }),
+                React.createElement('button', {
+                  type: 'button',
+                  onClick: addFault,
+                  disabled: !faultKey || faultVal === '',
+                  style: { padding: '5px 11px', borderRadius: '5px', fontSize: '10.5px',
+                           fontWeight: 800, fontFamily: 'inherit',
+                           cursor: (faultKey && faultVal !== '') ? 'pointer' : 'not-allowed',
+                           border: '1px solid ' + ((faultKey && faultVal !== '') ? '#8a2018' : '#38445c'),
+                           background: (faultKey && faultVal !== '') ? 'rgba(194,34,34,.22)' : '#1b2230',
+                           color: (faultKey && faultVal !== '') ? '#ff8a7e' : '#5d6b83' }
+                }, 'BREAK IT')
+              )
+            ) : null,
+
             // Offered only before anything has been captured: once a fault exists on the
             // diagram, generating a different one would silently discard it.
             (setupKeys.length === 0 && AC && AC.scenariosFor)
@@ -619,7 +746,20 @@
             ) : null,
 
             React.createElement('div', { style: Object.assign({}, labelStyle(), { marginTop: '9px' }) }, 'COMPLETE WHEN'),
-            React.createElement('div', {
+            React.createElement('label', {
+              style: { display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0 6px',
+                       fontSize: '11px', color: '#c3cfdd', cursor: 'pointer' }
+            },
+              React.createElement('input', {
+                type: 'checkbox', checked: diagnosisOnly,
+                onChange: function (e) { setDiagnosisOnly(e.target.checked); }
+              }),
+              'The student submits a written diagnosis \u2014 no value to reach'
+            ),
+            diagnosisOnly ? React.createElement('div', {
+              style: { fontSize: '10px', color: '#8a97ab', lineHeight: 1.45, marginBottom: '4px' }
+            }, 'For scenarios where the answer is a judgement rather than a repair \u2014 whether an after-hours run was justified, say. The exercise passes when they have written something, and you assess the reasoning yourself.') : null,
+            diagnosisOnly ? null : React.createElement('div', {
               // A ± column between target and tolerance, so the row reads as
               // "is within 58 ± 3" instead of two unlabelled numbers side by side.
               style: { display: 'grid', alignItems: 'center', marginTop: '3px', gap: '5px',

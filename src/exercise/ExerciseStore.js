@@ -374,9 +374,19 @@
    * Is the goal currently satisfied? Reported with the live value so the student
    * can see how close they are rather than only pass/fail.
    */
-  function evaluate(ex) {
+  function evaluate(ex, operator) {
     var ctrl = controllerFor(ex.unitId);
     var goal = ex.goal;
+
+    // No measured target: the deliverable is the written diagnosis, so passing is having
+    // submitted one. Gated on the stored attempt rather than any live reading, which is why
+    // it needs the operator — a judgement exercise has nothing on the unit to check.
+    if (goal && goal.diagnosisOnly) {
+      var at = operator ? attemptFor(ex.id, operator) : null;
+      var written = !!(at && at.diagnosis && String(at.diagnosis).trim());
+      return { ok: written, value: null, diagnosisOnly: true };
+    }
+
     if (!ctrl || !goal || !goal.key) return { ok: false, value: null };
     var value = (ctrl.getState() || {})[goal.key];
     if (typeof value !== 'number') return { ok: false, value: value };
@@ -395,7 +405,9 @@
    * Returns { ok, value, heldMs, passed }.
    */
   function check(ex, operator) {
-    var res = evaluate(ex);
+    // Operator forwarded: a diagnosis-only exercise has nothing on the unit to check, so
+    // evaluate needs to look up that student's written answer instead.
+    var res = evaluate(ex, operator);
     var id = ex.id + '|' + operator;
     var now = Date.now();
     if (!res.ok) { delete holdSince[id]; return { ok: false, value: res.value, heldMs: 0, passed: false }; }
@@ -426,6 +438,9 @@
   function goalText(ex) {
     if (!ex.goal || !ex.goal.key) return '—';
     var label = ex.goal.label || ex.goal.key;
+    if (ex.goal.diagnosisOnly) {
+      return 'Write your diagnosis \u2014 no value to reach';
+    }
     var c = COMPARATORS[ex.goal.comparator] || COMPARATORS.within;
     var unit = ex.goal.unit || '';
     var body = (ex.goal.comparator === 'within')
@@ -752,6 +767,9 @@
           })
         },
         goal: {
+          // A judgement, not a repair: nothing on the unit needs changing, so the CO2 target
+          // this used to carry was already true on open and the exercise passed itself.
+          diagnosisOnly: true,
           key: 'co2Sensor', label: 'Zone CO\u2082', unit: ' PPM',
           comparator: 'below', target: 1100, tolerance: 0,
           standard: '62.1', criterionId: 'iaq-co2-differential',
@@ -926,6 +944,9 @@
           })
         },
         goal: {
+          // A judgement, not a repair: nothing on the unit needs changing, so the CO2 target
+          // this used to carry was already true on open and the exercise passed itself.
+          diagnosisOnly: true,
           key: 'co2Sensor', label: 'Zone CO\u2082', unit: ' PPM',
           comparator: 'below', target: 1100, tolerance: 0,
           standard: '62.1', criterionId: 'iaq-co2-differential',
@@ -1389,7 +1410,7 @@
   // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
   // stored copy already at this version, so an edit without a bump is silently inert —
   // that is how the reworked VAV brief failed to reach a browser that had already seeded.
-  var SEED_VERSION = 28;
+  var SEED_VERSION = 29;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;
