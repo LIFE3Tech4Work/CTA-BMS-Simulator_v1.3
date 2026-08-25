@@ -232,7 +232,7 @@
     { id: 'AHU-4-4', label: 'AHU-4-4', parent: 'all' },
     { id: 'AHU-4-3', label: 'AHU-4-3', parent: 'all' },
     { id: 'AHU-23-1', label: 'AHU-23-1', parent: 'all' },
-    { id: 'VAV-4-4-02', label: 'VAV-4-4 (Ballroom)', parent: 'all' },
+    { id: 'VAV-4-4-02', label: 'VAV-4-4 (Conference Room)', parent: 'all' },
     // VAV-02-03 is hidden from the station tab bar, so it has no node here either
     // — an empty filter for a unit the operator cannot open is just clutter.
     { id: 'Outdoor', label: 'Outdoor', parent: 'all' }

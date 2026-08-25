@@ -65,7 +65,7 @@
   var DEFAULT_DISCHARGE_AIR_TEMP = 55.0; // °F — used before the AHU pushes a live value
 
   var ZONES = [
-    { id: 'VAV-4-4-02', label: 'Ballroom', servedBy: 'AHU-4-4_NEW' }
+    { id: 'VAV-4-4-02', label: 'Conference Room', servedBy: 'AHU-4-4_NEW' }
   ];
 
   function defaultState() {

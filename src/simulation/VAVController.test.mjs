@@ -3,7 +3,7 @@
  * VAVController.js attaches to `window`, so we set up globals before loading.
  *
  * Covers:
- *  - Two zones exist (VAV-4-4-01 Pre-Function, VAV-4-4-02 Ballroom), independent state
+ *  - Two zones exist (VAV-4-4-01 Pre-Function, VAV-4-4-02 Conference Room), independent state
  *  - Sequence of operation: cooling call, deadband, heating-reheat call
  *  - CO2 DCV override raises (never lowers) the damper floor
  *  - Unoccupied behavior zeroes damper/airflow/reheat
@@ -34,9 +34,9 @@ function loadController() {
 
 // This suite was written against a 'VAV-4-4-01' ("Pre-Function") zone that no
 // VAVController in the repo has ever defined — the controller has always had
-// only the Ballroom box, so every readFileSync-loaded assertion here referenced
+// only the Conference Room box, so every readFileSync-loaded assertion here referenced
 // an undefined zone and returned undefined. Pointed at the two zones that do
-// exist: the original Ballroom box and the Meeting Room 214 box.
+// exist: the original Conference Room box and the Meeting Room 214 box.
 const ZONE_A = 'VAV-4-4-02';
 const ZONE_B = 'VAV-02-03';
 
@@ -46,10 +46,10 @@ describe('VAVController — zone setup', () => {
     expect(ctrl.getZoneIds()).toEqual([ZONE_A, ZONE_B]);
   });
 
-  it('VAV-4-4-02 is labeled Ballroom, served by AHU-4-4_NEW', () => {
+  it('VAV-4-4-02 is labeled Conference Room, served by AHU-4-4_NEW', () => {
     const ctrl = loadController();
     const info = ctrl.getZoneInfo(ZONE_A);
-    expect(info.label).toBe('Ballroom');
+    expect(info.label).toBe('Conference Room');
     expect(info.servedBy).toBe('AHU-4-4_NEW');
   });
 

@@ -2,7 +2,7 @@
  * AHU44NewImageOverlay.jsx — Real Honeywell/TecSystems AHU graphic as background
  * image with READ-ONLY hotspot overlays for AHU-4-4.
  *
- * Service: Pre-Function / Ballroom Level 2, Location: Level 4
+ * Service: Pre-Function / Conference Room Level 2, Location: Level 4
  *
  * Data flow:
  *   window.AHU44NewState (shared state) → this overlay (READ-ONLY display)
@@ -58,7 +58,7 @@ const AHU44NewImageOverlay = (() => {
   // Positions as % of image width/height, measured directly against
   // AHU_4_4_NEW_Honeywell_v4.png (1617×875, same dimensions throughout —
   // pixel content changed, no resize), sourced from the Honeywell
-  // SymmetrE screenshot (Hotel_AHU4_4Edit.png, Service: Pre-Function/Ballroom
+  // SymmetrE screenshot (Hotel_AHU4_4Edit.png, Service: Pre-Function/Conference Room
   // Level 2, Location: Level 4). Each (x,y,w,h) was measured by cropping and
   // gridding the source image at 2x zoom, not estimated by eye.
   //
@@ -293,7 +293,7 @@ const AHU44NewImageOverlay = (() => {
       // would otherwise nudge the hotspot layer off by a hair.
       React.createElement('img', {
         src: IMAGE_SRC,
-        alt: 'AHU-4-4 — Honeywell SymmetrE / TecSystems AHU Schematic (Pre-Function/Ballroom Level 2)',
+        alt: 'AHU-4-4 — Honeywell SymmetrE / TecSystems AHU Schematic (Pre-Function/Conference Room Level 2)',
         className: 'block w-full h-auto',
         draggable: false,
         style: { imageRendering: 'auto' },

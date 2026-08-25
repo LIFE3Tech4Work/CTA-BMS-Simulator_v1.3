@@ -1,7 +1,7 @@
 /**
  * AHU44NewController.js — Control logic engine for AHU-4-4
  *
- * Implements reactive BMS control sequences for the Pre-Function/Ballroom
+ * Implements reactive BMS control sequences for the Pre-Function/Conference Room
  * Level 2 AHU (based on the Honeywell SymmetrE TecSystems screenshot).
  *
  * Engineering Relationships:

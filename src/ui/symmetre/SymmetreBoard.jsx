@@ -102,12 +102,15 @@ const SymmetreBoard = (function () {
 
   // ─── Chip ───────────────────────────────────────────────────────────────────
 
-  function Chip({ row, value, manual, alarm, onOpen, label, unitId }) {
+  function Chip({ row, value, manual, faulted, alarm, onOpen, label, unitId }) {
     const BP = window.SymmetreBoardPoints;
     const key = row[0], type = row[1], x = row[2], y = row[3], w = row[4];
     const align = row[5] || 'left', fs = row[6] || 13;
     const m = BP.meta(key, unitId) || {};
     const [hover, setHover] = useState(false);
+    // Alarm and override colours. Faults are handled per chip type below rather than here:
+    // this value feeds only the box branch, so putting a fault colour in it would look
+    // wired while doing nothing for the pills, which is what every zone reading is.
     const color = alarm ? '#c21f14' : (manual ? '#c81fae' : null);
     const display = BP.format(key, value);
     const unit = m.unit || '';
@@ -144,14 +147,24 @@ const SymmetreBoard = (function () {
     } else {
       st = { position: 'absolute', top: (y - 16) + 'px', display: 'flex', alignItems: 'baseline',
              gap: '2px', padding: '2px 7px', borderRadius: '5px',
-             background: alarm ? 'linear-gradient(180deg,#8a2018,#5f1410)' : 'linear-gradient(180deg,#43556f,#2c3a51)',
-             border: '1px solid ' + (alarm ? '#ff5a49' : '#1c2636'),
+             background: alarm ? 'linear-gradient(180deg,#8a2018,#5f1410)'
+               // A broken device reads BLACK, distinct from both a healthy pill and the
+               // magenta of a deliberate override. The `color` value above is only
+               // consumed by the box branch, so the pill needs its own fill — without
+               // this, a faulted pill was pixel-identical to a healthy one and grey text
+               // was the only cue, which reads as "dimmed" rather than "do not trust".
+               : (faulted ? 'linear-gradient(180deg,#22262e,#0e1116)'
+                          : 'linear-gradient(180deg,#43556f,#2c3a51)'),
+             border: '1px solid ' + (alarm ? '#ff5a49' : (faulted ? '#4a5364' : '#1c2636')),
              boxShadow: '0 1px 2px rgba(0,0,0,.28)', cursor: 'pointer', whiteSpace: 'nowrap',
              lineHeight: 1, zIndex: 5, animation: alarm ? 'bms-ring 1.1s infinite' : 'none' };
       if (align === 'right') st.right = (BOARD_W - x) + 'px';
       else if (align === 'center') { st.left = x + 'px'; st.transform = 'translateX(-50%)'; }
       else st.left = x + 'px';
-      vst = { fontSize: fs + 'px', fontWeight: 800, color: alarm ? '#fff' : (manual ? '#ff9bec' : '#eef3fb') };
+      vst = { fontSize: fs + 'px', fontWeight: 800,
+              // Near-white on the dark fault fill: grey-on-slate read as "dimmed", which
+              // is the wrong signal for a reading that is actively wrong.
+              color: alarm ? '#fff' : (faulted ? '#e6e9ef' : (manual ? '#ff9bec' : '#eef3fb')) };
       ust = { fontSize: '10px', fontWeight: 800, color: alarm ? '#ffd0c9' : '#9db0c8' };
     }
 
@@ -169,7 +182,9 @@ const SymmetreBoard = (function () {
       onMouseEnter: () => setHover(true),
       onMouseLeave: () => setHover(false),
       title: label + ': ' + display + (unit ? ' ' + unit : '') +
-        (manual ? ' — MANUAL override' : '') + (alarm ? ' — ALARM ACTIVE' : '') + ' (click for point detail)',
+        (faulted ? ' \u2014 SENSOR FAULT, reading not trustworthy'
+                 : (manual ? ' \u2014 MANUAL override' : '')) +
+        (alarm ? ' \u2014 ALARM ACTIVE' : '') + ' (click for point detail)',
       role: 'button',
       tabIndex: 0,
       'aria-label': label + ' ' + display + ' ' + unit + ', activate to open point detail',
@@ -179,14 +194,15 @@ const SymmetreBoard = (function () {
         React.createElement('span', { style: vst }, display)
       ),
       unit ? React.createElement('span', { style: ust }, unit) : null,
-      manual ? React.createElement('span', {
+      (faulted || manual) ? React.createElement('span', {
         style: { position: 'absolute', top: '-8px', right: '-6px', minWidth: '14px', height: '14px',
                  padding: '0 2px', borderRadius: '4px', fontSize: '10px', fontWeight: 800,
                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-                 background: '#c81fae', border: '1px solid #fff',
+                 background: faulted ? '#2a2f38' : '#c81fae', border: '1px solid #fff',
                  boxShadow: '0 1px 2px rgba(0,0,0,.3)', zIndex: 6 },
-        title: 'Manual override active',
-      }, 'M') : null
+        title: faulted ? 'Sensor fault \u2014 this reading is not trustworthy'
+                       : 'Manual override active',
+      }, faulted ? 'F' : 'M') : null
     );
   }
 
@@ -347,8 +363,12 @@ const SymmetreBoard = (function () {
       const iv = setInterval(function () {
         const eng = window[cfg.faultEngine], c = window[cfg.controller];
         if (!eng || !c) return;
-        const md = c.getModes ? c.getModes() : {};
-        const list = eng.evaluate ? eng.evaluate(c.getState(), md) : (eng.getActiveAlarms ? eng.getActiveAlarms() : []);
+        // Pass the UNIT, not the modes. This call passed c.getModes() in the second slot,
+        // which the old single-parameter evaluate() ignored — harmless until that slot
+        // became unitId, at which point the modes object became the alarm's subsystem and
+        // every alarm stopped matching its own unit in the summary and the overview.
+        const list = eng.evaluate ? eng.evaluate(c.getState(), unitId)
+                                  : (eng.getActiveAlarms ? eng.getActiveAlarms() : []);
         setAlarms((list || []).map(function (a) { return a.condition; }));
       }, 500);
       return function () { clearInterval(iv); };
@@ -593,6 +613,11 @@ const SymmetreBoard = (function () {
       children.push(React.createElement(Chip, {
         key: key, row: row, value: value, label: m.label, unitId: unitId,
         manual: modes[key] === 'Manual',
+        // A failed device, read from the controller rather than inferred from modes: a
+        // sensor fault is not an override and must not be drawn as one.
+        faulted: !!(window[cfg.controller] &&
+                    typeof window[cfg.controller].getSensorFaults === 'function' &&
+                    window[cfg.controller].getSensorFaults()[key] !== undefined),
         alarm: !!alarmKeys[key],
         onOpen: () => setOpenKey(key),
       }));

@@ -75,10 +75,16 @@ const SymmetreAppChrome = (function() {
         { label: '🌀 AHU-4-4 Overview', action: function() { window.location.hash = '#/symmetre/AHU-4-4'; } },
         { label: '🌀 AHU-23-1 Overview', action: function() { window.location.hash = '#/symmetre/AHU-23-1'; } },
         { label: '🌀 AHU-4-6 Overview', action: function() { window.location.hash = '#/symmetre/AHU-4-6'; } },
-        { label: '🌬️ VAV-4-4-02 (Ballroom) Overview', action: function() { window.location.hash = '#/symmetre/VAV-4-4-02'; } },
+        { label: '🌬️ VAV-4-4-02 (Conference Room) Overview', action: function() { window.location.hash = '#/symmetre/VAV-4-4-02'; } },
       ],
       'View': [
         { label: 'Alarm Summary', action: function() { window.location.hash = '#/alarms'; } },
+        // The topology every other screen assumes. Available to students as well as
+        // instructors: an exercise that names the conference room expects them to know which box
+        // serves it, and nowhere else in the app says so.
+        // System Overview is hidden for now at the user's request. The screen, its route
+        // (#/overview) and the zone plan all remain — uncommenting this restores it.
+        // { label: 'System Overview', action: function() { window.location.hash = '#/overview'; } },
         // Student-facing: their own assignment list. Hidden from instructors, who
         // are never assigned exercises and would land on an empty screen.
         isInstructorOp ? null : { label: 'My Exercises', action: function() { window.location.hash = '#/exercises'; } },

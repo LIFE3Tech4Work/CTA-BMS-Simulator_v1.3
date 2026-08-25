@@ -95,7 +95,14 @@
   // Map<ruleId, Alarm> — one active alarm per rule at most, mirroring
   // FaultEngine.js's Property 20/21 behavior.
 
+  // Keyed "unitId:ruleId" rather than ruleId, so two units running this model keep separate
+  // alarm sets. Keyed on rule alone, AHU-4-3 tripping N-01 would silently replace AHU-4-4's
+  // N-01 and be attributed to the wrong unit.
   const activeAlarms = new Map();
+
+  // Which unit the caller is evaluating. Defaults to AHU-4-4 so every existing call site —
+  // the board poll, the alarm summary, the tests — behaves exactly as before.
+  var DEFAULT_UNIT = 'AHU-4-4';
 
   // ─── Core Methods ───────────────────────────────────────────────────────────
 
@@ -106,9 +113,10 @@
    * @param {Object} state - AHU44NewController state object
    * @returns {Alarm[]} - Array of newly generated alarms
    */
-  function evaluate(state) {
+  function evaluate(state, unitId) {
     const newAlarms = [];
     if (!state) return newAlarms;
+    var unit = (typeof unitId === 'string' && unitId) || DEFAULT_UNIT;
 
     for (var i = 0; i < rules.length; i++) {
       var rule = rules[i];
@@ -121,7 +129,8 @@
       }
 
       if (conditionMet) {
-        if (!activeAlarms.has(rule.id)) {
+        var akey = unit + ':' + rule.id;
+        if (!activeAlarms.has(akey)) {
           var triggerValue = state[rule.sourceField];
           var alarm = {
             id: rule.id + '_' + Date.now(),
@@ -135,15 +144,16 @@
             acknowledged: false,
             operator: '',
             action: '',
-            subsystem: 'AHU-4-4'
+            subsystem: unit
           };
 
-          activeAlarms.set(rule.id, alarm);
+          activeAlarms.set(akey, alarm);
           newAlarms.push(alarm);
         }
       } else {
-        if (activeAlarms.has(rule.id)) {
-          var existingAlarm = activeAlarms.get(rule.id);
+        var ckey = unit + ':' + rule.id;
+        if (activeAlarms.has(ckey)) {
+          var existingAlarm = activeAlarms.get(ckey);
           if (existingAlarm.lifecycle === 'active') {
             existingAlarm.lifecycle = 'inactive';
             // acknowledged state is preserved (no change) — same as FaultEngine.js
@@ -169,8 +179,17 @@
     return Array.from(activeAlarms.values());
   }
 
-  function acknowledge(ruleId, operator) {
-    var alarm = activeAlarms.get(ruleId);
+  function acknowledge(ruleId, operator, unitId) {
+    // Accepts a bare rule id (every existing caller) or a unit-scoped one. Without the
+    // fallback scan, acknowledging from the alarm summary — which knows the rule, not the
+    // key — would silently do nothing now that keys carry the unit.
+    var alarm = activeAlarms.get(ruleId) ||
+                activeAlarms.get((unitId || DEFAULT_UNIT) + ':' + ruleId);
+    if (!alarm) {
+      activeAlarms.forEach(function (a, k) {
+        if (!alarm && k.slice(k.indexOf(':') + 1) === ruleId) alarm = a;
+      });
+    }
     if (alarm) {
       alarm.acknowledged = true;
       alarm.operator = operator || '';

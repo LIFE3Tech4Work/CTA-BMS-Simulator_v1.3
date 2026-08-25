@@ -37,7 +37,7 @@
       id: 2,
       title: 'BMS Data Analysis',
       prompt: 'Analyze the BMS trend data for AHU-4-4 and AHU-4-6, and the VAV-4-4-02 ' +
-        '(Ballroom) terminal unit they serve. Identify patterns in ' +
+        '(Conference Room) terminal unit they serve. Identify patterns in ' +
         'supply air temperature, fan speed, damper positions, reheat valve operation, ' +
         'and zone conditions. Reference specific data points and time periods observed ' +
         'in the simulator. Note any anomalies or areas requiring further investigation.'

@@ -22,7 +22,7 @@
  *
  * Key structural difference from AHU-4-4: the OA_DAMPER_FLOOR is 50%,
  * not 20%. Meeting rooms require significantly more fresh air per ASHRAE 62.1
- * than pre-function/ballroom spaces (higher design occupancy density), so the
+ * than pre-function/conference room spaces (higher design occupancy density), so the
  * configured minimum OA damper position is well above AHU-4-4's. At 50%
  * minimum and 9,200 CFM design, the base-case OA delivery is ~4,600 CFM,
  * matching the SOO's own 4,500 CFM minOAAirflowSetpoint (4,500/9,000 CFM

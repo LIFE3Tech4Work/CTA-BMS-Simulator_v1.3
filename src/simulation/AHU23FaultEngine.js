@@ -161,6 +161,18 @@
     return Object.keys(active).map(function (k) { return active[k]; });
   }
 
+  /**
+   * Unacknowledged alarms still in the active state. Present on AHU46FaultEngine and
+   * AHU44NewFaultEngine but missing here, so any caller that iterated the engines got a
+   * silent zero for this unit — the System Overview's alarm badge among them, on the one
+   * unit that actually had a live alarm.
+   */
+  function getActiveAlarms() {
+    return getAllAlarms().filter(function (a) {
+      return a.lifecycle !== 'inactive' && !a.acknowledged;
+    });
+  }
+
   function reset() { active = {}; }
 
   /** Drop an acknowledged-and-cleared alarm, so it can trip cleanly again later. */
@@ -187,6 +199,7 @@
     RULES: RULES,
     evaluate: evaluate,
     getAllAlarms: getAllAlarms,
+    getActiveAlarms: getActiveAlarms,
     reset: reset,
     retire: retire
   };
