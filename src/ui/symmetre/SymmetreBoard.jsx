@@ -434,12 +434,28 @@ const SymmetreBoard = (function () {
       const m = BP.meta(key, unitId) || {};
       const prev = BP.format(key, BP.valueOf(state, key));
       if (mode === 'auto') {
-        if (c.clearMode) c.clearMode(key);
-        else if (c.clearModes) c.clearModes();
-        if (c.recalculate) c.recalculate();
-        eventLog.unshift({ t: stamp(), key: key, src: BP.bacnetFor(unitId, key).name,
-                           etype: 'Mode Transition', prev: 'Manual', val: 'Auto',
-                           by: window.CTAAuthOperator || 'operator' });
+        // Auto WITH a value is Lev's authoring case: hold the reading with no mode
+        // recorded, so the board shows an ordinary Auto number and nothing appears on the
+        // Point Attribute Report. This branch previously ignored `value` entirely and only
+        // released the point, so an instructor could not author a lying-feedback fault at
+        // all — every route through here ended at setValue and turned the chip magenta.
+        var holding = value !== null && value !== undefined && value !== '' &&
+                      typeof c.setAutoValue === 'function';
+        if (holding) {
+          c.setAutoValue(key, value);
+          eventLog.unshift({ t: stamp(), key: key, src: BP.bacnetFor(unitId, key).name,
+                             etype: 'Value Change',
+                             prev: prev + (m.unit ? ' ' + m.unit : ''),
+                             val: BP.format(key, value) + (m.unit ? ' ' + m.unit : ''),
+                             by: window.CTAAuthOperator || 'operator' });
+        } else {
+          if (c.clearMode) c.clearMode(key);
+          else if (c.clearModes) c.clearModes();
+          if (c.recalculate) c.recalculate();
+          eventLog.unshift({ t: stamp(), key: key, src: BP.bacnetFor(unitId, key).name,
+                             etype: 'Mode Transition', prev: 'Manual', val: 'Auto',
+                             by: window.CTAAuthOperator || 'operator' });
+        }
       } else {
         c.setValue(key, value);
         eventLog.unshift({ t: stamp(), key: key, src: BP.bacnetFor(unitId, key).name,

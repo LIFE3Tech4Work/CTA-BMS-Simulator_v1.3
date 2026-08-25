@@ -300,6 +300,10 @@
     if (typeof ctrl.clearModes === 'function') ctrl.clearModes();
 
     var setup = ex.setup || {};
+    // Points the instructor chose to deliver as normal operation rather than as an override:
+    // applied through setAutoValue so nothing flags them. Declared HERE, beside setup, because
+    // the loop below reads it — it previously sat after that loop and was undefined when used.
+    var autoKeys = (ex.autoKeys || []).slice();
     var setupHoldsOA = Object.keys(setup).some(function (k) { return OA_KEYS[k]; });
 
     // Weather FIRST, then the point setup. Both can write the same OA keys, and
@@ -317,8 +321,27 @@
       }
     }
 
+    // Clear BEFORE writing. Running it after — which some paths did — wiped the override
+    // that had just been applied, so a seeded closed-damper fault did not exist when a
+    // student opened the exercise.
+    if (typeof ctrl.clearAutoHeld === 'function') ctrl.clearAutoHeld();
     Object.keys(setup).forEach(function (k) {
-      try { ctrl.setValue(k, setup[k]); } catch (e) {}
+      try {
+        // Auto-recorded points bypass setValue so they leave no override behind them.
+        if (autoKeys.indexOf(k) >= 0 && typeof ctrl.setAutoValue === 'function') {
+          ctrl.setAutoValue(k, setup[k]);
+        } else {
+          ctrl.setValue(k, setup[k]);
+        }
+      } catch (e) {
+        // Surfaced, not swallowed: this function builds every exercise's starting state, so a
+        // silent failure here means a student opens an exercise with no fault in it and
+        // nothing anywhere reports why.
+        if (window.console) {
+          console.error('[Exercise] could not apply starting state for ' + k +
+                        ' on ' + ex.unitId + ':', e);
+        }
+      }
     });
 
     // Failed sensors. Applied after the setup so a fault always wins over a plain value,
@@ -1124,6 +1147,13 @@
         instructorNotes: o.instructorNotes || '',
         trends: o.trends || null,
         sensorFaults: o.sensorFaults || null,
+        // Third repeat of the failure the note above warns about. Without autoKeys every
+        // point in a setup falls back to setValue, so Lev's broken-damper exercise — whose
+        // whole premise is a BMS reading that nothing flags — delivered five magenta
+        // override chips and handed the student the answer. diagnosisOnly went the same
+        // way, so a mechanical failure demanded a numeric fix that cannot be made.
+        autoKeys: o.autoKeys || [],
+        diagnosisOnly: !!o.diagnosisOnly,
         assignedTo: to,
         assignment: { mode: to.length ? 'students' : 'students', groupIds: [], seatIds: to },
         published: !!o.published, createdBy: 'cta_instructor', createdAt: now
@@ -1298,6 +1328,63 @@
                 basis: 'indicator' }
       }),
       ex({
+        id: 'ex-lib-44-broken-oa-damper',
+        title: 'Stuffy conference room \u2014 the engineer says the damper is open',
+        unit: 'AHU-4-4',
+        brief: 'Wednesday, 2:00 PM. A conference in the 2nd-level meeting rooms. Attendees ' +
+          'are complaining that the air is stuffy and several have become drowsy.\n\n' +
+          'They raised it with the building engineer, who checked the BMS and reported back ' +
+          'that the outdoor air damper shows 100% open, so ventilation is fine and there is ' +
+          'nothing to fix.\n\nThe engineer is wrong. Work out why, and identify which ASHRAE ' +
+          'standard is being violated.\n\n' +
+          'Hint: a damper position on a screen is a commanded or reported position, not a ' +
+          'measurement of air. Find a reading that measures the air itself.',
+        instructorNotes:
+          'Resolution: the outdoor air damper has failed MECHANICALLY. Its feedback reports ' +
+          '100% open, but the blade is shut \u2014 so the unit is fully recirculating. There is ' +
+          'nothing for a student to fix from the workstation: the correct action is to ' +
+          'recognise the failure and report it for mechanical repair.\n\n' +
+          'The proof is airflow, not position. Outdoor air CFM reads 5 against a design ' +
+          'minimum of 4,900. A damper genuinely 100% open cannot move 5 CFM. Position is ' +
+          'reported; airflow is measured \u2014 and when the two disagree, believe the measurement.\n\n' +
+          'A second confirmation is temperature. Mixed air reads 72.2\u00b0F, identical to return ' +
+          'air, while outdoor air is 66.8\u00b0F. If any outdoor air were entering, the mix would ' +
+          'sit below return. Two independent readings agree that no outdoor air is present.\n\n' +
+          'The violation is ASHRAE 62.1 \u00a76.2 \u2014 minimum outdoor airflow must be supplied ' +
+          'continuously whenever the space is occupied. And occupancy is the point of the CO\u2082 ' +
+          'reading: 1,200 ppm against a 900 ppm setpoint says the room is full of people. ' +
+          'That is what makes this a violation rather than acceptable operation \u2014 62.1 and ' +
+          '90.1 both PERMIT a fully closed outdoor air damper during scheduled unoccupied ' +
+          'hours, and during morning warm-up or cool-down before occupancy. A student who ' +
+          'reports a closed damper without checking occupancy has not finished the job.\n\n' +
+          'Worth drawing out: the downstream VAV box is wide open, calling for air. That is ' +
+          'correct behaviour and changes nothing \u2014 a terminal box can only distribute what ' +
+          'the air handler delivers, and this one is delivering recirculated air. Students ' +
+          'often chase the box because it looks active.',
+        // Delivered as ordinary Auto readings, deliberately. The engineer in the story
+        // believed the BMS; a student has to distrust it the same way, which cannot happen
+        // if the app flags the fault for them.
+        setup: {
+          oaDamperPosition: 100,   // feedback lies: reports fully open
+          oaCFM: 5,                // the measurement that contradicts it
+          returnAirDamperPct: 100, // full recirculation
+          co2Sensor: 1200,         // occupied — what makes it a violation
+          mixedAirTemp: 72.2       // equals return air: no outdoor air in the mix
+        },
+        autoKeys: ['oaDamperPosition', 'oaCFM', 'returnAirDamperPct', 'co2Sensor', 'mixedAirTemp'],
+        published: true,
+        assigned: seats.slice(),
+        // Diagnosis-only: a mechanical failure cannot be repaired from the workstation, so
+        // demanding a numeric target would ask for something impossible.
+        diagnosisOnly: true,
+        goal: { key: 'oaCFM', label: 'Outdoor Air Flow', unit: ' CFM',
+                comparator: 'above', target: 4900, tolerance: 0,
+                standard: '62.1', criterionId: 'iaq-min-damper',
+                criterionLabel: 'OA damper at or above minimum position',
+                citation: 'ASHRAE 62.1 \u00a76.2 \u2014 Ventilation Rate Procedure, minimum outdoor air intake',
+                basis: 'requirement' }
+      }),
+      ex({
         id: 'ex-lib-vav-sensor-drift',
         title: 'Zone complaints with nothing out of range',
         instructorNotes:
@@ -1410,7 +1497,7 @@
   // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
   // stored copy already at this version, so an edit without a bump is silently inert —
   // that is how the reworked VAV brief failed to reach a browser that had already seeded.
-  var SEED_VERSION = 29;
+  var SEED_VERSION = 32;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;

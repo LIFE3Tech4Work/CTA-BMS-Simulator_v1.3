@@ -163,6 +163,17 @@
     // point reports.
     var safety = safetyOverridesOperator();
     var overrode = false;
+    // Auto-held values re-applied first: authored without a mode, so the manual latch
+    // below never sees them and the sequence would otherwise recompute them away.
+    Object.keys(autoHeld).forEach(function (ak) {
+      if (ak in sensorFaults) return;
+      // Same yield the manual latch below applies: a safety action — fan-off damper
+      // isolation, freeze protection — outranks a held value. Without it the two
+      // authoring paths disagreed about the same safety event, and a stopped unit
+      // reported a 50% open outdoor air damper against 0 CFM.
+      if (safety && SAFETY_DRIVEN_KEYS[ak]) return;
+      if (state[ak] !== autoHeld[ak]) { state[ak] = autoHeld[ak]; overrode = true; }
+    });
     for (var mk in manualValues) {
       if (!Object.prototype.hasOwnProperty.call(manualValues, mk)) continue;
       if (!state.hasOwnProperty(mk)) continue;
@@ -217,10 +228,10 @@
             !state.lowOATLockout) {
           state.economizerActive = true;
           // Full economizer: damper opens to 100% for maximum free cooling
-          state.oaDamperPosition = 100;
+          if (!pinned('oaDamperPosition')) state.oaDamperPosition = 100;
         } else {
           // No economizer: damper sits at minimum position floor
-          state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
+          if (!pinned('oaDamperPosition')) state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
         }
 
         // CO₂ Demand-Controlled Ventilation (DCV) override
@@ -230,13 +241,13 @@
           var co2Excess = state.co2Sensor - state.co2Setpoint;
           // Proportional gain: every 5 PPM over setpoint = 1% more damper
           var co2DamperCommand = Math.min(100, state.economizerMinPosition + (co2Excess / 5));
-          state.oaDamperPosition = Math.round(co2DamperCommand);
+          if (!pinned('oaDamperPosition')) state.oaDamperPosition = Math.round(co2DamperCommand);
         }
       }
       // else: Manual hold — program yields authority (same as AHU-4-6/4-4)
     } else {
       // Fan off: damper closed
-      state.oaDamperPosition = 0;
+      state.oaDamperPosition = 0;   // isolation, not a recompute — never yields to a pin
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -412,7 +423,7 @@
    *   heating   true adds, false subtracts
    */
   function honourCommandedValve(entering, key, capacity, heating) {
-    if (modes[key] !== 'Manual') return null;
+    if (!pinned(key)) return null;
     // Read the COMMANDED value, not state[key]: the sequence overwrites that a line or
     // two earlier in the same pass, so state[key] is its number rather than the
     // operator's, and the override silently had no effect.
@@ -430,7 +441,7 @@
   // the point reports until it is released. recalculate() re-applies these
   // after every pass, which is what makes a commanded value actually hold —
   // previously only a handful of keys were spared by their own
-  // "modes.X !== 'Manual'" guards and everything else was recomputed straight
+  // "!pinned('X')" guards and everything else was recomputed straight
   // back over the operator's value.
   var manualValues = {};
 
@@ -447,6 +458,50 @@
   // That distinction is the whole lesson: a broken damper reporting 100% open cannot be
   // found by looking for who commanded it.
   var sensorFaults = {};
+
+  // Values an instructor set while authoring with the point left in Auto. Re-applied after
+  // every pass like a manual override, but with no mode recorded — so the point reads
+  // normally and appears on no override list, which is the whole point of the setting.
+  // Cleared by clearModes/clearAutoHeld, so a reset returns the unit to real defaults.
+  var autoHeld = {};
+
+  /** True when the sequence must not recompute this key: an operator override, or a value an
+   *  instructor authored with the point left in Auto. Both mean "someone has decided this",
+   *  and the difference is only whether it is FLAGGED — so the physics has to treat them
+   *  identically or the held value never feeds forward into anything derived from it. */
+  function pinned(k) { return modes[k] === 'Manual' || (k in autoHeld); }
+
+  /**
+   * Set a value WITHOUT recording an override.
+   *
+   * For authoring a fault that should look like normal operation. setValue marks the point
+   * Manual, which draws it magenta and lists it on the Point Attribute Report — so a
+   * student finds the answer on a list instead of diagnosing it. This writes the value and
+   * its auto baseline instead, leaving no flag anywhere.
+   *
+   * Only meaningful on points the sequence does not recompute — setpoints, configuration,
+   * commanded positions. A calculated output would be overwritten on the next pass, which
+   * is correct: you cannot quietly hold a value the plant is actively deriving.
+   */
+  function setAutoValue(key, value) {
+    if (!state.hasOwnProperty(key)) return false;
+    autoHeld[key] = value;
+    autoValues[key] = value;
+    delete modes[key];
+    delete manualValues[key];
+    state[key] = value;
+    recalculate();
+    // Reported back so a caller can tell the instructor when a point refuses to hold,
+    // rather than closing a dialog over a value that silently reverted.
+    return state[key] === value;
+  }
+
+  function clearAutoHeld(key) {
+    if (key === undefined) { autoHeld = {}; } else { delete autoHeld[key]; }
+    recalculate();
+  }
+
+  function getAutoHeld() { return Object.assign({}, autoHeld); }
 
   function setSensorFault(key, value) {
     if (!state.hasOwnProperty(key)) return false;
@@ -541,11 +596,11 @@
     var weather = window.TMY3Projector.interpolateWeather(row, fraction);
     if (!weather) return;
 
-    if (modes.oaTemperature !== 'Manual') state.oaTemperature = weather.dryBulb;
-    if (modes.oaEnthalpy !== 'Manual') state.oaEnthalpy = weather.enthalpy;
+    if (!pinned('oaTemperature')) state.oaTemperature = weather.dryBulb;
+    if (!pinned('oaEnthalpy')) state.oaEnthalpy = weather.enthalpy;
     // Guarded: a weather row without relHumidity would otherwise write undefined
     // and turn every downstream humidity reading into NaN.
-    if (modes.oaRelHumidity !== 'Manual' && typeof weather.relHumidity === 'number'
+    if (!pinned('oaRelHumidity') && typeof weather.relHumidity === 'number'
         && isFinite(weather.relHumidity)) {
       state.oaRelHumidity = weather.relHumidity;
     }
@@ -560,6 +615,9 @@
   window.AHU23Controller = {
     getState: getState,
     setValue: setValue,
+    setAutoValue: setAutoValue,
+    clearAutoHeld: clearAutoHeld,
+    getAutoHeld: getAutoHeld,
     setSensorFault: setSensorFault,
     clearSensorFault: clearSensorFault,
     clearSensorFaults: clearSensorFaults,
