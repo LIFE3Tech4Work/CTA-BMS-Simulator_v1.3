@@ -57,7 +57,7 @@ window.SMEQAForm = (function () {
 
   // ── Constants ────────────────────────────────────────────────────────────
   var SCREENS = [
-    'AHU-4-4', 'AHU-4-6', 'AHU-23-1', 'VAV-4-4-02 (Ballroom)',
+    'AHU-4-4', 'AHU-4-6', 'AHU-23-1', 'VAV-4-4-02 (Conference Room)',
     'Alarm Summary', 'EBI Point Detail', 'Schedule Manager',
     'Point Attribute Report', 'Capstone Worksheet', 'LL97 Panel',
     'General / multiple screens',

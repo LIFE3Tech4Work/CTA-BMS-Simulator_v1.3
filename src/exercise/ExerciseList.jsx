@@ -593,14 +593,31 @@
     // now, and sits fine beside COMPLETE once the label has stopped contradicting it.
     everPassed ? React.createElement('div', {
       style: { padding: '8px 14px', borderTop: '1px solid rgba(47,122,82,.5)',
-               background: 'rgba(63,143,90,.14)', fontSize: '11.5px',
-               color: '#8ff0b5', lineHeight: 1.5 }
+               background: res.passed ? 'rgba(63,143,90,.14)' : 'rgba(230,162,60,.14)',
+               fontSize: '11.5px',
+               color: res.passed ? '#8ff0b5' : '#ffd79a', lineHeight: 1.5 }
     },
-      React.createElement('strong', null, 'Goal met and held. '),
-      'You brought ' + ((g.label || 'the reading')) + ' to ' + ES.goalText(ex) + '.',
-      (g.standard && window.ASHRAECriteria)
-        ? ' That is the ' + window.ASHRAECriteria.badge(g.standard) + ' criterion for this unit.'
-        : ''
+      // Two states, because one sentence cannot cover both. Present tense only while the
+      // goal is ACTUALLY met: after a RESTART the fault is re-applied and the reading can
+      // be 60°F off, where "you brought it to 60°F" is contradicted by the number beside it.
+      res.passed
+        ? [
+            React.createElement('strong', { key: 's' }, 'Goal met and held. '),
+            // Target only — goalText() already carries the point name and the ASHRAE badge,
+            // so interpolating it here produced "brought Zone Temperature to Zone
+            // Temperature is above 60°F · ASHRAE 55".
+            'You brought ' + (g.label || 'the reading') + ' to ' +
+              (g.comparator === 'within' ? 'within \u00b1' + (g.tolerance || 0) + ' of ' : '') +
+              g.target + (g.unit || '') + '.',
+            (g.standard && window.ASHRAECriteria)
+              ? ' That is the ' + window.ASHRAECriteria.badge(g.standard) + ' criterion for this unit.'
+              : null
+          ]
+        : [
+            React.createElement('strong', { key: 'r' }, 'Completed earlier. '),
+            'The fault has been re-applied, so the reading is off target again. Your ' +
+              'completion still stands \u2014 work it through again if you want the practice.'
+          ]
     ) : null
     );
   }

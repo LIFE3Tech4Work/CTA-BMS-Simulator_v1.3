@@ -25,7 +25,7 @@ const WeeklySchedule = (() => {
   const HEAD_TH = { padding: '7px 12px', textAlign: 'left', fontSize: '10px',
                     fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase' };
 
-  // Per-unit occupied patterns. Deliberately NOT identical: a ballroom runs later than
+  // Per-unit occupied patterns. Deliberately NOT identical: a conference room runs later than
   // an office floor, and a meeting room does not run at weekends. Identical schedules
   // would make the distinction between units invisible, which is the thing a student is
   // meant to reason about when asked whether a unit should be running at all.
@@ -33,12 +33,12 @@ const WeeklySchedule = (() => {
   // The weekday 08:00–18:00 window matches the occupied test used by the F-03
   // "running unoccupied" alarm, so the two agree.
   var PATTERNS = {
-    // Ballroom air handler: event space, so it runs into the evening.
+    // Conference Room air handler: event space, so it runs into the evening.
     'AHU-4-4': { start: '08:00:00', end: '22:00:00', days: 5 },
     'AHU-4-3': { start: '08:00:00', end: '22:00:00', days: 5 },
     // Meeting-room box: weekdays only, standard office hours.
     'VAV-02-03': { start: '08:00:00', end: '18:00:00', days: 5 },
-    // Ballroom terminal box follows its air handler.
+    // Conference Room terminal box follows its air handler.
     'VAV-4-4-02': { start: '08:00:00', end: '22:00:00', days: 5 },
     // 2nd-level meeting rooms, and the default.
     'AHU-4-6': { start: '08:00:00', end: '18:00:00', days: 5 },

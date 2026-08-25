@@ -92,6 +92,9 @@ function parseRoute(hash) {
   if (parts[0] === 'review') {
     return { screen: 'review', params: {} };
   }
+  if (parts[0] === 'overview') {
+    return { screen: 'overview', params: {} };
+  }
   return { screen: 'auth', params: {} };
 }
 
@@ -447,6 +450,10 @@ function Router() {
       return window.ReviewQueueScreen
         ? React.createElement(window.ReviewQueueScreen, null)
         : React.createElement('div', { className: 'p-6 text-gray-300' }, 'Review queue unavailable.');
+    case 'overview':
+      return window.SystemOverview
+        ? React.createElement(window.SystemOverview, null)
+        : React.createElement('div', { className: 'p-6 text-gray-300' }, 'System overview unavailable.');
     case 'symmetre':
       return React.createElement(SymmetreScreen, { params: route.params });
     case 'ebi':
@@ -560,7 +567,7 @@ function App() {
         window.AHU44NewFaultEngine.evaluate(window.AHU44NewController.getState());
       }
 
-      // VAV-4-4-02 (Ballroom) is downstream of AHU-4-4: push the AHU's current
+      // VAV-4-4-02 (Conference Room) is downstream of AHU-4-4: push the AHU's current
       // discharge air temp into each zone (this is what makes "Excessive
       // Reheat" a real, connected fault rather than an isolated number —
       // see VAVController.js's header), then evaluate each zone's fault

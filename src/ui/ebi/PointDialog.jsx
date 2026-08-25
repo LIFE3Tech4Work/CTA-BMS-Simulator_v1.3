@@ -755,7 +755,7 @@ const PointDialog = (function () {
             React.createElement('div', { style: { fontWeight: 800, fontSize: '13px', color: isManual ? '#ffa8f2' : '#fff' } },
               unitId + ' · ' + m.label),
             React.createElement('div', { style: { fontSize: '11.5px', fontWeight: 700, color: '#cfe0f6', letterSpacing: '0.3px', marginTop: '3px' } },
-              '/Facility/LIFE3Hotel/' + bac.name)
+              '/Facility/LIFE3Building/' + bac.name)
           ),
           React.createElement('div', {
             style: { width: '30px', height: '30px', borderRadius: '6px', display: 'flex',

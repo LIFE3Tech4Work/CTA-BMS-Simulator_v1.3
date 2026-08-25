@@ -105,7 +105,7 @@
     <!--IF:isU43-->
       <g>
         <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">AHU-4-3</text>
-        <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: Ballroom 2nd Level</text>
+        <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: Conference Rooms 2nd Level</text>
         <text x="1606" y="98" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Location: Level 4</text>
       </g>
     <!--/IF-->
@@ -119,7 +119,7 @@
     <!--IF:isU44-->
       <g>
         <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">AHU-4-4</text>
-        <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: Banquet / Ballroom / Pre-Function 2nd Level</text>
+        <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: Conference / Meeting Rooms 2nd Level</text>
         <text x="1606" y="98" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Location: Level 4</text>
       </g>
     <!--/IF-->
@@ -431,8 +431,12 @@
 
   <g id="header" transform="translate(225,120) scale(0.8474576)">
     <text x="1606" y="48" font-size="36" font-weight="800" fill="#1b3357" text-anchor="end" letter-spacing="1">AHU-23-1</text>
-    <text x="1606" y="72" font-size="14" font-weight="800" fill="#22406e" text-anchor="end">Service: Floor 23 Boiler Room Ventilation</text>
-    <text x="1606" y="90" font-size="14" font-weight="800" fill="#22406e" text-anchor="end">Location: Floor 23 MER</text>
+    <!-- 16px, matching every other board. This group's scale(0.8475) is the inverse of the
+         board's own viewBox zoom (1613/1367 = 1.18), so it cancels out rather than
+         compounding — text here renders at its literal size. An earlier fix set 18.9 on the
+         assumption the scale shrank it, which overshot in the other direction. -->
+    <text x="1606" y="77" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Service: Floor 23 Boiler Room Ventilation</text>
+    <text x="1606" y="98" font-size="16" font-weight="800" fill="#173257" text-anchor="end">Location: Floor 23 MER</text>
   </g>
 
   <g id="panels" fill="#bcd6fb" fill-opacity="0.4" stroke="#eaf2fd" stroke-opacity="0.7" stroke-width="2">

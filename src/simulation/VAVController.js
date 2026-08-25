@@ -3,8 +3,8 @@
  *
  * Models a VAV (Variable Air Volume) terminal box downstream of AHU-4-4_NEW,
  * following the same formula-driven pattern as AHU44NewController.js. One
- * zone is modeled, served by AHU-4-4_NEW (Ballroom Level 2):
- *   - VAV-4-4-02 — Ballroom
+ * zone is modeled, served by AHU-4-4_NEW (Conference Room Level 2):
+ *   - VAV-4-4-02 — Conference Room
  *   (VAV-4-4-01 Pre-Function removed — was identical twin, provided no
  *    additional instructional value)
  *
@@ -65,7 +65,7 @@
   var DEFAULT_DISCHARGE_AIR_TEMP = 55.0; // °F — used before the AHU pushes a live value
 
   var ZONES = [
-    { id: 'VAV-4-4-02', label: 'Ballroom', servedBy: 'AHU-4-4_NEW' },
+    { id: 'VAV-4-4-02', label: 'Conference Room', servedBy: 'AHU-4-4_NEW' },
     // Meeting-room box downstream of AHU-4-6. `defaults` lets a zone start from
     // its own box schedule (this one is a 10" inlet rated 1,200 CFM) instead of
     // every zone sharing one set of numbers.

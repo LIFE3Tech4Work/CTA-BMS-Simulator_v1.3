@@ -253,7 +253,7 @@
     // its own controller instance. No AHU-4-3 fault engine exists, so alarms are
     // left off rather than borrowing AHU-4-4's and mislabelling them.
     'AHU-4-3': {
-      ahu: 'AHU-4-3', board: 'MAIN', controller: 'AHU43Controller', faultEngine: null,
+      ahu: 'AHU-4-3', board: 'MAIN', controller: 'AHU43Controller', faultEngine: 'AHU44NewFaultEngine',
       dev: 'DEV4003', bacPrefix: 'AHU04_03',
       art: { showCommon: true },
       chips: [
@@ -390,7 +390,7 @@
       fans: [],
     },
 
-    // Ballroom box downstream of AHU-4-4. This one HAS a hot-water reheat coil —
+    // Conference Room box downstream of AHU-4-4. This one HAS a hot-water reheat coil —
     // the model has always carried reheatValvePosition / reheatValveStatus /
     // leavingAirTemp for it, but the old legacy graphic showed none of it, so the
     // reheat sequence was invisible. Same board as VAV-02-03 with the reheat group
@@ -400,7 +400,7 @@
       dev: 'DEV4402', bacPrefix: 'VAV04_4002',
       art: {
         vavTag: 'VAV-4-4',
-        vavService: 'Ballroom \u00b7 Zone 2',
+        vavService: 'Conference Room \u00b7 Zone 2',
         vavLocation: 'Level 4 \u00b7 served by AHU-4-4',
         vavBoxLabel: 'VAV-4-4 \u00b7 14\u201d INLET \u00b7 REHEAT',
         vavReheat: true,

@@ -705,7 +705,7 @@
           { pointKey: 'runSchedule', weekday: 1, hour: 16, etype: 'Mode Transition',
             prev: 'Auto', val: 'Manual', by: 'Axel' },
           { pointKey: 'runSchedule', weekday: 1, hour: 16, etype: 'Value Change',
-            prev: 'OFF', val: 'ON (event request \u2014 ballroom, to 23:00)', by: 'Axel' },
+            prev: 'OFF', val: 'ON (event request \u2014 conference room, to 23:00)', by: 'Axel' },
           { pointKey: 'fanSpeed', weekday: 1, hour: 16, etype: 'Value Change',
             prev: '0 %', val: '38 %', by: 'Axel' },
           { pointKey: 'fanSpeedSetpoint', weekday: 1, hour: 16, etype: 'Value Change',
@@ -1038,7 +1038,7 @@
           'holding it.',
         unitId: 'AHU-4-4',
         instructions:
-          'The Ballroom is at high occupancy and zone CO\u2082 has climbed past the level ' +
+          'The Conference Room is at high occupancy and zone CO\u2082 has climbed past the level ' +
           'ASHRAE 62.1 uses to indicate adequate ventilation. Bring it back down.\n\n' +
           'Hint: the sequence should be bringing in more outdoor air as CO\u2082 rises \u2014 ' +
           'check the outdoor air damper and what is commanding the unit.',
@@ -1112,7 +1112,7 @@
       // ── AHU-4-3 ───────────────────────────────────────────────────────────
       ex({
         id: 'ex-lib-43-overcool',
-        title: 'Ballroom running cold',
+        title: 'Conference Room running cold',
         instructorNotes:
           'A temperature swing of \u00b11.5\u00b0F \u2014 a 3\u00b0F total deadband \u2014 around the setpoint is ' +
           'generally acceptable and normal in a standard commercial HVAC building ' +
@@ -1132,7 +1132,7 @@
           'design setpoint. The Point Attribute Report under View lists every override on ' +
           'the system, which is where to look first when a unit is behaving oddly.',
         unit: 'AHU-4-3',
-        brief: 'The ballroom is being overcooled and staff are complaining. Supply air is well below where it should be for this unit. Find what is driving it and return supply air to its design setpoint.\n\nHint: a point left in Manual overrides the control program. The Point Attribute Report under View lists every override on the system.\n\nOn tolerance: \u00b11.5\u00b0F around setpoint \u2014 a 3\u00b0F total deadband \u2014 is normal and acceptable in a standard commercial building automation system. Do not treat a swing that size as a fault. It is deliberate: it saves energy by not cycling equipment constantly, it protects compressors, fans and valves from short-cycling, and most people cannot feel one or two degrees anyway. What you are looking at here is ten degrees below setpoint, which is a different matter entirely.',
+        brief: 'The conference room is being overcooled and staff are complaining. Supply air is well below where it should be for this unit. Find what is driving it and return supply air to its design setpoint.\n\nHint: a point left in Manual overrides the control program. The Point Attribute Report under View lists every override on the system.\n\nOn tolerance: \u00b11.5\u00b0F around setpoint \u2014 a 3\u00b0F total deadband \u2014 is normal and acceptable in a standard commercial building automation system. Do not treat a swing that size as a fault. It is deliberate: it saves energy by not cycling equipment constantly, it protects compressors, fans and valves from short-cycling, and most people cannot feel one or two degrees anyway. What you are looking at here is ten degrees below setpoint, which is a different matter entirely.',
         setup: { coolingCoilSetpoint: 46 },
         goal: { key: 'supplyAirTemp', label: 'Supply Air Temperature', unit: '\u00b0F',
                 comparator: 'within', target: 60, tolerance: 1.5,
@@ -1303,7 +1303,7 @@
           'commissioning includes checking sensors against a calibrated instrument rather ' +
           'than only checking that they report something.',
         unit: 'VAV-4-4-02',
-        brief: 'Occupants in the ballroom are complaining that the space is too warm. ' +
+        brief: 'Occupants in the conference room are complaining that the space is too warm. ' +
           'Nothing is in alarm, no point has been overridden by hand, and every reading on ' +
           'the box is inside its normal range.\n\nThe zone temperature reads 64\u00b0F against a ' +
           '74\u00b0F setpoint, so the controller is calling for heat \u2014 reheat is open and the ' +
@@ -1326,7 +1326,7 @@
       }),
       ex({
         id: 'ex-lib-vav-damper-v3',
-        title: 'Ballroom zone starved of air',
+        title: 'Conference room zone starved of air',
         instructorNotes:
           'The air handler upstream is behaving perfectly. The fault is at the terminal box: ' +
           'its damper was throttled well below the minimum airflow the zone needs.\n\n' +
@@ -1340,7 +1340,7 @@
           'damper rather than closing it. A partly-starved zone is the fault you will ' +
           'actually be called about, because nothing trips \u2014 it just quietly underperforms.',
         unit: 'VAV-4-4-02',
-        brief: 'The ballroom is stuffy and occupants are complaining, but AHU-4-4 upstream ' +
+        brief: 'The conference room is stuffy and occupants are complaining, but AHU-4-4 upstream ' +
           'looks healthy \u2014 its fan is running and its discharge air is on setpoint.\n\n' +
           'Three readings at this box tell you what is wrong. Take them in order:\n\n' +
           '\u2022 Zone airflow \u2014 how much air is actually reaching the room\n' +
@@ -1389,7 +1389,7 @@
   // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
   // stored copy already at this version, so an edit without a bump is silently inert —
   // that is how the reworked VAV brief failed to reach a browser that had already seeded.
-  var SEED_VERSION = 27;
+  var SEED_VERSION = 28;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;
