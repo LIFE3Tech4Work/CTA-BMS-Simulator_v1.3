@@ -452,7 +452,7 @@
    *   heating   true adds, false subtracts
    */
   function honourCommandedValve(entering, key, capacity, heating) {
-    if (modes[key] !== 'Manual') return null;
+    if (!pinned(key)) return null;
     var pos = state[key];
     if (typeof pos !== 'number') return null;
     var frac = Math.max(0, Math.min(100, pos)) / 100;
@@ -466,7 +466,7 @@
   // the point reports until it is released. recalculate() re-applies these
   // after every pass, which is what makes a commanded value actually hold —
   // previously only a handful of keys were spared by their own
-  // "modes.X !== 'Manual'" guards and everything else was recomputed straight
+  // "!pinned('X')" guards and everything else was recomputed straight
   // back over the operator's value.
   var manualValues = {};
 
@@ -529,7 +529,7 @@
       state.cfm = 0;
       if (!oaDamperManualDuringStart) {
         var travelFraction = sfDelayEnd > 0 ? Math.min(1, elapsedSec / sfDelayEnd) : 1;
-        state.oaDamperPosition = Math.round(OA_DAMPER_FLOOR * travelFraction);
+        if (!pinned('oaDamperPosition')) state.oaDamperPosition = Math.round(OA_DAMPER_FLOOR * travelFraction);
       }
     } else if (elapsedSec < sfRampEnd) {
       // SF ramping from its minimum-position lock speed up to setpoint.
@@ -622,6 +622,17 @@
     // point reports.
     var safety = safetyOverridesOperator();
     var overrode = false;
+    // Auto-held values re-applied first: authored without a mode, so the manual latch
+    // below never sees them and the sequence would otherwise recompute them away.
+    Object.keys(autoHeld).forEach(function (ak) {
+      if (ak in sensorFaults) return;
+      // Same yield the manual latch below applies: a safety action — fan-off damper
+      // isolation, freeze protection — outranks a held value. Without it the two
+      // authoring paths disagreed about the same safety event, and a stopped unit
+      // reported a 50% open outdoor air damper against 0 CFM.
+      if (safety && SAFETY_DRIVEN_KEYS[ak]) return;
+      if (state[ak] !== autoHeld[ak]) { state[ak] = autoHeld[ak]; overrode = true; }
+    });
     for (var mk in manualValues) {
       if (!Object.prototype.hasOwnProperty.call(manualValues, mk)) continue;
       if (!state.hasOwnProperty(mk)) continue;
@@ -749,7 +760,7 @@
     // oaDamperPosition does, in case a future UI exposes a toggle for it —
     // today's Controls Sidebar doesn't, so this is effectively always
     // automatic in practice.
-    if (modes.freezePumpOn !== 'Manual') {
+    if (!pinned('freezePumpOn')) {
       if (state.oaTemperature < FREEZE_PUMP_START_TEMP) {
         state.freezePumpOn = true;
       } else if (state.oaTemperature > FREEZE_PUMP_STOP_TEMP) {
@@ -766,7 +777,7 @@
     // regardless of OAT. Runs independent of fan status, same as the
     // freeze pump above (and per its own "active at all times" language).
     // Respects Manual override via the sidebar's "Active Minimum Setpoint" row.
-    if (modes.plenumMinSetpoint !== 'Manual') {
+    if (!pinned('plenumMinSetpoint')) {
       var plenumReset = PLENUM_RESET_MIN +
         (PLENUM_RESET_OAT_HIGH - state.oaTemperature) / (PLENUM_RESET_OAT_HIGH - PLENUM_RESET_OAT_LOW) *
         (PLENUM_RESET_MAX - PLENUM_RESET_MIN);
@@ -885,7 +896,7 @@
     // state — same hysteresis-deadband pattern as the freeze pump above.
     // Still respects Manual override via the "Enthalpy OK — Economizer"
     // sidebar toggle.
-    if (modes.enthalpyOKForEconomizer !== 'Manual') {
+    if (!pinned('enthalpyOKForEconomizer')) {
       var raEnthalpy = liveReturnAirEnthalpy();
           var enthalpyFavorable = state.oaEnthalpy < (raEnthalpy - ECONOMIZER_ENABLE_ENTHALPY_DELTA);
       var enthalpyUnfavorable = state.oaEnthalpy > (raEnthalpy - ECONOMIZER_DISABLE_ENTHALPY_DELTA);
@@ -936,21 +947,21 @@
             }
             if (econLimitPct < econVentMin) {
               state.economizerActive = false;
-              state.oaDamperPosition = econVentMin;
+              if (!pinned('oaDamperPosition')) state.oaDamperPosition = econVentMin;
             } else {
               state.economizerActive = true;
-              state.oaDamperPosition = Math.min(100, econLimitPct);
+              if (!pinned('oaDamperPosition')) state.oaDamperPosition = Math.min(100, econLimitPct);
             }
           } else {
             // At 50% minimum, the floor is the design requirement — not 20% like AHU-4-4
-            state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
+            if (!pinned('oaDamperPosition')) state.oaDamperPosition = Math.max(state.economizerMinPosition, OA_DAMPER_FLOOR);
           }
 
           // CO₂ DCV override — raises above minimum, never below
           if (state.co2Sensor > state.co2Setpoint && !state.economizerActive) {
             var co2Excess = state.co2Sensor - state.co2Setpoint;
             var co2DamperCommand = Math.min(100, state.economizerMinPosition + (co2Excess / 5));
-            state.oaDamperPosition = Math.round(co2DamperCommand);
+            if (!pinned('oaDamperPosition')) state.oaDamperPosition = Math.round(co2DamperCommand);
           }
         }
         // else: Manual hold — program yields authority (same as AHU-4-4)
@@ -958,7 +969,7 @@
         state.oaCFM = Math.round(state.minOAAirflowSetpoint * (state.oaDamperPosition / state.economizerMinPosition));
         state.oaCFM = Math.min(state.oaCFM, state.cfm);
       } else {
-        state.oaDamperPosition = 0;
+        state.oaDamperPosition = 0;   // isolation, not a recompute — never yields to a pin
         state.oaCFM = 0;
       }
     }
@@ -981,10 +992,10 @@
     // its own commanded value independently instead of being recomputed from
     // oaDamperPosition every tick.
     if (state.fanRunning) {
-      if (modes.returnAirDamperPosition !== 'Manual') {
+      if (!pinned('returnAirDamperPosition')) {
         state.returnAirDamperPosition = 100 - state.oaDamperPosition;
       }
-      if (modes.spillDamperPosition !== 'Manual') {
+      if (!pinned('spillDamperPosition')) {
         state.spillDamperPosition = state.oaDamperPosition;
       }
     } else {
@@ -995,7 +1006,7 @@
     // Discharge damper on the supply trunk. Open while the unit runs, shut when it
     // stops — an isolation damper, not a modulating output, so modelling it as
     // proportional would invent control behaviour the sequence does not have.
-    if (modes.dischargeDamperPct !== 'Manual') {
+    if (!pinned('dischargeDamperPct')) {
       state.dischargeDamperPct = state.fanRunning ? 100 : 0;
     }
 
@@ -1023,7 +1034,7 @@
       Math.max(HEAT_RESET_MIN, Math.min(HEAT_RESET_MAX, heatReset)) * 10
     ) / 10;
     if (state.oaResetEnabled && !state.zoneSetpointControl &&
-        modes.heatingCoilSetpoint !== 'Manual') {
+        !pinned('heatingCoilSetpoint')) {
       // Borrow the setpoint the way zone control does, so switching the schedule
       // off hands back the configured value instead of stranding the setpoint at
       // whatever the schedule last wrote.
@@ -1035,7 +1046,7 @@
       // release-to-Auto snapshot.
       delete autoValues.heatingCoilSetpoint;
     } else if (preResetHeatingSetpoint !== null) {
-      if (modes.heatingCoilSetpoint !== 'Manual' && !state.zoneSetpointControl) {
+      if (!pinned('heatingCoilSetpoint') && !state.zoneSetpointControl) {
         state.heatingCoilSetpoint = preResetHeatingSetpoint;
       }
       preResetHeatingSetpoint = null;
@@ -1058,19 +1069,19 @@
       // actually writes are affected. Deleting both unconditionally also threw
       // away a legitimate snapshot taken when the operator commanded a setpoint
       // BEFORE switching zone control on, making that value unrecoverable.
-      if (modes.heatingCoilSetpoint !== 'Manual') {
+      if (!pinned('heatingCoilSetpoint')) {
         state.heatingCoilSetpoint = Math.round((state.zoneTempSetpoint - ZONE_DEADBAND / 2) * 10) / 10;
         delete autoValues.heatingCoilSetpoint;
       }
-      if (modes.coolingCoilSetpoint !== 'Manual') {
+      if (!pinned('coolingCoilSetpoint')) {
         state.coolingCoilSetpoint = Math.round((state.zoneTempSetpoint + ZONE_DEADBAND / 2) * 10) / 10;
         delete autoValues.coolingCoilSetpoint;
       }
     } else if (preZoneSetpoints) {
-      if (modes.heatingCoilSetpoint !== 'Manual') {
+      if (!pinned('heatingCoilSetpoint')) {
         state.heatingCoilSetpoint = preZoneSetpoints.heatingCoilSetpoint;
       }
-      if (modes.coolingCoilSetpoint !== 'Manual') {
+      if (!pinned('coolingCoilSetpoint')) {
         state.coolingCoilSetpoint = preZoneSetpoints.coolingCoilSetpoint;
       }
       preZoneSetpoints = null;
@@ -1272,7 +1283,7 @@
     // what a zone sensor reads — which is how a BMS reports zone temperature on a
     // unit without a separate wall sensor. Averaging supply and return (the first
     // attempt) put the "space" halfway down the coil and read 55°F.
-    if (modes.spaceTemp !== 'Manual') {
+    if (!pinned('spaceTemp')) {
       state.spaceTemp = state.returnAirTemp;
     }
 
@@ -1285,7 +1296,7 @@
     // staged start, and stage 1's ~90s fan-off delay simply holds that
     // already-elevated value — it isn't a new artifact of staging, and it
     // self-corrects within stage 2 once ventilation resumes.
-    if (modes.co2Sensor !== 'Manual') {
+    if (!pinned('co2Sensor')) {
       var ventilationRatio = state.fanRunning
         ? Math.min(1, state.oaCFM / state.minOAAirflowSetpoint)
         : 0;
@@ -1373,6 +1384,50 @@
   // found by looking for who commanded it.
   var sensorFaults = {};
 
+  // Values an instructor set while authoring with the point left in Auto. Re-applied after
+  // every pass like a manual override, but with no mode recorded — so the point reads
+  // normally and appears on no override list, which is the whole point of the setting.
+  // Cleared by clearModes/clearAutoHeld, so a reset returns the unit to real defaults.
+  var autoHeld = {};
+
+  /** True when the sequence must not recompute this key: an operator override, or a value an
+   *  instructor authored with the point left in Auto. Both mean "someone has decided this",
+   *  and the difference is only whether it is FLAGGED — so the physics has to treat them
+   *  identically or the held value never feeds forward into anything derived from it. */
+  function pinned(k) { return modes[k] === 'Manual' || (k in autoHeld); }
+
+  /**
+   * Set a value WITHOUT recording an override.
+   *
+   * For authoring a fault that should look like normal operation. setValue marks the point
+   * Manual, which draws it magenta and lists it on the Point Attribute Report — so a
+   * student finds the answer on a list instead of diagnosing it. This writes the value and
+   * its auto baseline instead, leaving no flag anywhere.
+   *
+   * Only meaningful on points the sequence does not recompute — setpoints, configuration,
+   * commanded positions. A calculated output would be overwritten on the next pass, which
+   * is correct: you cannot quietly hold a value the plant is actively deriving.
+   */
+  function setAutoValue(key, value) {
+    if (!state.hasOwnProperty(key)) return false;
+    autoHeld[key] = value;
+    autoValues[key] = value;
+    delete modes[key];
+    delete manualValues[key];
+    state[key] = value;
+    recalculate();
+    // Reported back so a caller can tell the instructor when a point refuses to hold,
+    // rather than closing a dialog over a value that silently reverted.
+    return state[key] === value;
+  }
+
+  function clearAutoHeld(key) {
+    if (key === undefined) { autoHeld = {}; } else { delete autoHeld[key]; }
+    recalculate();
+  }
+
+  function getAutoHeld() { return Object.assign({}, autoHeld); }
+
   function setSensorFault(key, value) {
     if (!state.hasOwnProperty(key)) return false;
     sensorFaults[key] = value;
@@ -1451,11 +1506,11 @@
     if (!weather) return;
     // A hand-set outdoor condition outranks the TMY3 file, so an instructor can
     // hold "winter" or "humid summer" steady while the rest of the model runs.
-    if (modes.oaTemperature !== 'Manual') state.oaTemperature = weather.dryBulb;
-    if (modes.oaEnthalpy !== 'Manual') state.oaEnthalpy = weather.enthalpy;
+    if (!pinned('oaTemperature')) state.oaTemperature = weather.dryBulb;
+    if (!pinned('oaEnthalpy')) state.oaEnthalpy = weather.enthalpy;
     // Guarded: a weather row without relHumidity would otherwise write undefined
     // and turn every downstream humidity reading into NaN.
-    if (modes.oaRelHumidity !== 'Manual' && typeof weather.relHumidity === 'number'
+    if (!pinned('oaRelHumidity') && typeof weather.relHumidity === 'number'
         && isFinite(weather.relHumidity)) {
       state.oaRelHumidity = weather.relHumidity;
     }
@@ -1498,6 +1553,9 @@
     },
     getState: getState,
     setValue: setValue,
+    setAutoValue: setAutoValue,
+    clearAutoHeld: clearAutoHeld,
+    getAutoHeld: getAutoHeld,
     setSensorFault: setSensorFault,
     clearSensorFault: clearSensorFault,
     clearSensorFaults: clearSensorFaults,

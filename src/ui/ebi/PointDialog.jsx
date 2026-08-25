@@ -451,6 +451,33 @@ const PointDialog = (function () {
     // before the exercise is saved and the choice has to outlive it.
     var authoringNow = !!(window.ExerciseAuthoring && window.ExerciseAuthoring.isArmed &&
                           window.ExerciseAuthoring.isArmed());
+
+    // The in-place PRESENT VALUE edit. Auto is already the default mode, so changing the
+    // reading here holds it through setAutoValue — no mode recorded, no magenta, nothing on
+    // the Point Attribute Report. That is the gesture Lev asked for: authoring through
+    // Control Mode meant selecting MANUAL in order to type a value, which is exactly the
+    // flag these exercises must not carry.
+    var authorLive = (unitCtrl && unitCtrl.getState) ? unitCtrl.getState()[stateKey] : undefined;
+    const [authorDraft, setAuthorDraft] = useState(
+      typeof authorLive === 'number'
+        ? String(m.dec ? authorLive.toFixed(m.dec) : Math.round(authorLive))
+        : '');
+
+    function commitAuthorValue() {
+      if (!authoringNow || !unitCtrl) return;
+      var v = parseFloat(authorDraft);
+      // A blank or unparseable box is someone mid-edit, not a command to write NaN.
+      if (isNaN(v)) return;
+      if (typeof authorLive === 'number' && v === authorLive) return;
+      if (typeof unitCtrl.setAutoValue === 'function') {
+        unitCtrl.setAutoValue(stateKey, v);
+      } else {
+        // No auto-hold on this controller: fall back rather than silently doing nothing,
+        // and the save dialog's NORMAL setting still strips the flag on delivery.
+        unitCtrl.setValue(stateKey, v);
+      }
+      if (unitCtrl.recalculate) unitCtrl.recalculate();
+    }
     var trendPresets = (window.TrendAuthoring && window.TrendAuthoring.presetsFor)
       ? window.TrendAuthoring.presetsFor(stateKey) : [];
     const [trendPreset, setTrendPreset] = useState(function () {
@@ -684,6 +711,15 @@ const PointDialog = (function () {
     // for SET, exactly as a typed value does.
     if (mode === 'auto' && isManual) hasPendingChange = true;
 
+    // The in-place PRESENT VALUE edit counts as pending too. It commits on Enter or blur,
+    // but leaving SET inert while a changed number sits in the box read as the dialog
+    // refusing the edit — so an instructor typed a value, saw a dead button, and could not
+    // tell whether anything had been applied.
+    var authorPending = authoringNow && !isBinary && authorDraft !== '' &&
+      !isNaN(parseFloat(authorDraft)) &&
+      (typeof authorLive !== 'number' || parseFloat(authorDraft) !== authorLive);
+    if (authorPending) hasPendingChange = true;
+
     // ── tabs ──
     // Engr+ only. Read live rather than passed in, because the dialog opens from the
     // board, the panels and the alarm list, and threading a prop through all of them
@@ -742,7 +778,36 @@ const PointDialog = (function () {
       // AUTO already released on its own click; this covers SET pressed while the
       // point is in Auto. Setpoints included — excluding them was what left Zone
       // Heating SP overridden with no way back.
-      if (mode === 'auto') { onSet(null, 'auto'); onClose(); return; }
+      //
+      // While AUTHORING, though, Auto plus a typed value means something different: the
+      // instructor is setting the starting value WITHOUT wanting it flagged as somebody's
+      // override. Releasing to Auto and discarding what they typed would make the field
+      // silently do nothing. So Auto + a changed value writes through setAutoValue, which
+      // holds the value with no mode recorded — the student sees an ordinary reading and has
+      // to diagnose it from behaviour rather than finding it on the override list.
+      if (mode === 'auto') {
+        var authoringAuto = authoringNow && !isBinary &&
+          String(draft) !== String(committedDraft) &&
+          unitCtrl && typeof unitCtrl.setAutoValue === 'function';
+        if (authoringAuto) {
+          var av = parseFloat(draft);
+          if (!isNaN(av)) {
+            av = clamp(av, lo != null ? lo : -1e9, hi != null ? hi : 1e9);
+            av = m.dec ? +av.toFixed(m.dec) : Math.round(av);
+            // Held or not: a point the sequence actively recomputes cannot be quietly
+            // pinned, and closing over a reverted value is worse than refusing.
+            var held = unitCtrl.setAutoValue(stateKey, av);
+            if (typeof onSet === 'function') onSet(null, 'refresh');
+            if (!held) {
+              setErr('This point is driven by the control sequence, so it will not hold in Auto. Choose MANUAL to author it as an override.');
+              return;
+            }
+            onClose();
+            return;
+          }
+        }
+        onSet(null, 'auto'); onClose(); return;
+      }
       if (isBinary) {
         if (pendingBin !== null) onSet(binVal(pendingBin === options[0]), 'man');
         onClose();
@@ -857,12 +922,42 @@ const PointDialog = (function () {
             // Binary points command from the General tab's Command list; a second
             // set of buttons here was the same control twice.
             React.createElement('div', { style: { width: '100%', textAlign: 'center' } },
-              React.createElement('div', { style: { fontSize: '10px', fontWeight: 800, color: '#5a6f8e', letterSpacing: '0.5px' } }, 'PRESENT VALUE'),
-              // A readout, not a field. No box or border — the boxed treatment read
-              // as an editable input, but commands go through the entry field and
-              // SET below, never by typing here.
-              // Unit sits on the value's baseline, not stacked under it.
-              React.createElement('div', {
+              React.createElement('div', { style: { fontSize: '10px', fontWeight: 800, color: '#5a6f8e', letterSpacing: '0.5px' } },
+                authoringNow ? 'PRESENT VALUE · EDITABLE' : 'PRESENT VALUE'),
+              // While authoring, this IS the field. Editing the reading in place is the
+              // gesture Lev asked for: Auto is already the default mode, so changing the
+              // number here holds it in Auto with no mode recorded and nothing on the Point
+              // Attribute Report. Routing authoring through Control Mode + the command field
+              // meant selecting MANUAL in order to type a value — precisely the flag these
+              // exercises must not carry.
+              //
+              // For a student it stays a readout: no box, no border, because commands go
+              // through the entry field and SET below.
+              authoringNow
+                ? React.createElement('div', {
+                    style: { display: 'flex', alignItems: 'baseline', justifyContent: 'center',
+                             gap: '4px', marginTop: '2px' }
+                  },
+                    React.createElement('input', {
+                      value: authorDraft,
+                      onChange: function (e) { setAuthorDraft(e.target.value); },
+                      onKeyDown: function (e) { if (e.key === 'Enter') commitAuthorValue(); },
+                      // No commit on blur. It applied the value the moment focus left the
+                      // box, so clicking anywhere else in the dialog silently committed and
+                      // SET went inert — indistinguishable from the dialog refusing the edit.
+                      // Enter or SET, both explicit, both leaving the button lit until the
+                      // value has actually been written.
+                      title: 'Edit the reading, then press Enter or SET — held in Auto, not recorded as an override',
+                      style: { width: '90px', padding: '3px 6px', borderRadius: '5px',
+                               fontSize: '19px', fontWeight: 800, textAlign: 'center',
+                               fontFamily: 'inherit', color: '#12294f',
+                               background: '#fff', border: '1px solid #6f86ad' }
+                    }),
+                    m.unit ? React.createElement('span', {
+                      style: { fontSize: '10px', fontWeight: 700, color: '#5a6f8e' },
+                    }, m.unit) : null
+                  )
+                : React.createElement('div', {
                 style: { display: 'flex', alignItems: 'baseline', justifyContent: 'center',
                          gap: '3px', padding: '2px 4px 0', marginTop: '1px' },
               },
@@ -908,6 +1003,20 @@ const PointDialog = (function () {
             // correctly would watch the success state look like a different fault. This is the
             // same guard the save dialog's faultable list uses, so both routes offer the
             // identical set rather than the diagram being the more permissive of the two.
+            // While authoring, an overridden point reads "Manual Ovr" here — that is the
+            // instructor's own gesture, not what the student will see. Saying so where the
+            // magenta appears stops them assuming the fault will be findable on the override
+            // list, which is the one thing the NORMAL setting exists to avoid.
+            (authoringNow && isManual) ? React.createElement('div', {
+              style: { marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #2b3850',
+                       fontSize: '10px', color: '#8a97ab', lineHeight: 1.45 }
+            },
+              React.createElement('span', {
+                style: { display: 'block', fontWeight: 800, letterSpacing: '.4px',
+                         color: '#e6a23c', marginBottom: '4px' }
+              }, 'AUTHORING \u2014 HOW THE STUDENT SEES THIS'),
+              'Overriding is how you set the value. In SAVE AS EXERCISE this point can be delivered as OVERRIDE (magenta, listed on the Point Attribute Report) or as NORMAL (nothing flags it, so it must be diagnosed from behaviour).'
+            ) : null,
             (authoringNow && !sensorFaulted && kind === 'ai' &&
              unitCtrl && typeof unitCtrl.setSensorFault === 'function' &&
              typeof (unitCtrl.getState() || {})[stateKey] === 'number')
@@ -1231,7 +1340,13 @@ const PointDialog = (function () {
                      border: '1px solid ' + (hasPendingChange ? '#2f7a52' : '#b7c3d6'),
                      color: hasPendingChange ? '#fff' : '#8a97ab',
                      cursor: hasPendingChange ? 'pointer' : 'not-allowed' },
-            onClick: function () { if (hasPendingChange) commitSet(); },
+            onClick: function () {
+              if (!hasPendingChange) return;
+              // SET applies the authoring edit as well, so both routes out of that field —
+              // Enter, blur, or the button — do the same thing.
+              if (authorPending) commitAuthorValue();
+              commitSet();
+            },
           }, 'SET') : null
         )
       )

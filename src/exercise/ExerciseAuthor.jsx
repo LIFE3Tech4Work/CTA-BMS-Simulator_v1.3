@@ -120,6 +120,15 @@
     // was already true on open, so a student passed without acting and the written answer,
     // which IS the work, counted for nothing.
     var [diagnosisOnly, setDiagnosisOnly] = useState(false);
+    // Captured points the student should receive as normal operation rather than as an
+    // override. Held as a list of keys so an exercise can mix both — a visible override to
+    // find plus a quiet value that only shows up in behaviour.
+    var [autoKeys, setAutoKeys] = useState([]);
+    function toggleAuto(k) {
+      setAutoKeys(function (prev) {
+        return prev.indexOf(k) >= 0 ? prev.filter(function (x) { return x !== k; }) : prev.concat([k]);
+      });
+    }
 
     // Device faults, kept separate from the captured setup. A falsified READING is not an
     // override: the sequence still computes from real physics and only what the BMS reports
@@ -476,6 +485,9 @@
         createdBy: operator,
         createdAt: new Date().toISOString(),
         setup: snap.setup,
+        // Which of those the student receives with no override flag. Applied through
+        // setAutoValue rather than setValue, so nothing marks them.
+        autoKeys: autoKeys.length ? autoKeys.slice() : undefined,
         // Falsified readings, applied by applySetup through setSensorFault rather than
         // setValue, so they report FAULT and stay off the override list.
         sensorFaults: Object.keys(faults).length ? faults : undefined,
@@ -585,8 +597,22 @@
                                borderBottom: '1px solid rgba(53,64,90,.5)' }
                     },
                       React.createElement('span', { style: { color: '#c3cfdd' } }, m.label),
-                      React.createElement('span', { style: { fontFamily: 'monospace', color: '#ff9bec', fontWeight: 700 } },
-                        String(snap.setup[k]) + (m.unit || ''))
+                      React.createElement('span', { style: { fontFamily: 'monospace',
+                        color: autoKeys.indexOf(k) >= 0 ? '#8ff0b5' : '#ff9bec', fontWeight: 700 } },
+                        String(snap.setup[k]) + (m.unit || '')),
+                      React.createElement('button', {
+                        type: 'button',
+                        onClick: function () { toggleAuto(k); },
+                        title: autoKeys.indexOf(k) >= 0
+                          ? 'The student sees this as normal operation \u2014 nothing flags it, and it is not on the override list'
+                          : 'The student sees this as a manual override \u2014 magenta, and listed on the Point Attribute Report',
+                        style: { padding: '1px 6px', borderRadius: '3px', fontSize: '9px',
+                                 fontWeight: 800, letterSpacing: '.3px', fontFamily: 'inherit',
+                                 cursor: 'pointer', marginLeft: '6px',
+                                 border: '1px solid ' + (autoKeys.indexOf(k) >= 0 ? '#2f7a52' : '#8a4f7d'),
+                                 background: autoKeys.indexOf(k) >= 0 ? 'rgba(63,143,90,.2)' : 'rgba(200,31,174,.16)',
+                                 color: autoKeys.indexOf(k) >= 0 ? '#8ff0b5' : '#ff9bec' }
+                      }, autoKeys.indexOf(k) >= 0 ? 'NORMAL' : 'OVERRIDE')
                     );
                   })
                 : React.createElement('div', {
