@@ -20,7 +20,25 @@
 const PointDialog = (function () {
   'use strict';
 
-  const { useState, useMemo, useRef } = React;
+  const { useState, useMemo, useEffect, useRef } = React;
+
+  /**
+   * Now, according to the SIMULATION rather than the wall clock. Every timestamp on this
+   * chart used Date.now(), so speeding the simulator up moved the plant while the trend
+   * kept advancing in real minutes — a before/after comparison could not work, because the
+   * "after" never arrived on the chart.
+   *
+   * Falls back to the wall clock when the engine has not resolved a timestamp yet, so the
+   * dialog still renders during load.
+   */
+  function simNow() {
+    var E = window.SimulationEngine;
+    if (E && typeof E.getCurrentTimestamp === 'function') {
+      var t = E.getCurrentTimestamp();
+      if (t && typeof t.getTime === 'function' && !isNaN(t.getTime())) return t.getTime();
+    }
+    return Date.now();
+  }
 
   const UNIT_NAMES = {
     '%': 'Percent', '°F': 'Degrees Fahrenheit', 'PPM': 'Parts Per Million',
@@ -81,7 +99,7 @@ const PointDialog = (function () {
     const arr = [];
     for (let i = 0; i < 2160; i++) {
       const back = 2159 - i;
-      const d = new Date(Date.now() - back * 3600000);
+      const d = new Date(simNow() - back * 3600000);
       const wd = d.getDay(), hr = d.getHours() + d.getMinutes() / 60;
       arr.push((wd >= 1 && wd <= 6 && hr >= 6.5 && hr < 16) ? 1 : 0);
     }
@@ -388,6 +406,20 @@ const PointDialog = (function () {
     const sensorFaulted = !!(unitCtrl && typeof unitCtrl.getSensorFaults === 'function' &&
                              unitCtrl.getSensorFaults()[stateKey] !== undefined);
 
+    // Value to falsify, local to the dialog: it only has to survive until the fault is set,
+    // after which the controller holds it.
+    const [breakVal, setBreakVal] = useState('');
+
+    function breakSensor() {
+      if (!unitCtrl || typeof unitCtrl.setSensorFault !== 'function') return;
+      var v = Number(breakVal);
+      if (!isFinite(v)) return;
+      unitCtrl.setSensorFault(stateKey, v);
+      setBreakVal('');
+      // Same refresh the command path uses, so the lamp and the reading update at once.
+      if (typeof onSet === 'function') onSet(null, 'refresh');
+    }
+
     function replaceSensor() {
       if (!unitCtrl || typeof unitCtrl.clearSensorFault !== 'function') return;
       unitCtrl.clearSensorFault(stateKey);
@@ -443,7 +475,26 @@ const PointDialog = (function () {
                   fontFamily: 'inherit', border: '1px solid #a9b6c9', background: '#fff', color: '#12294f' };
     var lblSt = { fontSize: '10.5px', fontWeight: 700, color: '#5a6f8e' };
 
+    // A ticking value so the chart's memos re-derive as simulation time advances. Without
+    // a clock term in their dependency arrays they compute once and the axis freezes —
+    // which is what made the before/after comparison impossible even after simNow() was
+    // returning the right time.
+    //
+    // Polled rather than subscribed to the engine's tick: at 3600x that fires far faster
+    // than anything readable, so this samples on a fixed wall-clock cadence and only
+    // writes when the sim minute has actually changed. A no-op setState on every poll
+    // would re-render the dialog four times a second for nothing.
+    const [simClock, setSimClock] = useState(function () { return Math.floor(simNow() / 60000); });
+    useEffect(function () {
+      var iv = setInterval(function () {
+        var m = Math.floor(simNow() / 60000);
+        setSimClock(function (prev) { return prev === m ? prev : m; });
+      }, 1000);
+      return function () { clearInterval(iv); };
+    }, []);
+
     const [histPeriod, setHistPeriod] = useState(240);
+    // 0.1 = six-minute detail, 1 = hourly, >1 = averaged over that many hours.
     const [histIvl, setHistIvl] = useState(1);
     const [cur, setCur] = useState(null);
     const [pin, setPin] = useState(null);
@@ -511,7 +562,16 @@ const PointDialog = (function () {
     const hist = useMemo(function () {
       const rawSer = series.slice(-histPeriod);
       let ser = rawSer;
-      if (histIvl > 1) {
+      // Sub-hourly: expand each hourly sample into ten 6-minute steps. Nothing is
+      // interpolated — the reading is held until the next sample, which is how a trend log
+      // renders between polls and keeps a fan's on/off edges square rather than sloped.
+      if (histIvl === 0.1) {
+        const fine = [];
+        for (let i = 0; i < rawSer.length; i++) {
+          for (let k = 0; k < 10; k++) fine.push(rawSer[i]);
+        }
+        ser = fine;
+      } else if (histIvl > 1) {
         ser = [];
         for (let i = 0; i < rawSer.length; i += histIvl) {
           const c = rawSer.slice(i, i + histIvl);
@@ -520,7 +580,7 @@ const PointDialog = (function () {
       }
       if (ser.length < 2) return { empty: true, ticks: [], pts: '', area: '' };
 
-      const dAt = (off) => new Date(Date.now() - off * 3600000);
+      const dAt = (off) => new Date(simNow() - off * 3600000);
       const fmtD = (off) => { const d = dAt(off);
         // Weekday first: Lev's reason was that finding the weekend meant opening a
         // calendar, and identifying it is the core skill in the override exercise.
@@ -568,10 +628,12 @@ const PointDialog = (function () {
       return { empty: false, pts, area: '0,' + HH + ' ' + pts + ' ' + HW + ',' + HH,
                ticks, marker, at, val, off, ser, n, histIvl };
       // eslint-disable-next-line
-    }, [series, histPeriod, histIvl, cur, pin, stateKey]);
+      // simClock included: the x-axis is derived from "now", so it has to re-derive when
+      // now moves. Omitting it is what froze the trend while the plant ran on.
+    }, [series, histPeriod, histIvl, cur, pin, stateKey, simClock]);
 
     const xLabels = useMemo(function () {
-      const dAt = (off) => new Date(Date.now() - off * 3600000);
+      const dAt = (off) => new Date(simNow() - off * 3600000);
       const fmtD = (off) => { const d = dAt(off);
         // Weekday first: Lev's reason was that finding the weekend meant opening a
         // calendar, and identifying it is the core skill in the override exercise.
@@ -585,7 +647,7 @@ const PointDialog = (function () {
         return fmtD(off);
       };
       return [hq(1), hq(0.75), hq(0.5), hq(0.25), 'now'];
-    }, [histPeriod]);
+    }, [histPeriod, simClock]);
 
     // ── gauge ──
     let gauge = null;
@@ -722,6 +784,7 @@ const PointDialog = (function () {
 
     const ivlOpts = [
       { v: '1', label: '1 hour', dis: false },
+      { v: '0.1', label: '6 min', dis: histPeriod > 72 },
       { v: '6', label: '6 hr avg', dis: false },
       { v: '24', label: '1 day avg', dis: false },
       { v: '168', label: '1 week avg', dis: histPeriod < 168 },
@@ -835,6 +898,56 @@ const PointDialog = (function () {
             // command — a field engineer swaps the sensor, and there was no equivalent
             // action here at all, so the only way out of this exercise was releasing the
             // point to Auto, which reads as undoing an override.
+            // Offered only while authoring, only on measured inputs, and only when the point
+            // is not already faulted — a second fault on the same point would just overwrite
+            // the first, which reads as the control doing nothing.
+            //
+            // The numeric check matters as much as the kind: three AI points on AHU-4-4
+            // (activeSeason, spaceTemp, returnAirTemp) hold no numeric state, so faulting one
+            // read fine and then blanked to "--" on repair — a student who diagnosed it
+            // correctly would watch the success state look like a different fault. This is the
+            // same guard the save dialog's faultable list uses, so both routes offer the
+            // identical set rather than the diagram being the more permissive of the two.
+            (authoringNow && !sensorFaulted && kind === 'ai' &&
+             unitCtrl && typeof unitCtrl.setSensorFault === 'function' &&
+             typeof (unitCtrl.getState() || {})[stateKey] === 'number')
+              ? React.createElement('div', {
+                  style: { marginTop: '12px', paddingTop: '10px',
+                           borderTop: '1px solid #2b3850' }
+                },
+                  React.createElement('div', {
+                    style: { fontSize: '9px', fontWeight: 800, letterSpacing: '.4px',
+                             color: '#e6a23c', marginBottom: '5px' }
+                  }, 'AUTHORING \u2014 BREAK SENSOR'),
+                  // Column, not a row: the label already spans the panel, and at this width a
+                  // side-by-side field and button pushed the button past the panel edge.
+                  React.createElement('div', {
+                    style: { display: 'flex', flexDirection: 'column', gap: '5px' } },
+                    React.createElement('input', {
+                      type: 'number', step: 'any', value: breakVal,
+                      placeholder: 'false reading',
+                      onChange: function (e) { setBreakVal(e.target.value); },
+                      onKeyDown: function (e) { if (e.key === 'Enter') breakSensor(); },
+                      style: { width: '100%', boxSizing: 'border-box', padding: '5px 7px',
+                               borderRadius: '4px', fontSize: '11px', fontFamily: 'inherit',
+                               background: '#fff', border: '1px solid #98a6bd', color: '#16181d' }
+                    }),
+                    React.createElement('button', {
+                      type: 'button',
+                      onClick: breakSensor,
+                      disabled: breakVal === '',
+                      title: 'This point will report the false value while the plant keeps behaving normally',
+                      style: { width: '100%', boxSizing: 'border-box', padding: '5px 10px',
+                               borderRadius: '4px', fontSize: '10px',
+                               fontWeight: 800, fontFamily: 'inherit',
+                               cursor: breakVal === '' ? 'not-allowed' : 'pointer',
+                               border: '1px solid ' + (breakVal === '' ? '#b7c3d6' : '#8a2018'),
+                               background: breakVal === '' ? '#eef2f8' : 'rgba(194,34,34,.14)',
+                               color: breakVal === '' ? '#8a97ab' : '#8a2018' }
+                    }, 'BREAK SENSOR')
+                  )
+                )
+              : null,
             sensorFaulted ? React.createElement('button', {
               type: 'button',
               onClick: replaceSensor,

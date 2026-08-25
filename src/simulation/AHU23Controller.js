@@ -168,6 +168,11 @@
       if (!state.hasOwnProperty(mk)) continue;
       if (MOMENTARY_KEYS[mk]) continue;
       if (safety && SAFETY_DRIVEN_KEYS[mk]) continue;
+      // A faulted sensor reports its false value even on an overridden point: the reading is
+      // what the BMS shows, not what the plant is doing. Lev's broken-damper scenario is
+      // exactly this pair — damper commanded shut, feedback reporting 100% — and without
+      // the skip this latch overwrote the fault with the physical 0%.
+      if (mk in sensorFaults) continue;
       if (state[mk] !== manualValues[mk]) { state[mk] = manualValues[mk]; overrode = true; }
     }
     if (overrode && typeof notifySubscribers === 'function') notifySubscribers();
@@ -386,8 +391,9 @@
   // ─── Public API ─────────────────────────────────────────────────────────────
 
   function getState() {
-    // Return a shallow copy so consumers can't accidentally mutate internal state
-    return Object.assign({}, state);
+    // Shallow copy so consumers cannot mutate internal state, with faulted sensors
+    // overlaid at read time — see withSensorFaults.
+    return withSensorFaults(Object.assign({}, state));
   }
 
   // Tracks which state keys the operator has manually overridden — same shape
@@ -433,6 +439,49 @@
   // config flag, a field-condition boolean) comes back to what it was instead
   // of being stuck at the commanded value forever.
   var autoValues = {};
+
+  // ─── Sensor faults ──────────────────────────────────────────────────────────
+  // A failed device, distinct from an operator override. The reading is falsified after
+  // every recalculate, so the sequence acts on the false number exactly as it would in the
+  // field — but the point reports FAULT rather than MANUAL and appears on no override list.
+  // That distinction is the whole lesson: a broken damper reporting 100% open cannot be
+  // found by looking for who commanded it.
+  var sensorFaults = {};
+
+  function setSensorFault(key, value) {
+    if (!state.hasOwnProperty(key)) return false;
+    sensorFaults[key] = value;
+    recalculate();
+    return true;
+  }
+
+  function clearSensorFault(key) {
+    if (!(key in sensorFaults)) return false;
+    delete sensorFaults[key];
+    recalculate();
+    return true;
+  }
+
+  function clearSensorFaults() {
+    sensorFaults = {};
+    recalculate();
+  }
+
+  function getSensorFaults() { return Object.assign({}, sensorFaults); }
+
+  /** A copy of state with faulted sensors reporting their false values.
+   *
+   *  Overlaid at READ time, never written into state. Writing it in made the false value
+   *  the sequence's own input on the next pass, so a damper reporting 100% while shut
+   *  produced airflow to match — collapsing the exact contradiction the exercise turns on.
+   *  A failed transmitter changes what the BMS SEES, not what the air does. */
+  function withSensorFaults(src) {
+    var keys = Object.keys(sensorFaults);
+    if (!keys.length) return src;
+    var out = Object.assign({}, src);
+    keys.forEach(function (k) { out[k] = sensorFaults[k]; });
+    return out;
+  }
 
   function setValue(key, value) {
     if (state.hasOwnProperty(key)) {
@@ -511,6 +560,10 @@
   window.AHU23Controller = {
     getState: getState,
     setValue: setValue,
+    setSensorFault: setSensorFault,
+    clearSensorFault: clearSensorFault,
+    clearSensorFaults: clearSensorFaults,
+    getSensorFaults: getSensorFaults,
     getModes: getModes,
     clearMode: clearMode,
     // Release EVERY override at once, restoring each point's pre-override value.
