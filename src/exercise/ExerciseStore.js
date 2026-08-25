@@ -235,8 +235,20 @@
   function restoreProgress(ex, progress) {
     var ctrl = controllerFor(ex.unitId);
     if (!ctrl || typeof ctrl.setValue !== 'function') return;
+    // Auto-delivered points must be restored the same way they were applied. This used
+    // setValue for EVERY key, so resuming an exercise re-flagged the instructor's
+    // auto-held readings as manual overrides — the M badges reappeared on resume even
+    // though applySetup had placed them correctly, and clearing storage never helped
+    // because the fault was in the restore, not the stored copy.
+    var autoKeys = (ex.autoKeys || []).slice();
     Object.keys(progress).forEach(function (k) {
-      try { ctrl.setValue(k, progress[k]); } catch (e) {}
+      try {
+        if (autoKeys.indexOf(k) >= 0 && typeof ctrl.setAutoValue === 'function') {
+          ctrl.setAutoValue(k, progress[k]);
+        } else {
+          ctrl.setValue(k, progress[k]);
+        }
+      } catch (e) {}
     });
     if (typeof ctrl.recalculate === 'function') ctrl.recalculate();
   }
@@ -1497,7 +1509,7 @@
   // BUMP THIS whenever a seeded definition's content changes. The upgrade guard skips any
   // stored copy already at this version, so an edit without a bump is silently inert —
   // that is how the reworked VAV brief failed to reach a browser that had already seeded.
-  var SEED_VERSION = 32;
+  var SEED_VERSION = 33;
   var SNAPSHOT_KEY = 'cta_exercises_seed_snapshot';
 
   // Superseded seeds. A stored copy is dropped when it still matches what was seeded;
@@ -1544,6 +1556,11 @@
   function seedFingerprint(e) {
     return JSON.stringify({
       title: e.title, instructions: e.instructions, setup: e.setup,
+      // sensorFaults and autoKeys ARE the exercise on a fault-based scenario, so leaving
+      // them out meant a corrected fault looked identical to the broken version: the
+      // refresh skipped it, students kept the fault-free copy, and nine of them passed a
+      // 0-point exercise in three seconds.
+      sensorFaults: e.sensorFaults, autoKeys: e.autoKeys,
       weather: e.weather, goal: e.goal, published: e.published,
       assignedTo: (e.assignedTo || []).slice().sort()
     });

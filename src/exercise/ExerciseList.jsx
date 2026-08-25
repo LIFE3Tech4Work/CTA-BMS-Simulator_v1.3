@@ -482,7 +482,13 @@
                  color: '#9db0c8', lineHeight: 1.5 }
       },
         React.createElement('strong', { style: { color: '#c3cfdd' } }, 'Complete when: '),
-        ES.goalText(ex)
+        // A diagnosis-only exercise has no numeric target to reach: the fault is mechanical
+        // and cannot be repaired from a workstation, so stating "Outdoor Air Flow is above
+        // 4900 CFM" asked for something impossible and read as the task. The written
+        // diagnosis IS the deliverable, and the goal line has to say so.
+        ex.diagnosisOnly
+          ? 'You have written your diagnosis.'
+          : ES.goalText(ex)
       ),
       // The citation, in full. On the collapsed row there is only room for the badge,
       // and "why is 1100 ppm the number" is the question the standard answers.
