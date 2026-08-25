@@ -420,11 +420,21 @@ const PointDialog = (function () {
       if (typeof onSet === 'function') onSet(null, 'refresh');
     }
 
+    // Confirmation that the replacement did something, instead of closing silently.
+    // Replacing a sensor is the one action here whose effect is invisible at the instant it
+    // happens — the reading corrects a beat later — so a student pressing the button saw the
+    // dialog vanish with no acknowledgement and no way to tell whether it had worked.
+    const [replacedTo, setReplacedTo] = useState(null);
+
     function replaceSensor() {
       if (!unitCtrl || typeof unitCtrl.clearSensorFault !== 'function') return;
+      var wasReading = (unitCtrl.getState() || {})[stateKey];
       unitCtrl.clearSensorFault(stateKey);
       if (typeof unitCtrl.recalculate === 'function') unitCtrl.recalculate();
-      onClose();
+      var nowReading = (unitCtrl.getState() || {})[stateKey];
+      // Kept open deliberately: the before and after readings side by side are the lesson —
+      // the sequence was right all along, the input was not.
+      setReplacedTo({ before: wasReading, after: nowReading });
     }
     const raw = BP.valueOf(state, stateKey);
     const isBinary = (kind === 'bi' || kind === 'bo');
@@ -719,6 +729,12 @@ const PointDialog = (function () {
       !isNaN(parseFloat(authorDraft)) &&
       (typeof authorLive !== 'number' || parseFloat(authorDraft) !== authorLive);
     if (authorPending) hasPendingChange = true;
+
+    // A just-replaced sensor is a change worth committing: the reading moved from the
+    // failed value to the real one, and SET is where a student confirms and closes. Left
+    // inert, the dialog offered no way to acknowledge the repair and CANCEL was the only
+    // live control — which reads as the fix having been rejected.
+    if (replacedTo) hasPendingChange = true;
 
     // ── tabs ──
     // Engr+ only. Read live rather than passed in, because the dialog opens from the
@@ -1066,7 +1082,16 @@ const PointDialog = (function () {
                        letterSpacing: '.3px', fontFamily: 'inherit', cursor: 'pointer',
                        background: 'linear-gradient(180deg,#3f8f5a,#2d7346)',
                        border: '1px solid #2f7a52', color: '#fff' }
-            }, 'REPLACE SENSOR') : null
+            }, 'REPLACE SENSOR') : null,
+
+            // Success confirmation, shown in place of the button once the sensor is replaced.
+            // Both readings together, because the before-and-after IS the lesson: the
+            // control sequence was correct throughout, and only the input was wrong.
+            // Confirmation lives in the RIGHT pane, not here — see below. The left column is
+            // 113px wide against 550px of content, so this panel wrapped every two or three
+            // words and its explanatory sentence fell 154px below the fold, reachable only by
+            // scrolling a narrow inner column. A confirmation about the point as a whole also
+            // belongs beside the point's own attributes rather than among the lamps.
           ),
 
           // ── right pane ──
@@ -1074,6 +1099,31 @@ const PointDialog = (function () {
             style: { flex: 1, minWidth: 0, minHeight: 0, padding: '12px 16px 6px',
                      display: 'flex', flexDirection: 'column' },
           },
+            // Sensor-replacement confirmation, full width at the top of the content pane so
+            // the whole message reads on one or two lines instead of wrapping to shreds in
+            // the 113px lamp column. First thing in the pane because it answers the action
+            // the student just took.
+            replacedTo ? React.createElement('div', {
+              style: { marginBottom: '12px', padding: '10px 12px', borderRadius: '7px',
+                       background: '#e4f4ea', border: '1px solid #2f7a52', flexShrink: 0 }
+            },
+              React.createElement('div', {
+                style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.4px',
+                         color: '#1e6b3f', marginBottom: '4px' }
+              }, '\u2713 SENSOR REPLACED'),
+              React.createElement('div', {
+                style: { fontSize: '12px', color: '#12294f', lineHeight: 1.5 }
+              },
+                'Reading was ',
+                React.createElement('strong', null,
+                  BP.format(stateKey, replacedTo.before) + (m.unit ? ' ' + m.unit : '')),
+                ', now ',
+                React.createElement('strong', null,
+                  BP.format(stateKey, replacedTo.after) + (m.unit ? ' ' + m.unit : '')),
+                '. The control sequence was behaving correctly all along \u2014 it was acting on a ' +
+                'reading that was not true. Nothing else needed changing.'
+              )
+            ) : null,
             React.createElement('div', {
               style: { display: 'flex', gap: '4px', borderBottom: '2px solid #b9c9de', flexShrink: 0 },
             },
